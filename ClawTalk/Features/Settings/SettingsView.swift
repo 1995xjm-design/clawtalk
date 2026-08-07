@@ -666,7 +666,7 @@ private var connectionSection: some View {
             // 必须真正消费流，AVSpeechSynthesizer 才会开始朗读。
             Task {
                 do {
-                    for await _ in tts.streamSpeech(text: sampleText) {}
+                    for try await _ in tts.streamSpeech(text: sampleText) {}
                 } catch {
                     previewErrorMessage = "语音预览失败：\(error.localizedDescription)"
                 }

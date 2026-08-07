@@ -291,12 +291,12 @@ struct WechatBindView: View {
     @MainActor
     private func startPolling() {
         stopPolling()
-        pollTask = Task { [weak self] in
+        pollTask = Task {
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(3))
                 if Task.isCancelled { break }
-                await self?.checkBindingStatus()
-                if let state = self?.state, state.isTerminal {
+                await self.checkBindingStatus()
+                if let state = self.state, state.isTerminal {
                     break
                 }
             }
