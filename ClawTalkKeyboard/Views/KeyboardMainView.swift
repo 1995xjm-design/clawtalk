@@ -26,6 +26,11 @@ protocol KeyboardMainViewDelegate: AnyObject {
     func didRequestPaste() -> String?
     func didRequestSendText(_ text: String)
 
+    // 语音输入（按住说话、松开转文字）
+    func didTouchDownVoice()
+    func didTouchUpVoice()
+    func didVoiceCancel()
+
     // 超会说专用
     func didTapKeyForSuperTalk(_ key: String)
     func didTapDeleteForSuperTalk()
@@ -309,6 +314,11 @@ class KeyboardMainView: UIView {
         candidateBarView.showMessage(message)
     }
 
+    /// 语音录音状态透传给工具栏按钮
+    func setVoiceRecording(_ isRecording: Bool) {
+        toolbarView.setVoiceRecording(isRecording)
+    }
+
     func showAICandidates(_ replies: [String], contactName: String?) {
         candidateBarView.showAICandidates(replies, contactName: contactName)
     }
@@ -465,6 +475,18 @@ extension KeyboardMainView: ToolbarViewDelegate {
 
     func toolbarDidTapGenerate() {
         delegate?.didTapGenerate()
+    }
+
+    func toolbarVoiceTouchDown() {
+        delegate?.didTouchDownVoice()
+    }
+
+    func toolbarVoiceTouchUpInside() {
+        delegate?.didTouchUpVoice()
+    }
+
+    func toolbarVoiceTouchCancel() {
+        delegate?.didVoiceCancel()
     }
 }
 
@@ -623,3 +645,4 @@ extension KeyboardMainView: ConfigPanelViewDelegate {
         delegate?.didTapBackToKeyboard()
     }
 }
+

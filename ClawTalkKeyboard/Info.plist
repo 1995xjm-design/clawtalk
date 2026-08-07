@@ -14,6 +14,12 @@
     <string>1</string>
     <key>CFBundleShortVersionString</key>
     <string>1.0</string>
+    <key>RequestsOpenAccess</key>
+    <true/>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>ClawTalk 键盘需要使用麦克风进行语音输入：按住「语音」键说话，松开后自动转为文字。</string>
+    <key>NSSpeechRecognitionUsageDescription</key>
+    <string>ClawTalk 键盘需要使用语音识别服务，把您说的话转换为文字并填入输入框。</string>
     <key>NSExtension</key>
     <dict>
         <key>NSExtensionPointIdentifier</key>
@@ -23,3 +29,4 @@
     </dict>
 </dict>
 </plist>
+

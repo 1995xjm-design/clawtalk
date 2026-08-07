@@ -52,13 +52,28 @@ final class VoiceWakeCapability {
     static let shared = VoiceWakeCapability()
     private init() {}
 
+
+    // MARK: - Locale
+
+    /// Resolve the speech recognition locale: honor an explicit value, otherwise
+    /// follow the system language (Chinese systems -> zh-CN). If the resolved locale
+    /// has no recognizer, startListening falls back to zh-CN.
+    private static func resolveLocale(_ locale: String?) -> String {
+        let raw = locale?.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let raw, !raw.isEmpty {
+            return AppleTTSService.normalizedVoiceLanguage(raw)
+        }
+        let system = Locale.preferredLanguages.first ?? Locale.current.identifier
+        return AppleTTSService.normalizedVoiceLanguage(system)
+    }
     // MARK: - Commands
 
     func setConfig(keywords: [String], enabled: Bool, locale: String?) async throws -> ConfigResult {
         currentKeywords = keywords
+        let resolvedLocale = Self.resolveLocale(locale)
 
         if enabled && !keywords.isEmpty {
-            try await startListening(locale: locale ?? "en-US")
+            try await startListening(locale: resolvedLocale)
         } else {
             stopListening()
         }
@@ -66,7 +81,7 @@ final class VoiceWakeCapability {
         return ConfigResult(
             keywords: currentKeywords,
             enabled: isListening,
-            locale: locale ?? "en-US"
+            locale: resolvedLocale
         )
     }
 
@@ -74,7 +89,7 @@ final class VoiceWakeCapability {
         ConfigResult(
             keywords: currentKeywords,
             enabled: isListening,
-            locale: recognizer?.locale.identifier ?? "en-US"
+            locale: recognizer?.locale.identifier ?? Self.resolveLocale(nil)
         )
     }
 
@@ -95,7 +110,8 @@ final class VoiceWakeCapability {
         let micGranted = await AVAudioApplication.requestRecordPermission()
         guard micGranted else { throw VoiceWakeError.denied }
 
-        guard let speechRecognizer = SFSpeechRecognizer(locale: Locale(identifier: locale)),
+        guard let speechRecognizer = SFSpeechRecognizer(locale: Locale(identifier: locale))
+              ?? SFSpeechRecognizer(locale: Locale(identifier: "zh-CN")),
               speechRecognizer.isAvailable else {
             throw VoiceWakeError.unavailable
         }

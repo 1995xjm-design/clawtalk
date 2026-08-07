@@ -67,14 +67,15 @@ struct ClawTalkApp: App {
                 CanvasView(canvas: CanvasCapability.shared)
             }
             .tint(.openClawRed)
-            .preferredColorScheme(.dark)
+            .preferredColorScheme(settingsStore.settings.appearance == .dark ? .dark : .light)
             .task {
                 // Pre-warm WhisperKit at app launch so the first
                 // conversation-mode utterance doesn't pay the 3s
                 // CoreML cold-load cost. Triggers Task.detached load
                 // inside the service's init; the eager work runs in
                 // the background while the user navigates to a chat.
-                if settingsStore.settings.voiceInputEnabled,
+                if settingsStore.settings.sttProvider == .local,
+                   settingsStore.settings.voiceInputEnabled,
                    modelManager.hasDownloadedModel,
                    cachedSTT == nil {
                     let warmup = WhisperKitService(modelSize: settingsStore.settings.whisperModelSize)
@@ -102,6 +103,9 @@ struct ClawTalkApp: App {
                 }
             }
             .onChange(of: settingsStore.settings.ttsProvider) {
+                reconfigureServices()
+            }
+            .onChange(of: settingsStore.settings.sttProvider) {
                 reconfigureServices()
             }
             .onChange(of: settingsStore.settings.voiceInputEnabled) { _, enabled in
@@ -188,23 +192,44 @@ struct ClawTalkApp: App {
         let secure = SecureStorage.shared
         let s = settingsStore.settings
 
-        // STT — WhisperKit is the on-device transcriber used for
-        // push-to-talk in every config, and for conversation mode when
-        // server-side STT isn't enabled. We keep it loaded whenever
-        // voice input is enabled at all; the only way to skip the
-        // load is to disable Voice Input entirely.
+        // STT: Local Whisper transcribes on-device; OpenClaw Backend
+        // relays audio to the fusion-backend /api/stt endpoint. The
+        // on-device service stays cached while the local provider is
+        // active; the backend provider is created per configuration.
         let stt: (any TranscriptionService)?
         if !s.voiceInputEnabled {
             cachedSTT = nil
             cachedSTTModelSize = nil
             stt = nil
-        } else if let cached = cachedSTT, cachedSTTModelSize == s.whisperModelSize {
-            stt = cached
         } else {
-            let service = WhisperKitService(modelSize: s.whisperModelSize)
-            cachedSTT = service
-            cachedSTTModelSize = s.whisperModelSize
-            stt = service
+            switch s.sttProvider {
+            case .local:
+                if let cached = cachedSTT, cachedSTTModelSize == s.whisperModelSize {
+                    stt = cached
+                } else {
+                    let service = WhisperKitService(modelSize: s.whisperModelSize)
+                    cachedSTT = service
+                    cachedSTTModelSize = s.whisperModelSize
+                    stt = service
+                }
+            case .openclaw:
+                let backendURL = s.fusionBackendURL.trimmingCharacters(in: .whitespacesAndNewlines)
+                if backendURL.isEmpty {
+                    // Fall back to on-device Whisper when no backend URL is configured.
+                    if let cached = cachedSTT, cachedSTTModelSize == s.whisperModelSize {
+                        stt = cached
+                    } else {
+                        let service = WhisperKitService(modelSize: s.whisperModelSize)
+                        cachedSTT = service
+                        cachedSTTModelSize = s.whisperModelSize
+                        stt = service
+                    }
+                } else {
+                    cachedSTT = nil
+                    cachedSTTModelSize = nil
+                    stt = OpenClawSTTService(backendURL: backendURL, language: nil)
+                }
+            }
         }
 
         // TTS
@@ -220,6 +245,12 @@ struct ClawTalkApp: App {
                     return OpenAITTSService(voice: s.openAIVoice, apiKey: key)
                 }
                 return AppleTTSService()
+            case .openclaw:
+                let backendURL = s.fusionBackendURL.trimmingCharacters(in: .whitespacesAndNewlines)
+                if backendURL.isEmpty {
+                    return AppleTTSService()
+                }
+                return OpenClawTTSService(backendURL: backendURL, voice: nil)
             case .apple:
                 return AppleTTSService()
             }

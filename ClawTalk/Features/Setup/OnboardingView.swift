@@ -38,7 +38,7 @@ struct OnboardingView: View {
             UIPageControl.appearance().pageIndicatorTintColor = UIColor(.openClawRed).withAlphaComponent(0.3)
         }
         .background(Color(.systemBackground))
-        .preferredColorScheme(.dark)
+        .preferredColorScheme(settingsStore.settings.appearance == .dark ? .dark : .light)
     }
 
     // MARK: - Welcome
@@ -125,7 +125,7 @@ struct OnboardingView: View {
         }
     }
 
-    private func bulletPoint(_ text: String) -> some View {
+    private func bulletPoint(_ text: LocalizedStringKey) -> some View {
         HStack(alignment: .top, spacing: 10) {
             Circle()
                 .fill(Color.openClawRed)
@@ -328,7 +328,7 @@ struct OnboardingView: View {
 
     // MARK: - Helpers
 
-    private func primaryButton(_ title: String, action: @escaping () -> Void) -> some View {
+    private func primaryButton(_ title: LocalizedStringKey, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(title)
                 .font(.headline)

@@ -61,7 +61,7 @@ This means:
 ### 1. Speech-to-Text: WhisperKit (on-device)
 
 **Package:** `github.com/argmaxinc/WhisperKit`
-**Models:** `small.en` (~250 MB, default) or `large-v3-turbo` (~1.6 GB, best quality)
+**Models:** `small` (multilingual, ~250 MB, default) or `large-v3-turbo` (~1.6 GB, best quality)
 
 | Property | Value |
 |----------|-------|
@@ -318,7 +318,7 @@ No WebRTC, no LiveKit, no Pipecat. The TTS and OpenClaw clients are simple HTTP 
 | ElevenLabs Voice ID | UserDefaults | `21m00Tcm4TlvDq8ikWAM` |
 | OpenAI API Key | Keychain | `sk-...` |
 | OpenAI Voice | UserDefaults | `alloy` / `nova` / `shimmer` |
-| Whisper Model | UserDefaults | `small.en` / `large-v3-turbo` |
+| Whisper Model | UserDefaults | `small` (multilingual) / `large-v3-turbo` |
 | Voice Input | UserDefaults | Enabled / Disabled |
 | Voice Output | UserDefaults | Enabled / Disabled |
 | Show Token Usage | UserDefaults | On / Off (requires Open Responses) |

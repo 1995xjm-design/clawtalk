@@ -10,6 +10,8 @@ struct AppSettingsTests {
 
         #expect(settings.gatewayURL.isEmpty)
         #expect(settings.ttsProvider == .openai)
+        #expect(settings.sttProvider == .local)
+        #expect(settings.fusionBackendURL == "http://127.0.0.1:18890")
         #expect(settings.voiceOutputEnabled == true)
         #expect(settings.voiceInputEnabled == true)
         #expect(settings.whisperModelSize == .small)
@@ -25,6 +27,8 @@ struct AppSettingsTests {
         var settings = AppSettings.defaults
         settings.gatewayURL = "https://openclaw.samdavid.net"
         settings.ttsProvider = .elevenlabs
+        settings.sttProvider = .openclaw
+        settings.fusionBackendURL = "http://127.0.0.1:18890"
         settings.agentAPIMode = .openResponses
         settings.showTokenUsage = true
 
@@ -33,6 +37,8 @@ struct AppSettingsTests {
 
         #expect(decoded.gatewayURL == "https://openclaw.samdavid.net")
         #expect(decoded.ttsProvider == .elevenlabs)
+        #expect(decoded.sttProvider == .openclaw)
+        #expect(decoded.fusionBackendURL == "http://127.0.0.1:18890")
         #expect(decoded.agentAPIMode == .openResponses)
         #expect(decoded.showTokenUsage == true)
     }
@@ -61,11 +67,21 @@ struct AppSettingsTests {
         // New fields get defaults
         #expect(decoded.agentAPIMode == .openResponses)
         #expect(decoded.showTokenUsage == false)
+        #expect(decoded.sttProvider == .local)
+        #expect(decoded.fusionBackendURL == "http://127.0.0.1:18890")
     }
 
     @Test("All TTS providers have display names")
     func ttsProviderNames() {
         for provider in TTSProvider.allCases {
+            #expect(!provider.rawValue.isEmpty)
+            #expect(!provider.id.isEmpty)
+        }
+    }
+
+    @Test("All STT providers have display names")
+    func sttProviderNames() {
+        for provider in STTProvider.allCases {
             #expect(!provider.rawValue.isEmpty)
             #expect(!provider.id.isEmpty)
         }

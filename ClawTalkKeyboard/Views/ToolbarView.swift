@@ -9,6 +9,11 @@ protocol ToolbarViewDelegate: AnyObject {
     func toolbarDidTapContact()
     func toolbarDidTapPaste()
     func toolbarDidTapGenerate()
+
+    // 语音输入（按住说话、松开转文字）
+    func toolbarVoiceTouchDown()
+    func toolbarVoiceTouchUpInside()
+    func toolbarVoiceTouchCancel()
 }
 
 /// 工具栏视图 - 显示帮你回、超会说、AI恋爱回复等功能按钮
@@ -26,6 +31,7 @@ class ToolbarView: UIView {
     private let pasteButton = UIButton(type: .system)
     private let generateButton = UIButton(type: .system)
     private let moreButton = UIButton(type: .system)
+    private let voiceButton = UIButton(type: .system)
 
     // MARK: - 初始化
     override init(frame: CGRect) {
@@ -67,6 +73,20 @@ class ToolbarView: UIView {
         configureButton(pasteButton, title: "粘贴", action: #selector(pasteTapped))
         configureButton(generateButton, title: "✨生成", action: #selector(generateTapped))
         configureButton(moreButton, title: "更多", action: #selector(moreTapped))
+        setupVoiceButton()
+    }
+
+    /// 语音按钮：按住说话、松开转文字（不支持普通点击，避免误触发送）
+    private func setupVoiceButton() {
+        voiceButton.setTitle("语音", for: .normal)
+        voiceButton.titleLabel?.font = .systemFont(ofSize: 13)
+        voiceButton.titleLabel?.adjustsFontSizeToFitWidth = true
+        voiceButton.titleLabel?.minimumScaleFactor = 0.8
+        voiceButton.layer.cornerRadius = 8
+        voiceButton.addTarget(self, action: #selector(voiceTouchDown), for: .touchDown)
+        voiceButton.addTarget(self, action: #selector(voiceTouchUpInside), for: .touchUpInside)
+        voiceButton.addTarget(self, action: #selector(voiceTouchCancel), for: [.touchUpOutside, .touchCancel])
+        stackView.addArrangedSubview(voiceButton)
     }
 
     private func configureButton(_ button: UIButton, title: String, action: Selector) {
@@ -82,6 +102,19 @@ class ToolbarView: UIView {
     /// 更新对象按钮标题：选中联系人后显示联系人名，否则显示「对象」
     func setSelectedContactName(_ name: String?) {
         contactButton.setTitle(name ?? "对象", for: .normal)
+    }
+
+    /// 语音录音状态：录音中显示「松开发送」并高亮，否则恢复「语音」
+    func setVoiceRecording(_ isRecording: Bool) {
+        if isRecording {
+            voiceButton.setTitle("松开发送", for: .normal)
+            voiceButton.backgroundColor = UIColor.primaryPink.withAlphaComponent(0.25)
+            voiceButton.setTitleColor(.systemRed, for: .normal)
+        } else {
+            voiceButton.setTitle("语音", for: .normal)
+            voiceButton.backgroundColor = .clear
+            voiceButton.setTitleColor(.systemBlue, for: .normal)
+        }
     }
 
     // MARK: - 事件处理
@@ -111,5 +144,17 @@ class ToolbarView: UIView {
 
     @objc private func moreTapped() {
         delegate?.toolbarDidTapMore()
+    }
+
+    @objc private func voiceTouchDown() {
+        delegate?.toolbarVoiceTouchDown()
+    }
+
+    @objc private func voiceTouchUpInside() {
+        delegate?.toolbarVoiceTouchUpInside()
+    }
+
+    @objc private func voiceTouchCancel() {
+        delegate?.toolbarVoiceTouchCancel()
     }
 }

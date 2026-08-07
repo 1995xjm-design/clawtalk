@@ -11,6 +11,7 @@ struct SettingsView: View {
     @State private var previewService: (any SpeechService)?
     @State private var previewPlayback: AudioPlaybackManager?
     @State private var isPreviewing = false
+    @State private var previewErrorMessage: String?
 
     enum ConnectionTestState: Equatable {
         case idle
@@ -49,6 +50,14 @@ struct SettingsView: View {
                         .fontWeight(.semibold)
                 }
             }
+            .alert("语音预览失败", isPresented: Binding(
+                get: { previewErrorMessage != nil },
+                set: { if !$0 { previewErrorMessage = nil } }
+            )) {
+                Button("好", role: .cancel) {}
+            } message: {
+                Text(previewErrorMessage ?? "")
+            }
         }
     }
 
@@ -56,7 +65,7 @@ struct SettingsView: View {
 
         private var keyboardSection: some View {
         Section {
-            Label("AI 恋爱回复键盘", systemImage: "keyboard")
+            Label("AI 聊天回复键盘", systemImage: "keyboard")
                 .font(.headline)
             Text("键盘已共享当前 OpenClaw 连接。启用后：选聊天对象 → 粘贴/输入对方的话 → 点 ✨ 生成 AI 回复。")
                 .font(.caption)
@@ -225,6 +234,12 @@ private var connectionSection: some View {
 
     private var displaySection: some View {
         Section {
+            Picker("Appearance", selection: $store.settings.appearance) {
+                Text("Dark").tag(Appearance.dark)
+                Text("Light").tag(Appearance.light)
+            }
+            .pickerStyle(.segmented)
+
             Toggle("Show Token Usage", isOn: $store.settings.showTokenUsage)
                 .disabled(store.settings.useWebSocket)
         } header: {
@@ -302,6 +317,11 @@ private var connectionSection: some View {
                 }
 
                 voicePreviewButton
+            case .openclaw:
+                TextField("Backend URL", text: $store.settings.fusionBackendURL)
+                    .keyboardType(.URL)
+
+                voicePreviewButton
             case .openai:
                 SecureField("API Key", text: $store.openAIAPIKey)
                     .textContentType(.password)
@@ -326,6 +346,8 @@ private var connectionSection: some View {
                 Text("ElevenLabs provides the most natural voices.\nFree tier: 10,000 chars/month.")
             case .openai:
                 Text("OpenAI TTS is cost-effective with good quality.")
+            case .openclaw:
+                Text("Use your OpenClaw backend TTS relay. Configure engine on the server.")
             case .apple:
                 Text("Apple's built-in voice. Free and works offline, but less natural.")
             }
@@ -344,30 +366,48 @@ private var connectionSection: some View {
 
     private var sttSection: some View {
         Section {
-            Picker("Whisper Model", selection: Binding(
-                get: { store.settings.whisperModelSize },
-                set: { newSize in
-                    if newSize == .largeTurbo && store.settings.whisperModelSize != .largeTurbo {
-                        pendingModelSize = newSize
-                        showModelConfirm = true
-                    } else {
-                        store.settings.whisperModelSize = newSize
-                    }
-                }
-            )) {
-                ForEach(WhisperModelSize.allCases) { model in
-                    Text(model.displayName).tag(model)
+            Picker("Provider", selection: $store.settings.sttProvider) {
+                ForEach(STTProvider.allCases) { provider in
+                    Text(provider.rawValue).tag(provider)
                 }
             }
-            .confirmationDialog("Download Large Model?", isPresented: $showModelConfirm, titleVisibility: .visible) {
-                Button("Download (~1.6 GB)") {
-                    if let size = pendingModelSize {
-                        store.settings.whisperModelSize = size
+
+            switch store.settings.sttProvider {
+            case .local:
+                Picker("Whisper Model", selection: Binding(
+                    get: { store.settings.whisperModelSize },
+                    set: { newSize in
+                        if newSize == .largeTurbo && store.settings.whisperModelSize != .largeTurbo {
+                            pendingModelSize = newSize
+                            showModelConfirm = true
+                        } else {
+                            store.settings.whisperModelSize = newSize
+                        }
+                    }
+                )) {
+                    ForEach(WhisperModelSize.allCases) { model in
+                        Text(model.displayName).tag(model)
                     }
                 }
-                Button("Cancel", role: .cancel) {}
-            } message: {
-                Text("The Large Turbo model provides the best accuracy but requires ~1.6 GB of storage. It will download on next voice input.")
+                .confirmationDialog("Download Large Model?", isPresented: $showModelConfirm, titleVisibility: .visible) {
+                    Button("Download (~1.6 GB)") {
+                        if let size = pendingModelSize {
+                            store.settings.whisperModelSize = size
+                        }
+                    }
+                    Button("Cancel", role: .cancel) {}
+                } message: {
+                    Text("The Large Turbo model provides the best accuracy but requires ~1.6 GB of storage. It will download on next voice input.")
+                }
+            case .openclaw:
+                Text("Use your OpenClaw backend STT. Supports dialects via server-side engines.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                if !store.settings.fusionBackendURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    Text("Backend: \(store.settings.fusionBackendURL)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
         } header: {
             Text("Speech-to-Text")
@@ -375,7 +415,12 @@ private var connectionSection: some View {
             if !store.settings.voiceInputEnabled {
                 Text("Voice Input is off — turn it on above to use speech-to-text.")
             } else {
-                Text("Runs entirely on-device. Audio never leaves your phone.")
+                switch store.settings.sttProvider {
+                case .local:
+                    Text("Runs entirely on-device. Audio never leaves your phone.")
+                case .openclaw:
+                    Text("Audio is sent to your OpenClaw backend for transcription.")
+                }
             }
         }
         .disabled(!store.settings.voiceInputEnabled)
@@ -509,6 +554,8 @@ private var connectionSection: some View {
             return store.elevenLabsAPIKey.isEmpty || store.settings.elevenLabsVoiceID.isEmpty
         case .openai:
             return store.openAIAPIKey.isEmpty
+        case .openclaw:
+            return store.settings.fusionBackendURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         case .apple:
             return false
         }
@@ -523,6 +570,8 @@ private var connectionSection: some View {
             tts = ElevenLabsTTSService(voiceID: store.settings.elevenLabsVoiceID, apiKey: store.elevenLabsAPIKey)
         case .openai:
             tts = OpenAITTSService(voice: store.settings.openAIVoice, apiKey: store.openAIAPIKey)
+        case .openclaw:
+            tts = OpenClawTTSService(backendURL: store.settings.fusionBackendURL, voice: nil)
         case .apple:
             tts = AppleTTSService()
         }
@@ -553,7 +602,8 @@ private var connectionSection: some View {
                     playback.markStreamingDone()
                     await playback.waitUntilFinished()
                 } catch {
-                    // Preview failed silently
+                    // 预览失败时明确提示用户，不再静默
+                    previewErrorMessage = "语音预览失败：\(error.localizedDescription)"
                 }
                 playback.stop()
                 isPreviewing = false

@@ -12,13 +12,13 @@
         }
       }
     },
-    "AI 恋爱回复": {
+    "AI 聊天回复": {
       "extractionState": "manual",
       "localizations": {
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "AI 恋爱回复"
+            "value": "AI 聊天回复"
           }
         }
       }

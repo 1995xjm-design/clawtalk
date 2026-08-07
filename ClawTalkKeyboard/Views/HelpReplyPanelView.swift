@@ -28,6 +28,10 @@ class HelpReplyPanelView: UIView {
     private let activityIndicator = UIActivityIndicatorView(style: .medium)
     private let loadingLabel = UILabel()
     private var replies: [String] = []
+    private var speakButtons: [UIButton] = []
+
+    /// 朗读按钮 tag（用于从气泡内查找）
+    private static let speakButtonTag = 7788
 
     // MARK: - 初始化
     override init(frame: CGRect) {
@@ -44,6 +48,14 @@ class HelpReplyPanelView: UIView {
     private func setupUI() {
         backgroundColor = .white
 
+        // 监听朗读状态变化，刷新「朗读/停止」按钮
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(speakingStateChanged(_:)),
+            name: SpeechSynthesizerService.speakingStateChangedNotification,
+            object: nil
+        )
+
         setupHeader()
         setupInputArea()
         setupResultArea()
@@ -59,7 +71,7 @@ class HelpReplyPanelView: UIView {
         addSubview(closeButton)
 
         // 标题
-        titleLabel.text = "AI 恋爱回复"
+        titleLabel.text = "AI 聊天回复"
         titleLabel.font = .boldSystemFont(ofSize: 16)
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
         addSubview(titleLabel)
@@ -197,11 +209,28 @@ class HelpReplyPanelView: UIView {
         label.translatesAutoresizingMaskIntoConstraints = false
         container.addSubview(label)
 
+        // 朗读按钮：点击用系统 TTS（zh-CN）朗读本条回复，再次点击停止
+        let speakButton = UIButton(type: .system)
+        speakButton.tag = Self.speakButtonTag
+        speakButton.setTitle("朗读", for: .normal)
+        speakButton.titleLabel?.font = .systemFont(ofSize: 12)
+        speakButton.backgroundColor = UIColor.primaryPink.withAlphaComponent(0.15)
+        speakButton.layer.cornerRadius = 6
+        speakButton.addTarget(self, action: #selector(speakButtonTapped(_:)), for: .touchUpInside)
+        speakButton.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(speakButton)
+        speakButtons.append(speakButton)
+
         NSLayoutConstraint.activate([
             label.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 12),
             label.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -12),
             label.topAnchor.constraint(equalTo: container.topAnchor, constant: 8),
-            label.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -8)
+            label.bottomAnchor.constraint(lessThanOrEqualTo: speakButton.topAnchor, constant: -4),
+
+            speakButton.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -8),
+            speakButton.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -6),
+            speakButton.widthAnchor.constraint(equalToConstant: 52),
+            speakButton.heightAnchor.constraint(equalToConstant: 26)
         ])
 
         let tap = UITapGestureRecognizer(target: self, action: #selector(replyBubbleTapped(_:)))
@@ -209,11 +238,16 @@ class HelpReplyPanelView: UIView {
         return container
     }
 
+    deinit {
+        NotificationCenter.default.removeObserver(self)
+    }
+
     // MARK: - 公共方法
     func reset() {
         inputTextView.text = ""
         updateInputHint()
         replies = []
+        speakButtons = []
         resultScrollView.isHidden = false
         placeholderLabel.isHidden = false
         loadingStackView.isHidden = true
@@ -257,6 +291,7 @@ class HelpReplyPanelView: UIView {
     /// 展示AI回复气泡
     func setReplies(_ replies: [String]) {
         self.replies = replies
+        speakButtons = []
         repliesStackView.arrangedSubviews.forEach { $0.removeFromSuperview() }
         for reply in replies {
             repliesStackView.addArrangedSubview(createReplyBubble(reply))
@@ -290,7 +325,27 @@ class HelpReplyPanelView: UIView {
         guard let container = gesture.view,
               let index = repliesStackView.arrangedSubviews.firstIndex(of: container),
               index < replies.count else { return }
+        // 点中「朗读」按钮时只朗读，不触发选中上屏
+        if index < speakButtons.count,
+           speakButtons[index].frame.contains(gesture.location(in: container)) {
+            return
+        }
         delegate?.helpReplyPanelDidSelectReply(replies[index])
+    }
+
+    @objc private func speakButtonTapped(_ sender: UIButton) {
+        guard let index = speakButtons.firstIndex(of: sender), index < replies.count else { return }
+        SpeechSynthesizerService.shared.speak(replies[index])
+    }
+
+    @objc private func speakingStateChanged(_ notification: Notification) {
+        let service = SpeechSynthesizerService.shared
+        for (index, button) in speakButtons.enumerated() {
+            let isCurrent = service.isSpeaking
+                && index < replies.count
+                && service.currentText == replies[index]
+            button.setTitle(isCurrent ? "停止" : "朗读", for: .normal)
+        }
     }
 }
 

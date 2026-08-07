@@ -1,50 +1,6 @@
 {
   "sourceLanguage": "en",
   "strings": {
-    "AI 恋爱回复键盘": {
-      "extractionState": "manual",
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "AI 恋爱回复键盘"
-          }
-        }
-      }
-    },
-    "API Key": {
-      "extractionState": "manual",
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "API 密钥"
-          }
-        }
-      }
-    },
-    "API Mode": {
-      "extractionState": "manual",
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "API 模式"
-          }
-        }
-      }
-    },
-    "API keys and tokens are stored in the iOS Keychain, encrypted at rest. Voice is transcribed on-device — audio never leaves your phone. Agent communication uses HTTPS.": {
-      "extractionState": "manual",
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "API 密钥和令牌存储在 iOS 钥匙串中并加密保存。语音在设备端转写——音频不会离开你的手机。智能体通信使用 HTTPS。"
-          }
-        }
-      }
-    },
     "Add": {
       "extractionState": "manual",
       "localizations": {
@@ -111,6 +67,17 @@
         }
       }
     },
+    "AI 聊天回复键盘": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "AI 聊天回复键盘"
+          }
+        }
+      }
+    },
     "Allow Once": {
       "extractionState": "manual",
       "localizations": {
@@ -133,6 +100,50 @@
         }
       }
     },
+    "API Key": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "API 密钥"
+          }
+        }
+      }
+    },
+    "API keys and tokens are stored in the iOS Keychain, encrypted at rest. Voice is transcribed on-device — audio never leaves your phone. Agent communication uses HTTPS.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "API 密钥和令牌存储在 iOS 钥匙串中并加密保存。语音在设备端转写——音频不会离开你的手机。智能体通信使用 HTTPS。"
+          }
+        }
+      }
+    },
+    "API Mode": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "API 模式"
+          }
+        }
+      }
+    },
+    "Appearance": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "外观"
+          }
+        }
+      }
+    },
     "Apple's built-in voice. Free and works offline, but less natural.": {
       "extractionState": "manual",
       "localizations": {
@@ -140,6 +151,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "Apple 内置语音。免费且可离线使用，但音色不太自然。"
+          }
+        }
+      }
+    },
+    "Audio is sent to your OpenClaw backend for transcription.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "音频将发送到你的 OpenClaw 后端进行转写。"
+          }
+        }
+      }
+    },
+    "Backend URL": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "后端地址"
           }
         }
       }
@@ -243,6 +276,17 @@
         }
       }
     },
+    "Clear all chat history?": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "清空全部聊天记录？"
+          }
+        }
+      }
+    },
     "Clear Chat": {
       "extractionState": "manual",
       "localizations": {
@@ -265,28 +309,6 @@
         }
       }
     },
-    "Clear History": {
-      "extractionState": "manual",
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "清空记录"
-          }
-        }
-      }
-    },
-    "Clear all chat history?": {
-      "extractionState": "manual",
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "清空全部聊天记录？"
-          }
-        }
-      }
-    },
     "Clear chat history?": {
       "extractionState": "manual",
       "localizations": {
@@ -298,6 +320,17 @@
         }
       }
     },
+    "Clear History": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "清空记录"
+          }
+        }
+      }
+    },
     "Close": {
       "extractionState": "manual",
       "localizations": {
@@ -305,6 +338,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "关闭"
+          }
+        }
+      }
+    },
+    "configured": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已配置"
           }
         }
       }
@@ -364,6 +408,17 @@
         }
       }
     },
+    "Continue": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "继续"
+          }
+        }
+      }
+    },
     "Continue Without Voice": {
       "extractionState": "manual",
       "localizations": {
@@ -386,6 +441,17 @@
         }
       }
     },
+    "Dark": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "深色"
+          }
+        }
+      }
+    },
     "Data": {
       "extractionState": "manual",
       "localizations": {
@@ -393,6 +459,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "数据"
+          }
+        }
+      }
+    },
+    "default": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "默认"
           }
         }
       }
@@ -496,6 +573,17 @@
         }
       }
     },
+    "Download for On-Device Voice": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "下载设备端语音模型"
+          }
+        }
+      }
+    },
     "Download Large Model?": {
       "extractionState": "manual",
       "localizations": {
@@ -536,6 +624,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "ElevenLabs 提供最自然的音色。\n免费额度：每月 10,000 字符。"
+          }
+        }
+      }
+    },
+    "Enable the HTTP API in gateway config": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在网关配置中启用 HTTP API"
           }
         }
       }
@@ -595,6 +694,17 @@
         }
       }
     },
+    "Expose over HTTPS for remote access": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "通过 HTTPS 暴露以便远程访问"
+          }
+        }
+      }
+    },
     "Failed to send": {
       "extractionState": "manual",
       "localizations": {
@@ -650,6 +760,17 @@
         }
       }
     },
+    "Get Started": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "开始"
+          }
+        }
+      }
+    },
     "Hands-free conversation": {
       "extractionState": "manual",
       "localizations": {
@@ -683,6 +804,17 @@
         }
       }
     },
+    "I Have a Gateway": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "我有网关"
+          }
+        }
+      }
+    },
     "I'll set this up later": {
       "extractionState": "manual",
       "localizations": {
@@ -694,6 +826,17 @@
         }
       }
     },
+    "Install OpenClaw on your machine": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在你的电脑上安装 OpenClaw"
+          }
+        }
+      }
+    },
     "Interact directly with your agent's tools without going through chat.": {
       "extractionState": "manual",
       "localizations": {
@@ -701,6 +844,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "无需经过聊天，直接与智能体的工具交互。"
+          }
+        }
+      }
+    },
+    "Light": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "白色"
           }
         }
       }
@@ -826,28 +980,6 @@
         }
       }
     },
-    "No Models": {
-      "extractionState": "manual",
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "暂无模型"
-          }
-        }
-      }
-    },
-    "No Sessions": {
-      "extractionState": "manual",
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "暂无会话"
-          }
-        }
-      }
-    },
     "No active sessions found.": {
       "extractionState": "manual",
       "localizations": {
@@ -892,6 +1024,17 @@
         }
       }
     },
+    "No Models": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "暂无模型"
+          }
+        }
+      }
+    },
     "No models returned from the gateway.": {
       "extractionState": "manual",
       "localizations": {
@@ -899,6 +1042,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "网关未返回任何模型。"
+          }
+        }
+      }
+    },
+    "No Sessions": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "暂无会话"
           }
         }
       }
@@ -943,6 +1097,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "OpenClaw 网关"
+          }
+        }
+      }
+    },
+    "Or enter manually": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "或手动输入"
           }
         }
       }
@@ -1024,6 +1189,17 @@
         }
       }
     },
+    "Run openclaw onboard to configure": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "运行 openclaw onboard 完成配置"
+          }
+        }
+      }
+    },
     "Runs entirely on-device. Audio never leaves your phone.": {
       "extractionState": "manual",
       "localizations": {
@@ -1101,6 +1277,17 @@
         }
       }
     },
+    "Set a gateway auth token": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "设置网关认证令牌"
+          }
+        }
+      }
+    },
     "Settings": {
       "extractionState": "manual",
       "localizations": {
@@ -1112,17 +1299,6 @@
         }
       }
     },
-    "Show Token Usage": {
-      "extractionState": "manual",
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "显示令牌用量"
-          }
-        }
-      }
-    },
     "Show input/output token counts under assistant messages. Requires Open Responses API mode.": {
       "extractionState": "manual",
       "localizations": {
@@ -1130,6 +1306,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "在助手消息下方显示输入/输出令牌数。需要 Open Responses API 模式。"
+          }
+        }
+      }
+    },
+    "Show Token Usage": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "显示令牌用量"
           }
         }
       }
@@ -1218,6 +1405,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "状态"
+          }
+        }
+      }
+    },
+    "STT Processing": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "语音转文字处理"
           }
         }
       }
@@ -1365,6 +1563,17 @@
         }
       }
     },
+    "Token Storage": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "令牌存储"
+          }
+        }
+      }
+    },
     "Token usage is not available in WebSocket mode. Disable WebSocket to see token counts.": {
       "extractionState": "manual",
       "localizations": {
@@ -1398,6 +1607,17 @@
         }
       }
     },
+    "Transport": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "传输方式"
+          }
+        }
+      }
+    },
     "Type a message, or tap the\nmic to use voice input.": {
       "extractionState": "manual",
       "localizations": {
@@ -1405,6 +1625,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "输入消息，或点击\n麦克风使用语音输入。"
+          }
+        }
+      }
+    },
+    "Use your OpenClaw backend STT. Supports dialects via server-side engines.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "使用你的 OpenClaw 后端语音转文字服务，支持通过服务端引擎识别方言。"
+          }
+        }
+      }
+    },
+    "Use your OpenClaw backend TTS relay. Configure engine on the server.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "使用你的 OpenClaw 后端语音合成中继，引擎在服务器上配置。"
           }
         }
       }
@@ -1486,13 +1728,13 @@
         }
       }
     },
-    "WS Port or Path": {
+    "WebSocket enables real-time streaming. Enter a path (e.g. /ws) for tunneled gateways or a port (e.g. 18789) for local connections.": {
       "extractionState": "manual",
       "localizations": {
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "WebSocket 端口或路径"
+            "value": "WebSocket 支持实时流式传输。隧道网关请输入路径（如 /ws），本地连接请输入端口（如 18789）。"
           }
         }
       }
@@ -1504,17 +1746,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "WebSocket 模式"
-          }
-        }
-      }
-    },
-    "WebSocket enables real-time streaming. Enter a path (e.g. /ws) for tunneled gateways or a port (e.g. 18789) for local connections.": {
-      "extractionState": "manual",
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "WebSocket 支持实时流式传输。隧道网关请输入路径（如 /ws），本地连接请输入端口（如 18789）。"
           }
         }
       }
@@ -1541,6 +1772,17 @@
         }
       }
     },
+    "WS Port or Path": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "WebSocket 端口或路径"
+          }
+        }
+      }
+    },
     "Your access token": {
       "extractionState": "manual",
       "localizations": {
@@ -1548,28 +1790,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "你的访问令牌"
-          }
-        }
-      }
-    },
-    "configured": {
-      "extractionState": "manual",
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "已配置"
-          }
-        }
-      }
-    },
-    "default": {
-      "extractionState": "manual",
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "默认"
           }
         }
       }

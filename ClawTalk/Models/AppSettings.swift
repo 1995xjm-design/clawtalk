@@ -3,7 +3,15 @@ import Foundation
 enum TTSProvider: String, Codable, CaseIterable, Identifiable {
     case elevenlabs = "ElevenLabs"
     case openai = "OpenAI"
+    case openclaw = "OpenClaw Backend"
     case apple = "Apple (Offline)"
+
+    var id: String { rawValue }
+}
+
+enum STTProvider: String, Codable, CaseIterable, Identifiable {
+    case local = "Local Whisper"
+    case openclaw = "OpenClaw Backend"
 
     var id: String { rawValue }
 }
@@ -16,7 +24,7 @@ enum AgentAPIMode: String, Codable, CaseIterable, Identifiable {
 }
 
 enum WhisperModelSize: String, Codable, CaseIterable, Identifiable {
-    case small = "small.en"
+    case small = "small"
     case largeTurbo = "large-v3_turbo"
 
     init(from decoder: Decoder) throws {
@@ -35,17 +43,32 @@ enum WhisperModelSize: String, Codable, CaseIterable, Identifiable {
 
     var displayName: String {
         switch self {
-        case .small: return "Small (250 MB, faster)"
+        case .small: return "Small (250 MB, 中英多语言, faster)"
         case .largeTurbo: return "Large Turbo (1.6 GB, best quality)"
         }
     }
 }
 
+enum Appearance: String, Codable, CaseIterable, Identifiable {
+    case dark
+    case light
+
+    /// Migrate unknown/legacy values back to the dark default.
+    init(from decoder: Decoder) throws {
+        let raw = try decoder.singleValueContainer().decode(String.self)
+        self = Appearance(rawValue: raw) ?? .dark
+    }
+
+    var id: String { rawValue }
+}
+
 struct AppSettings: Codable {
     var gatewayURL: String
     var ttsProvider: TTSProvider
+    var sttProvider: STTProvider
     var elevenLabsVoiceID: String
     var openAIVoice: String
+    var fusionBackendURL: String
     var whisperModelSize: WhisperModelSize
     var voiceOutputEnabled: Bool
     var voiceInputEnabled: Bool
@@ -54,12 +77,15 @@ struct AppSettings: Codable {
     var useWebSocket: Bool
     var webSocketPath: String
     var hapticsEnabled: Bool
+    var appearance: Appearance
 
     static let defaults = AppSettings(
         gatewayURL: "",
         ttsProvider: .openai,
+        sttProvider: .local,
         elevenLabsVoiceID: "21m00Tcm4TlvDq8ikWAM",
         openAIVoice: "alloy",
+        fusionBackendURL: "http://127.0.0.1:18890",
         whisperModelSize: .small,
         voiceOutputEnabled: true,
         voiceInputEnabled: true,
@@ -67,7 +93,8 @@ struct AppSettings: Codable {
         showTokenUsage: false,
         useWebSocket: false,
         webSocketPath: "/ws",
-        hapticsEnabled: true
+        hapticsEnabled: true,
+        appearance: .dark
     )
 
     /// Build the full WebSocket URL from the gateway URL + port/path override.
@@ -108,8 +135,10 @@ struct AppSettings: Codable {
     init(
         gatewayURL: String,
         ttsProvider: TTSProvider,
+        sttProvider: STTProvider = .local,
         elevenLabsVoiceID: String,
         openAIVoice: String,
+        fusionBackendURL: String = "http://127.0.0.1:18890",
         whisperModelSize: WhisperModelSize,
         voiceOutputEnabled: Bool,
         voiceInputEnabled: Bool,
@@ -117,12 +146,15 @@ struct AppSettings: Codable {
         showTokenUsage: Bool = false,
         useWebSocket: Bool = false,
         webSocketPath: String = "/ws",
-        hapticsEnabled: Bool = true
+        hapticsEnabled: Bool = true,
+        appearance: Appearance = .dark
     ) {
         self.gatewayURL = gatewayURL
         self.ttsProvider = ttsProvider
+        self.sttProvider = sttProvider
         self.elevenLabsVoiceID = elevenLabsVoiceID
         self.openAIVoice = openAIVoice
+        self.fusionBackendURL = fusionBackendURL
         self.whisperModelSize = whisperModelSize
         self.voiceOutputEnabled = voiceOutputEnabled
         self.voiceInputEnabled = voiceInputEnabled
@@ -131,14 +163,17 @@ struct AppSettings: Codable {
         self.useWebSocket = useWebSocket
         self.webSocketPath = webSocketPath
         self.hapticsEnabled = hapticsEnabled
+        self.appearance = appearance
     }
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         gatewayURL = try container.decode(String.self, forKey: .gatewayURL)
         ttsProvider = try container.decode(TTSProvider.self, forKey: .ttsProvider)
+        sttProvider = try container.decodeIfPresent(STTProvider.self, forKey: .sttProvider) ?? .local
         elevenLabsVoiceID = try container.decode(String.self, forKey: .elevenLabsVoiceID)
         openAIVoice = try container.decode(String.self, forKey: .openAIVoice)
+        fusionBackendURL = try container.decodeIfPresent(String.self, forKey: .fusionBackendURL) ?? "http://127.0.0.1:18890"
         whisperModelSize = try container.decode(WhisperModelSize.self, forKey: .whisperModelSize)
         voiceOutputEnabled = try container.decode(Bool.self, forKey: .voiceOutputEnabled)
         voiceInputEnabled = try container.decode(Bool.self, forKey: .voiceInputEnabled)
@@ -146,6 +181,7 @@ struct AppSettings: Codable {
         showTokenUsage = try container.decodeIfPresent(Bool.self, forKey: .showTokenUsage) ?? false
         useWebSocket = try container.decodeIfPresent(Bool.self, forKey: .useWebSocket) ?? false
         hapticsEnabled = try container.decodeIfPresent(Bool.self, forKey: .hapticsEnabled) ?? true
+        appearance = try container.decodeIfPresent(Appearance.self, forKey: .appearance) ?? .dark
 
         // Migrate legacy webSocketPort → webSocketPath
         if let legacyPort = try container.decodeIfPresent(Int.self, forKey: .webSocketPort) {
@@ -156,19 +192,22 @@ struct AppSettings: Codable {
     }
 
     enum CodingKeys: String, CodingKey {
-        case gatewayURL, ttsProvider, elevenLabsVoiceID, openAIVoice
+        case gatewayURL, ttsProvider, sttProvider, elevenLabsVoiceID, openAIVoice, fusionBackendURL
         case whisperModelSize, voiceOutputEnabled, voiceInputEnabled
         case agentAPIMode, showTokenUsage, useWebSocket
         case webSocketPath, webSocketPort // webSocketPort for legacy decode only
         case hapticsEnabled
+        case appearance
     }
 
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(gatewayURL, forKey: .gatewayURL)
         try container.encode(ttsProvider, forKey: .ttsProvider)
+        try container.encode(sttProvider, forKey: .sttProvider)
         try container.encode(elevenLabsVoiceID, forKey: .elevenLabsVoiceID)
         try container.encode(openAIVoice, forKey: .openAIVoice)
+        try container.encode(fusionBackendURL, forKey: .fusionBackendURL)
         try container.encode(whisperModelSize, forKey: .whisperModelSize)
         try container.encode(voiceOutputEnabled, forKey: .voiceOutputEnabled)
         try container.encode(voiceInputEnabled, forKey: .voiceInputEnabled)
@@ -177,6 +216,7 @@ struct AppSettings: Codable {
         try container.encode(useWebSocket, forKey: .useWebSocket)
         try container.encode(webSocketPath, forKey: .webSocketPath)
         try container.encode(hapticsEnabled, forKey: .hapticsEnabled)
+        try container.encode(appearance, forKey: .appearance)
         // webSocketPort intentionally not encoded — legacy only
     }
 }

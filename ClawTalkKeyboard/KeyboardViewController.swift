@@ -54,6 +54,13 @@ class KeyboardViewController: UIInputViewController {
         loadUserPreferences()
     }
 
+    override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+        // 键盘收起/切换时停止朗读与录音，避免后台残留
+        SpeechSynthesizerService.shared.stop()
+        VoiceInputService.shared.cancel()
+    }
+
     // MARK: - Setup
     private func setupKeyboard() {
         keyboardView = KeyboardMainView(frame: view.bounds)
@@ -256,6 +263,20 @@ extension KeyboardViewController: KeyboardMainViewDelegate {
         generateAIReplies()
     }
 
+    // MARK: - 语音输入（按住说话）
+    func didTouchDownVoice() {
+        VoiceInputService.shared.delegate = self
+        VoiceInputService.shared.start()
+    }
+
+    func didTouchUpVoice() {
+        VoiceInputService.shared.finish()
+    }
+
+    func didVoiceCancel() {
+        VoiceInputService.shared.cancel()
+    }
+
     func didSelectContact(_ contact: ChatContact) {
         selectedContact = contact
         keyboardView?.updateSelectedContact(contact)
@@ -263,6 +284,9 @@ extension KeyboardViewController: KeyboardMainViewDelegate {
     }
 
     func didTapBackToKeyboard() {
+        // 回到键盘时停止朗读（面板关闭/回复已上屏）
+        SpeechSynthesizerService.shared.stop()
+
         currentPanelMode = .keyboard
         keyboardView?.showKeyboard()
         keyboardView?.updateCandidates([], pinyin: "")
@@ -467,6 +491,35 @@ extension KeyboardViewController {
     }
 }
 
+// MARK: - VoiceInputServiceDelegate
+extension KeyboardViewController: VoiceInputServiceDelegate {
+
+    func voiceInputDidChangeState(_ state: VoiceInputService.State) {
+        switch state {
+        case .idle:
+            keyboardView?.setVoiceRecording(false)
+        case .recording:
+            keyboardView?.setVoiceRecording(true)
+            keyboardView?.showCandidateMessage("正在录音，松开发送")
+        case .transcribing:
+            keyboardView?.setVoiceRecording(false)
+            keyboardView?.showCandidateLoading("正在识别…")
+        }
+    }
+
+    func voiceInputDidProduceText(_ text: String) {
+        keyboardView?.setVoiceRecording(false)
+        insertText(text)
+        // 清掉候选栏的识别提示，恢复正常键盘状态
+        keyboardView?.updateCandidates([], pinyin: "")
+    }
+
+    func voiceInputDidFail(_ message: String) {
+        keyboardView?.setVoiceRecording(false)
+        keyboardView?.showCandidateMessage(message)
+    }
+}
+
 // MARK: - Haptic Manager
 class HapticManager {
 
@@ -486,3 +539,5 @@ class HapticManager {
         impactGenerator.impactOccurred()
     }
 }
+
+

@@ -51,7 +51,7 @@ targets:
             echo "No dev-resources WhisperKit model found at $SRC. Skipping bundle."
             exit 0
           fi
-          if [ -d "$DEST" ] && [ "$DEST/openai_whisper-small.en" -nt "$SRC/openai_whisper-small.en" ]; then
+          if [ -d "$DEST" ] && [ "$DEST/openai_whisper-small" -nt "$SRC/openai_whisper-small" ]; then
             echo "Bundled WhisperKit model already up to date."
             exit 0
           fi
@@ -124,8 +124,3 @@ targets:
         SWIFT_ACTIVE_COMPILATION_CONDITIONS: KEYBOARD_EXTENSION
         CODE_SIGN_ENTITLEMENTS: ClawTalkKeyboard/ClawTalkKeyboard.entitlements
         TARGETED_DEVICE_FAMILY: "1,2"
-    entitlements:
-      path: ClawTalkKeyboard/ClawTalkKeyboard.entitlements
-      properties:
-        com.apple.security.application-groups:
-          - group.com.openclaw.clawtalk
