@@ -93,7 +93,7 @@ final class VoiceInputService: NSObject {
             delegate?.voiceInputDidFail("麦克风权限被拒绝，请在系统设置中允许键盘使用麦克风")
         case .undetermined:
             isAuthorizationPending = true
-            AVAudioApplication.shared.requestRecordPermission { [weak self] granted in
+            AVAudioApplication.requestRecordPermission { [weak self] granted in
                 guard let self else { return }
                 self.isAuthorizationPending = false
                 DispatchQueue.main.async {
