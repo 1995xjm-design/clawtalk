@@ -383,10 +383,10 @@ enum KokoroG2P {
 /// 实际以 ORT session 的 inputNames 为准自动选择。
 final class KokoroTTSService: SpeechService {
     /// 最长音素 token 数（kokoro-onnx MAX_PHONEME_LENGTH=510，含首尾 pad 需留 2 个）
-    private static let maxPhonemeTokens = 508
+    static let maxPhonemeTokens = 508
     /// 输出波形每 100ms 的采样数（24kHz × 0.1s）
     private static let samplesPerChunk = 2400
-    private static let waveformOutputName = "waveform"
+    static let waveformOutputName = "waveform"
 
     private let modelManager: KokoroModelManager
     /// 音色名（v1.1-zh 音色包内，如 "zf_001" 女声、"zm_010" 男声）
@@ -524,7 +524,7 @@ private final class Engine {
             let env = try ORTEnv(loggingLevel: .warning)
             let options = try ORTSessionOptions()
             // CPU 线程数：手机核数减半，避免抢占主线程过多算力
-            _ = try options.setIntraOpNumThreads(max(1, ProcessInfo.processInfo.activeProcessorCount / 2))
+            _ = try options.setIntraOpNumThreads(Int32(max(1, ProcessInfo.processInfo.activeProcessorCount / 2)))
             _ = try options.setGraphOptimizationLevel(.all)
             self.env = env
             self.session = try ORTSession(env: env, modelPath: modelURL.path, sessionOptions: options)
