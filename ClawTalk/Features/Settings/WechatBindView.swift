@@ -296,7 +296,7 @@ struct WechatBindView: View {
                 try? await Task.sleep(for: .seconds(3))
                 if Task.isCancelled { break }
                 await self.checkBindingStatus()
-                if let state = self.state, state.isTerminal {
+                if self.state.isTerminal {
                     break
                 }
             }
