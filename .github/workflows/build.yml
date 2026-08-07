@@ -1,0 +1,62 @@
+name: Build & Test (ClawTalk + Keyboard)
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install xcodegen
+        run: brew install xcodegen
+
+      - name: Generate project (xcodegen)
+        run: xcodegen generate
+
+      - name: Resolve dependencies (SPM)
+        run: xcodebuild -resolvePackageDependencies -project ClawTalk.xcodeproj -scheme ClawTalk
+
+      - name: Build ClawTalk app (+ keyboard extension)
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -project ClawTalk.xcodeproj \
+            -scheme ClawTalk \
+            -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO | tee build-app.log
+
+      - name: Build ClawTalkKeyboard extension (standalone)
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -project ClawTalk.xcodeproj \
+            -scheme ClawTalkKeyboard \
+            -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO | tee build-keyboard.log
+
+      - name: Run unit tests
+        run: |
+          set -o pipefail
+          xcodebuild test \
+            -project ClawTalk.xcodeproj \
+            -scheme ClawTalk \
+            -destination 'platform=iOS Simulator,name=iPhone 16' \
+            CODE_SIGNING_ALLOWED=NO | tee test.log
+
+      - name: Upload build logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-logs
+          path: |
+            build-app.log
+            build-keyboard.log
+            test.log

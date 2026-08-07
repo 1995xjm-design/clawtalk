@@ -1,0 +1,131 @@
+name: ClawTalk
+options:
+  bundleIdPrefix: com.openclaw
+  deploymentTarget:
+    iOS: "17.0"
+  xcodeVersion: "16.0"
+  generateEmptyDirectories: true
+
+settings:
+  base:
+    SWIFT_VERSION: "5.10"
+    DEVELOPMENT_TEAM: UL35UHH8Q4
+    CODE_SIGN_IDENTITY: ""
+    CODE_SIGN_STYLE: Automatic
+    ENABLE_PREVIEWS: YES
+
+packages:
+  WhisperKit:
+    url: https://github.com/argmaxinc/WhisperKit.git
+    from: "0.9.0"
+  KeychainAccess:
+    url: https://github.com/kishikawakatsumi/KeychainAccess.git
+    from: "4.2.2"
+  MarkdownUI:
+    url: https://github.com/gonzalezreal/swift-markdown-ui.git
+    from: "2.4.0"
+
+targets:
+  ClawTalk:
+    type: application
+    platform: iOS
+    sources:
+      - ClawTalk
+    resources:
+      - ClawTalk/Resources
+    dependencies:
+      - package: WhisperKit
+      - package: KeychainAccess
+      - package: MarkdownUI
+      - target: ClawTalkKeyboard
+    postCompileScripts:
+      - name: Bundle WhisperKit model (Debug only)
+        script: |
+          if [ "$CONFIGURATION" != "Debug" ]; then
+            echo "Skipping bundled WhisperKit model (Release build)."
+            exit 0
+          fi
+          SRC="$SRCROOT/.dev-resources/whisperkit-coreml"
+          DEST="$BUILT_PRODUCTS_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/whisperkit-coreml"
+          if [ ! -d "$SRC" ]; then
+            echo "No dev-resources WhisperKit model found at $SRC. Skipping bundle."
+            exit 0
+          fi
+          if [ -d "$DEST" ] && [ "$DEST/openai_whisper-small.en" -nt "$SRC/openai_whisper-small.en" ]; then
+            echo "Bundled WhisperKit model already up to date."
+            exit 0
+          fi
+          mkdir -p "$BUILT_PRODUCTS_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH"
+          rsync -a --delete "$SRC/" "$DEST/"
+          echo "Copied dev WhisperKit model into Debug build."
+        outputFiles:
+          - $(BUILT_PRODUCTS_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/whisperkit-coreml
+    settings:
+      base:
+        INFOPLIST_FILE: ClawTalk/Resources/Info.plist
+        CODE_SIGN_ENTITLEMENTS: ClawTalk/Resources/ClawTalk.entitlements
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        PRODUCT_BUNDLE_IDENTIFIER: com.openclaw.clawtalk
+        MARKETING_VERSION: "1.1.0"
+        CURRENT_PROJECT_VERSION: 2
+        TARGETED_DEVICE_FAMILY: "1,2"
+    info:
+      path: ClawTalk/Resources/Info.plist
+      properties:
+        CFBundleDisplayName: ClawTalk
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        NSMicrophoneUsageDescription: "ClawTalk needs microphone access for voice input to your AI agent."
+        NSSpeechRecognitionUsageDescription: "ClawTalk uses speech recognition to transcribe your voice messages."
+        NSUserNotificationsUsageDescription: "ClawTalk sends notifications when your AI agent needs your attention."
+        NSLocationWhenInUseUsageDescription: "ClawTalk shares your location with your AI agent when requested."
+        NSContactsUsageDescription: "ClawTalk accesses contacts when your AI agent needs to look up or add a contact."
+        NSCalendarsFullAccessUsageDescription: "ClawTalk accesses your calendar when your AI agent needs to view or create events."
+        NSRemindersFullAccessUsageDescription: "ClawTalk accesses reminders when your AI agent needs to view or create reminders."
+        NSMotionUsageDescription: "ClawTalk accesses motion data when your AI agent requests activity or step information."
+        NSPhotoLibraryUsageDescription: "ClawTalk accesses your photos when your AI agent requests recent images."
+        NSCameraUsageDescription: "ClawTalk uses the camera when your AI agent requests a photo."
+        NSAppTransportSecurity:
+          NSAllowsArbitraryLoads: false
+          NSExceptionDomains:
+            ts.net:
+              NSExceptionAllowsInsecureHTTPLoads: false
+              NSIncludesSubdomains: true
+        ITSAppUsesNonExemptEncryption: false
+        UILaunchScreen: {}
+        UIRequiresFullScreen: true
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+
+  ClawTalkTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - ClawTalkTests
+    dependencies:
+      - target: ClawTalk
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.openclaw.clawtalk.tests
+        GENERATE_INFOPLIST_FILE: YES
+
+  ClawTalkKeyboard:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: ClawTalkKeyboard
+    resources:
+      - path: ClawTalkKeyboard/Localizable.xcstrings
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.openclaw.clawtalk.keyboard
+        INFOPLIST_FILE: ClawTalkKeyboard/Info.plist
+        SWIFT_ACTIVE_COMPILATION_CONDITIONS: KEYBOARD_EXTENSION
+        CODE_SIGN_ENTITLEMENTS: ClawTalkKeyboard/ClawTalkKeyboard.entitlements
+        TARGETED_DEVICE_FAMILY: "1,2"
+    entitlements:
+      path: ClawTalkKeyboard/ClawTalkKeyboard.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - group.com.openclaw.clawtalk

@@ -1,0 +1,116 @@
+{
+  "sourceLanguage": "en",
+  "strings": {
+    "ClawTalk accesses your calendar when your AI agent needs to view or create events.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "当你的 AI 智能体需要查看或创建日程时，ClawTalk 会访问你的日历。"
+          }
+        }
+      }
+    },
+    "ClawTalk uses the camera when your AI agent requests a photo.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "当你的 AI 智能体请求拍摄照片时，ClawTalk 会使用相机。"
+          }
+        }
+      }
+    },
+    "ClawTalk accesses contacts when your AI agent needs to look up or add a contact.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "当你的 AI 智能体需要查找或添加联系人时，ClawTalk 会访问你的通讯录。"
+          }
+        }
+      }
+    },
+    "ClawTalk shares your location with your AI agent when requested.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "应你的请求，ClawTalk 会与你的 AI 智能体共享你的位置。"
+          }
+        }
+      }
+    },
+    "ClawTalk needs microphone access for voice input to your AI agent.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ClawTalk 需要麦克风权限，用于向你的 AI 智能体进行语音输入。"
+          }
+        }
+      }
+    },
+    "ClawTalk accesses motion data when your AI agent requests activity or step information.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "当你的 AI 智能体请求活动或步数信息时，ClawTalk 会访问你的运动数据。"
+          }
+        }
+      }
+    },
+    "ClawTalk accesses your photos when your AI agent requests recent images.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "当你的 AI 智能体请求近期图片时，ClawTalk 会访问你的照片。"
+          }
+        }
+      }
+    },
+    "ClawTalk accesses reminders when your AI agent needs to view or create reminders.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "当你的 AI 智能体需要查看或创建提醒事项时，ClawTalk 会访问你的提醒事项。"
+          }
+        }
+      }
+    },
+    "ClawTalk uses speech recognition to transcribe your voice messages.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ClawTalk 使用语音识别功能将你的语音消息转写为文字。"
+          }
+        }
+      }
+    },
+    "ClawTalk sends notifications when your AI agent needs your attention.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "当你的 AI 智能体需要你关注时，ClawTalk 会发送通知提醒你。"
+          }
+        }
+      }
+    }
+  },
+  "version": "1.0"
+}

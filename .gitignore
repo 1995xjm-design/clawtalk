@@ -1,0 +1,46 @@
+# Xcode
+*.xcodeproj/xcuserdata/
+*.xcodeproj/project.xcworkspace/xcuserdata/
+*.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/
+DerivedData/
+build/
+*.moved-aside
+*.pbxuser
+!default.pbxuser
+*.mode1v3
+!default.mode1v3
+*.mode2v3
+!default.mode2v3
+*.perspectivev3
+!default.perspectivev3
+*.hmap
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# Swift Package Manager
+.build/
+Packages/
+Package.resolved
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Secrets
+.env
+
+# Claude
+.claude/
+
+# Internal planning (not for distribution)
+APP_STORE_PLAN.md
+docs/APP_STORE_METADATA.md
+docs/SUBMISSION_GAMEPLAN.md
+docs/TESTING_PLAN.md
+
+# Dev-only large assets (Debug-bundled WhisperKit models, etc.)
+.dev-resources/
+
+# Large store preview video (excluded from CI repo)
+assets/store-screenshots/preview-conversation.mov
