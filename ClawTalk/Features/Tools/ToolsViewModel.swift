@@ -342,14 +342,14 @@ final class ToolsViewModel {
         guard let gateway = gatewayConnection,
               gateway.connectionState == .connected
         else {
-            errorMessage = "Could not load models"
+            errorMessage = "无法加载模型"
             return
         }
 
         do {
             availableModels = try await gateway.modelsList()
         } catch {
-            errorMessage = "Failed to load models: \(error.localizedDescription)"
+            errorMessage = "加载模型失败：\(error.localizedDescription)"
         }
     }
 }

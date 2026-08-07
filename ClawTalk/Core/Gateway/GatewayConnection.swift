@@ -33,7 +33,7 @@ final class GatewayConnection {
     /// - Parameter resolvedURL: Full WebSocket URL (e.g. wss://host/ws or ws://host:18789).
     func connect(resolvedURL: String, token: String) async {
         guard let wsURL = URL(string: resolvedURL) else {
-            lastError = "Invalid WebSocket URL: \(resolvedURL)"
+            lastError = "无效的 WebSocket URL：\(resolvedURL)"
             return
         }
 

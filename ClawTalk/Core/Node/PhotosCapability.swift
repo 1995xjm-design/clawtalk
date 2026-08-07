@@ -19,7 +19,7 @@ enum PhotosCapability {
 
         var errorDescription: String? {
             switch self {
-            case .denied: return "Photos permission denied"
+            case .denied: return "照片权限被拒绝"
             case .failed(let msg): return msg
             }
         }

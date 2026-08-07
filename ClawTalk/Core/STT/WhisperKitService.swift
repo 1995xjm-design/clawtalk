@@ -99,7 +99,7 @@ private enum TranscriptionError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .modelNotLoaded: return "Whisper model failed to load. Check Settings."
+        case .modelNotLoaded: return "Whisper 模型加载失败，请在设置中检查。"
         }
     }
 }

@@ -6,8 +6,8 @@ enum STTError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .httpError(let code): return "STT service returned HTTP \(code)."
-        case .invalidConfiguration: return "STT is not configured. Check Settings."
+        case .httpError(let code): return "语音转写服务返回 HTTP 状态码 \(code)。"
+        case .invalidConfiguration: return "语音转写服务未配置，请在设置中检查。"
         }
     }
 }

@@ -36,11 +36,11 @@ actor GatewayWebSocket {
 
         var errorDescription: String? {
             switch self {
-            case .connectFailed(let msg): return "Connect failed: \(msg)"
-            case .requestTimeout(let method): return "\(method): request timed out"
-            case .responseError(let method, let code, let msg): return "\(method): [\(code)] \(msg)"
-            case .notConnected: return "Not connected to gateway"
-            case .encodingFailed: return "Failed to encode request"
+            case .connectFailed(let msg): return "连接失败：\(msg)"
+            case .requestTimeout(let method): return "\(method) 请求超时"
+            case .responseError(let method, let code, let msg): return "\(method)：[\(code)] \(msg)"
+            case .notConnected: return "未连接到网关"
+            case .encodingFailed: return "请求编码失败"
             }
         }
     }
@@ -145,7 +145,7 @@ actor GatewayWebSocket {
                     // Cancel the WebSocket task to unblock any pending receive() calls,
                     // otherwise the task group hangs waiting for the cancelled child to finish.
                     await self.cancelWebSocketTask()
-                    throw GatewayError.connectFailed("connect timed out")
+                    throw GatewayError.connectFailed("连接超时")
                 }
                 _ = try await group.next()
                 group.cancelAll()
@@ -225,12 +225,12 @@ actor GatewayWebSocket {
         }
 
         guard case let .res(res) = response else {
-            throw GatewayError.responseError(method: method, code: "UNEXPECTED", message: "unexpected frame type")
+            throw GatewayError.responseError(method: method, code: "UNEXPECTED", message: "意外的帧类型")
         }
 
         if !res.ok {
             let code = res.error?["code"]?.value as? String ?? "GATEWAY_ERROR"
-            let msg = res.error?["message"]?.value as? String ?? "gateway error"
+            let msg = res.error?["message"]?.value as? String ?? "网关错误"
             throw GatewayError.responseError(method: method, code: code, message: msg)
         }
 
@@ -351,9 +351,9 @@ actor GatewayWebSocket {
     private func waitForChallenge() async throws -> String {
         try await withThrowingTaskGroup(of: String.self) { group in
             group.addTask { [weak self] in
-                guard let self else { throw GatewayError.connectFailed("deallocated") }
+                guard let self else { throw GatewayError.connectFailed("连接已释放") }
                 while true {
-                    guard let task = await self.wsTask else { throw GatewayError.connectFailed("no socket") }
+                    guard let task = await self.wsTask else { throw GatewayError.connectFailed("没有可用连接") }
                     let msg = try await task.receive()
                     guard let data = self.decodeMessageData(msg),
                           let frame = try? self.decoder.decode(GatewayFrame.self, from: data),
@@ -369,7 +369,7 @@ actor GatewayWebSocket {
             group.addTask {
                 try await Task.sleep(nanoseconds: UInt64(self.challengeTimeoutSeconds * 1_000_000_000))
                 await self.cancelWebSocketTask()
-                throw GatewayError.connectFailed("challenge timeout")
+                throw GatewayError.connectFailed("挑战超时")
             }
             let result = try await group.next()!
             group.cancelAll()
@@ -379,7 +379,7 @@ actor GatewayWebSocket {
 
     private func waitForConnectResponse(reqId: String) async throws -> ResponseFrame {
         guard let task = wsTask else {
-            throw GatewayError.connectFailed("no socket")
+            throw GatewayError.connectFailed("没有可用连接")
         }
         while true {
             let msg = try await task.receive()
@@ -394,12 +394,12 @@ actor GatewayWebSocket {
 
     private func handleConnectResponse(_ res: ResponseFrame, identity: DeviceIdentity) async throws {
         guard res.ok else {
-            let msg = res.error?["message"]?.value as? String ?? "gateway connect rejected"
+            let msg = res.error?["message"]?.value as? String ?? "网关连接被拒绝"
             throw GatewayError.connectFailed(msg)
         }
 
         guard let payload = res.payload else {
-            throw GatewayError.connectFailed("missing payload")
+            throw GatewayError.connectFailed("缺少响应数据")
         }
 
         let payloadData = try encoder.encode(payload)

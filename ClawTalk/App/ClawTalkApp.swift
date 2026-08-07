@@ -251,8 +251,23 @@ struct ClawTalkApp: App {
                     return AppleTTSService()
                 }
                 return OpenClawTTSService(backendURL: backendURL, voice: nil)
+            case .minimax:
+                let groupID = s.minimaxGroupID.trimmingCharacters(in: .whitespacesAndNewlines)
+                let apiKey = s.minimaxAPIKey.trimmingCharacters(in: .whitespacesAndNewlines)
+                if groupID.isEmpty || apiKey.isEmpty {
+                    // MiniMax 配置缺失时兜底 Apple 语音
+                    return AppleTTSService()
+                }
+                return MiniMaxTTSService(
+                    groupID: groupID,
+                    apiKey: apiKey,
+                    domain: s.minimaxDomain,
+                    voiceID: s.minimaxVoiceID
+                )
             case .apple:
                 return AppleTTSService()
+            case .kokoro:
+                return KokoroTTSService()
             }
         }()
 

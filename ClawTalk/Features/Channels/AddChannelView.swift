@@ -113,7 +113,7 @@ struct AddChannelView: View {
 
     private func loadAgents() async {
         guard settings.isConfigured else {
-            loadError = "Configure your gateway in Settings first."
+            loadError = "请先在设置中配置网关。"
             return
         }
 
@@ -127,7 +127,7 @@ struct AddChannelView: View {
             let wrapper = try JSONDecoder().decode(ToolResultWrapper<AgentsListResult>.self, from: data)
             agents = wrapper.details?.agents ?? []
         } catch {
-            loadError = "Could not load agents."
+            loadError = "无法加载智能体列表。"
         }
         isLoading = false
     }

@@ -23,9 +23,9 @@ final class CanvasCapability {
 
         var errorDescription: String? {
             switch self {
-            case .noWebView: return "Canvas not available — open the Canvas tab first"
-            case .evalFailed(let msg): return "JavaScript error: \(msg)"
-            case .snapshotFailed: return "Failed to capture canvas snapshot"
+            case .noWebView: return "画布不可用——请先打开画布页"
+            case .evalFailed(let msg): return "JavaScript 错误：\(msg)"
+            case .snapshotFailed: return "画布截图失败"
             }
         }
     }
@@ -48,7 +48,7 @@ final class CanvasCapability {
 
     func present(url: String) async throws -> PresentResult {
         guard let parsedURL = URL(string: url) else {
-            throw CanvasError.evalFailed("Invalid URL: \(url)")
+            throw CanvasError.evalFailed("无效的 URL：\(url)")
         }
 
         currentURL = url

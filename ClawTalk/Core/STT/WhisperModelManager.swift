@@ -58,7 +58,7 @@ final class WhisperModelManager {
             defaults.set(true, forKey: downloadedKey)
         } catch {
             isDownloading = false
-            errorMessage = "Download failed: \(error.localizedDescription)"
+            errorMessage = "模型下载失败：\(error.localizedDescription)"
         }
     }
 }

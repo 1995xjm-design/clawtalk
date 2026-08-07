@@ -43,7 +43,7 @@ enum MotionCapability {
 
     static func getActivity(hours: Int = 1) async throws -> [ActivityResult] {
         guard CMMotionActivityManager.isActivityAvailable() else {
-            throw MotionError.unavailable("Motion activity not available")
+            throw MotionError.unavailable("运动数据不可用")
         }
 
         let manager = CMMotionActivityManager()
@@ -85,7 +85,7 @@ enum MotionCapability {
 
     static func getPedometer(hours: Int = 24) async throws -> PedometerResult {
         guard CMPedometer.isStepCountingAvailable() else {
-            throw MotionError.unavailable("Pedometer not available")
+            throw MotionError.unavailable("计步器不可用")
         }
 
         let pedometer = CMPedometer()
@@ -99,7 +99,7 @@ enum MotionCapability {
                 } else if let data {
                     continuation.resume(returning: data)
                 } else {
-                    continuation.resume(throwing: MotionError.unavailable("No pedometer data"))
+                    continuation.resume(throwing: MotionError.unavailable("没有计步数据"))
                 }
             }
         }

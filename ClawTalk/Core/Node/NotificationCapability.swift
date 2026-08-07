@@ -9,7 +9,7 @@ enum NotificationCapability {
 
         var errorDescription: String? {
             switch self {
-            case .denied: return "Notification permission denied"
+            case .denied: return "通知权限被拒绝"
             case .failed(let msg): return msg
             }
         }

@@ -15,8 +15,8 @@ enum ScreenCapability {
 
         var errorDescription: String? {
             switch self {
-            case .noWindow: return "No active window to capture"
-            case .captureFailed: return "Screenshot capture failed"
+            case .noWindow: return "没有可捕获的活动窗口"
+            case .captureFailed: return "截图失败"
             }
         }
     }

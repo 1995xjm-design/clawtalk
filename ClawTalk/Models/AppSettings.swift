@@ -4,7 +4,10 @@ enum TTSProvider: String, Codable, CaseIterable, Identifiable {
     case elevenlabs = "ElevenLabs"
     case openai = "OpenAI"
     case openclaw = "OpenClaw Backend"
+    case minimax = "MiniMax"
     case apple = "Apple (Offline)"
+    // Kokoro 本地语音服务由 FUSION-009 并行任务补齐实现，此处仅预留枚举值
+    case kokoro = "Kokoro (Local)"
 
     var id: String { rawValue }
 }
@@ -69,6 +72,11 @@ struct AppSettings: Codable {
     var elevenLabsVoiceID: String
     var openAIVoice: String
     var fusionBackendURL: String
+    var minimaxGroupID: String
+    var minimaxAPIKey: String
+    var minimaxDomain: String
+    var minimaxVoiceID: String
+    var wechatBridgeURL: String
     var whisperModelSize: WhisperModelSize
     var voiceOutputEnabled: Bool
     var voiceInputEnabled: Bool
@@ -86,6 +94,11 @@ struct AppSettings: Codable {
         elevenLabsVoiceID: "21m00Tcm4TlvDq8ikWAM",
         openAIVoice: "alloy",
         fusionBackendURL: "http://127.0.0.1:18890",
+        minimaxGroupID: "",
+        minimaxAPIKey: "",
+        minimaxDomain: "https://api.minimaxi.com",
+        minimaxVoiceID: "female-shaonv",
+        wechatBridgeURL: "",
         whisperModelSize: .small,
         voiceOutputEnabled: true,
         voiceInputEnabled: true,
@@ -139,6 +152,11 @@ struct AppSettings: Codable {
         elevenLabsVoiceID: String,
         openAIVoice: String,
         fusionBackendURL: String = "http://127.0.0.1:18890",
+        minimaxGroupID: String = "",
+        minimaxAPIKey: String = "",
+        minimaxDomain: String = "https://api.minimaxi.com",
+        minimaxVoiceID: String = "female-shaonv",
+        wechatBridgeURL: String = "",
         whisperModelSize: WhisperModelSize,
         voiceOutputEnabled: Bool,
         voiceInputEnabled: Bool,
@@ -155,6 +173,11 @@ struct AppSettings: Codable {
         self.elevenLabsVoiceID = elevenLabsVoiceID
         self.openAIVoice = openAIVoice
         self.fusionBackendURL = fusionBackendURL
+        self.minimaxGroupID = minimaxGroupID
+        self.minimaxAPIKey = minimaxAPIKey
+        self.minimaxDomain = minimaxDomain
+        self.minimaxVoiceID = minimaxVoiceID
+        self.wechatBridgeURL = wechatBridgeURL
         self.whisperModelSize = whisperModelSize
         self.voiceOutputEnabled = voiceOutputEnabled
         self.voiceInputEnabled = voiceInputEnabled
@@ -174,6 +197,11 @@ struct AppSettings: Codable {
         elevenLabsVoiceID = try container.decode(String.self, forKey: .elevenLabsVoiceID)
         openAIVoice = try container.decode(String.self, forKey: .openAIVoice)
         fusionBackendURL = try container.decodeIfPresent(String.self, forKey: .fusionBackendURL) ?? "http://127.0.0.1:18890"
+        minimaxGroupID = try container.decodeIfPresent(String.self, forKey: .minimaxGroupID) ?? ""
+        minimaxAPIKey = try container.decodeIfPresent(String.self, forKey: .minimaxAPIKey) ?? ""
+        minimaxDomain = try container.decodeIfPresent(String.self, forKey: .minimaxDomain) ?? "https://api.minimaxi.com"
+        minimaxVoiceID = try container.decodeIfPresent(String.self, forKey: .minimaxVoiceID) ?? "female-shaonv"
+        wechatBridgeURL = try container.decodeIfPresent(String.self, forKey: .wechatBridgeURL) ?? ""
         whisperModelSize = try container.decode(WhisperModelSize.self, forKey: .whisperModelSize)
         voiceOutputEnabled = try container.decode(Bool.self, forKey: .voiceOutputEnabled)
         voiceInputEnabled = try container.decode(Bool.self, forKey: .voiceInputEnabled)
@@ -193,6 +221,7 @@ struct AppSettings: Codable {
 
     enum CodingKeys: String, CodingKey {
         case gatewayURL, ttsProvider, sttProvider, elevenLabsVoiceID, openAIVoice, fusionBackendURL
+        case minimaxGroupID, minimaxAPIKey, minimaxDomain, minimaxVoiceID, wechatBridgeURL
         case whisperModelSize, voiceOutputEnabled, voiceInputEnabled
         case agentAPIMode, showTokenUsage, useWebSocket
         case webSocketPath, webSocketPort // webSocketPort for legacy decode only
@@ -208,6 +237,11 @@ struct AppSettings: Codable {
         try container.encode(elevenLabsVoiceID, forKey: .elevenLabsVoiceID)
         try container.encode(openAIVoice, forKey: .openAIVoice)
         try container.encode(fusionBackendURL, forKey: .fusionBackendURL)
+        try container.encode(minimaxGroupID, forKey: .minimaxGroupID)
+        try container.encode(minimaxAPIKey, forKey: .minimaxAPIKey)
+        try container.encode(minimaxDomain, forKey: .minimaxDomain)
+        try container.encode(minimaxVoiceID, forKey: .minimaxVoiceID)
+        try container.encode(wechatBridgeURL, forKey: .wechatBridgeURL)
         try container.encode(whisperModelSize, forKey: .whisperModelSize)
         try container.encode(voiceOutputEnabled, forKey: .voiceOutputEnabled)
         try container.encode(voiceInputEnabled, forKey: .voiceInputEnabled)

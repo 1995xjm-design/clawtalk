@@ -21,9 +21,9 @@ enum LocationCapability {
 
         var errorDescription: String? {
             switch self {
-            case .denied: return "Location permission denied"
-            case .unavailable: return "Location services unavailable"
-            case .timeout: return "Location request timed out"
+            case .denied: return "定位权限被拒绝"
+            case .unavailable: return "定位服务不可用"
+            case .timeout: return "定位请求超时"
             }
         }
     }

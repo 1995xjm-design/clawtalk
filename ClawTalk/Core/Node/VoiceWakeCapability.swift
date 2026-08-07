@@ -28,9 +28,9 @@ final class VoiceWakeCapability {
 
         var errorDescription: String? {
             switch self {
-            case .denied: return "Speech recognition permission denied"
-            case .unavailable: return "Speech recognition not available"
-            case .alreadyRunning: return "Voice wake already running"
+            case .denied: return "语音识别权限被拒绝"
+            case .unavailable: return "语音识别不可用"
+            case .alreadyRunning: return "语音唤醒已在运行"
             }
         }
     }

@@ -1,6 +1,50 @@
 {
   "sourceLanguage": "en",
   "strings": {
+    "AI 聊天回复键盘": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "AI 聊天回复键盘"
+          }
+        }
+      }
+    },
+    "API Key": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "API 密钥"
+          }
+        }
+      }
+    },
+    "API Mode": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "API 模式"
+          }
+        }
+      }
+    },
+    "API keys and tokens are stored in the iOS Keychain, encrypted at rest. Voice is transcribed on-device — audio never leaves your phone. Agent communication uses HTTPS.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "API 密钥和令牌存储在 iOS 钥匙串中并加密保存。语音在设备端转写——音频不会离开你的手机。智能体通信使用 HTTPS。"
+          }
+        }
+      }
+    },
     "Add": {
       "extractionState": "manual",
       "localizations": {
@@ -67,17 +111,6 @@
         }
       }
     },
-    "AI 聊天回复键盘": {
-      "extractionState": "manual",
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "AI 聊天回复键盘"
-          }
-        }
-      }
-    },
     "Allow Once": {
       "extractionState": "manual",
       "localizations": {
@@ -96,39 +129,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "始终允许"
-          }
-        }
-      }
-    },
-    "API Key": {
-      "extractionState": "manual",
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "API 密钥"
-          }
-        }
-      }
-    },
-    "API keys and tokens are stored in the iOS Keychain, encrypted at rest. Voice is transcribed on-device — audio never leaves your phone. Agent communication uses HTTPS.": {
-      "extractionState": "manual",
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "API 密钥和令牌存储在 iOS 钥匙串中并加密保存。语音在设备端转写——音频不会离开你的手机。智能体通信使用 HTTPS。"
-          }
-        }
-      }
-    },
-    "API Mode": {
-      "extractionState": "manual",
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "API 模式"
           }
         }
       }
@@ -276,17 +276,6 @@
         }
       }
     },
-    "Clear all chat history?": {
-      "extractionState": "manual",
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "清空全部聊天记录？"
-          }
-        }
-      }
-    },
     "Clear Chat": {
       "extractionState": "manual",
       "localizations": {
@@ -309,17 +298,6 @@
         }
       }
     },
-    "Clear chat history?": {
-      "extractionState": "manual",
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "清空聊天记录？"
-          }
-        }
-      }
-    },
     "Clear History": {
       "extractionState": "manual",
       "localizations": {
@@ -331,6 +309,28 @@
         }
       }
     },
+    "Clear all chat history?": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "清空全部聊天记录？"
+          }
+        }
+      }
+    },
+    "Clear chat history?": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "清空聊天记录？"
+          }
+        }
+      }
+    },
     "Close": {
       "extractionState": "manual",
       "localizations": {
@@ -338,17 +338,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "关闭"
-          }
-        }
-      }
-    },
-    "configured": {
-      "extractionState": "manual",
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "已配置"
           }
         }
       }
@@ -463,17 +452,6 @@
         }
       }
     },
-    "default": {
-      "extractionState": "manual",
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "默认"
-          }
-        }
-      }
-    },
     "Delete": {
       "extractionState": "manual",
       "localizations": {
@@ -573,17 +551,6 @@
         }
       }
     },
-    "Download for On-Device Voice": {
-      "extractionState": "manual",
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "下载设备端语音模型"
-          }
-        }
-      }
-    },
     "Download Large Model?": {
       "extractionState": "manual",
       "localizations": {
@@ -602,6 +569,27 @@
           "stringUnit": {
             "state": "translated",
             "value": "下载模型"
+          }
+        }
+      }
+    },
+    "Download for On-Device Voice": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "下载设备端语音模型"
+          }
+        }
+      }
+    },
+    "Downloading... %lld%": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "下载中... %lld%"
           }
         }
       }
@@ -628,17 +616,6 @@
         }
       }
     },
-    "Enable the HTTP API in gateway config": {
-      "extractionState": "manual",
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "在网关配置中启用 HTTP API"
-          }
-        }
-      }
-    },
     "Enable WebSocket mode in Settings to browse available models.": {
       "extractionState": "manual",
       "localizations": {
@@ -646,6 +623,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "请在设置中开启 WebSocket 模式以浏览可用模型。"
+          }
+        }
+      }
+    },
+    "Enable the HTTP API in gateway config": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在网关配置中启用 HTTP API"
           }
         }
       }
@@ -980,6 +968,28 @@
         }
       }
     },
+    "No Models": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "暂无模型"
+          }
+        }
+      }
+    },
+    "No Sessions": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "暂无会话"
+          }
+        }
+      }
+    },
     "No active sessions found.": {
       "extractionState": "manual",
       "localizations": {
@@ -1024,17 +1034,6 @@
         }
       }
     },
-    "No Models": {
-      "extractionState": "manual",
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "暂无模型"
-          }
-        }
-      }
-    },
     "No models returned from the gateway.": {
       "extractionState": "manual",
       "localizations": {
@@ -1042,17 +1041,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "网关未返回任何模型。"
-          }
-        }
-      }
-    },
-    "No Sessions": {
-      "extractionState": "manual",
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "暂无会话"
           }
         }
       }
@@ -1211,6 +1199,17 @@
         }
       }
     },
+    "STT Processing": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "语音转文字处理"
+          }
+        }
+      }
+    },
     "Save": {
       "extractionState": "manual",
       "localizations": {
@@ -1299,17 +1298,6 @@
         }
       }
     },
-    "Show input/output token counts under assistant messages. Requires Open Responses API mode.": {
-      "extractionState": "manual",
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "在助手消息下方显示输入/输出令牌数。需要 Open Responses API 模式。"
-          }
-        }
-      }
-    },
     "Show Token Usage": {
       "extractionState": "manual",
       "localizations": {
@@ -1317,6 +1305,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "显示令牌用量"
+          }
+        }
+      }
+    },
+    "Show input/output token counts under assistant messages. Requires Open Responses API mode.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在助手消息下方显示输入/输出令牌数。需要 Open Responses API 模式。"
           }
         }
       }
@@ -1405,17 +1404,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "状态"
-          }
-        }
-      }
-    },
-    "STT Processing": {
-      "extractionState": "manual",
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "语音转文字处理"
           }
         }
       }
@@ -1728,13 +1716,13 @@
         }
       }
     },
-    "WebSocket enables real-time streaming. Enter a path (e.g. /ws) for tunneled gateways or a port (e.g. 18789) for local connections.": {
+    "WS Port or Path": {
       "extractionState": "manual",
       "localizations": {
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "WebSocket 支持实时流式传输。隧道网关请输入路径（如 /ws），本地连接请输入端口（如 18789）。"
+            "value": "WebSocket 端口或路径"
           }
         }
       }
@@ -1746,6 +1734,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "WebSocket 模式"
+          }
+        }
+      }
+    },
+    "WebSocket enables real-time streaming. Enter a path (e.g. /ws) for tunneled gateways or a port (e.g. 18789) for local connections.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "WebSocket 支持实时流式传输。隧道网关请输入路径（如 /ws），本地连接请输入端口（如 18789）。"
           }
         }
       }
@@ -1772,17 +1771,6 @@
         }
       }
     },
-    "WS Port or Path": {
-      "extractionState": "manual",
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "WebSocket 端口或路径"
-          }
-        }
-      }
-    },
     "Your access token": {
       "extractionState": "manual",
       "localizations": {
@@ -1790,6 +1778,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "你的访问令牌"
+          }
+        }
+      }
+    },
+    "configured": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已配置"
+          }
+        }
+      }
+    },
+    "default": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "默认"
           }
         }
       }

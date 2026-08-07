@@ -36,6 +36,7 @@ struct SettingsView: View {
                 voiceSection
                 ttsSection
                 sttSection
+                wechatSection
                 dataSection
                 securitySection
             }
@@ -335,8 +336,40 @@ private var connectionSection: some View {
                 }
 
                 voicePreviewButton
+            case .minimax:
+                TextField("Group ID", text: $store.settings.minimaxGroupID)
+                    .autocorrectionDisabled()
+                    .textInputAutocapitalization(.never)
+                SecureField("API Key", text: $store.settings.minimaxAPIKey)
+                    .textContentType(.password)
+                TextField("Domain", text: $store.settings.minimaxDomain)
+                    .keyboardType(.URL)
+                    .autocorrectionDisabled()
+                    .textInputAutocapitalization(.never)
+                TextField("Voice ID", text: $store.settings.minimaxVoiceID)
+                    .autocorrectionDisabled()
+                    .textInputAutocapitalization(.never)
+
+                voicePreviewButton
             case .apple:
                 voicePreviewButton
+            case .kokoro:
+                voicePreviewButton
+                if KokoroModelManager.shared.hasDownloadedModel {
+                    Text("Kokoro 本地语音模型已就绪，完全离线。")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    Button {
+                        Task { await KokoroModelManager.shared.downloadModel() }
+                    } label: {
+                        if KokoroModelManager.shared.isDownloading {
+                            Label("下载中... \(Int(KokoroModelManager.shared.downloadProgress * 100))%", systemImage: "arrow.down.circle")
+                        } else {
+                            Label("下载 Kokoro 中文语音模型（约 380MB）", systemImage: "arrow.down.circle")
+                        }
+                    }
+                }
             }
         } header: {
             Text("Text-to-Speech")
@@ -348,8 +381,12 @@ private var connectionSection: some View {
                 Text("OpenAI TTS is cost-effective with good quality.")
             case .openclaw:
                 Text("Use your OpenClaw backend TTS relay. Configure engine on the server.")
+            case .minimax:
+                Text("MiniMax 语音服务，中文音色自然。需填写 Group ID 与 API Key。")
             case .apple:
                 Text("Apple's built-in voice. Free and works offline, but less natural.")
+            case .kokoro:
+                Text("Kokoro 本地神经语音模型，中文音色自然，完全离线。需先下载模型（约 380MB）。")
             }
         }
         .onAppear {
@@ -424,6 +461,36 @@ private var connectionSection: some View {
             }
         }
         .disabled(!store.settings.voiceInputEnabled)
+    }
+
+    // MARK: - WeChat Bind
+
+    private var wechatSection: some View {
+        Section {
+            TextField("微信桥接服务地址", text: $store.settings.wechatBridgeURL)
+                .keyboardType(.URL)
+                .autocorrectionDisabled()
+                .textInputAutocapitalization(.never)
+
+            let bridgeURL = store.settings.wechatBridgeURL.trimmingCharacters(in: .whitespacesAndNewlines)
+            if bridgeURL.isEmpty {
+                Label("连接微信 CLAW bot", systemImage: "qrcode")
+                    .foregroundStyle(.secondary)
+                Text("请在设置中填写微信桥接服务地址")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else {
+                NavigationLink {
+                    WechatBindView(bridgeURL: bridgeURL)
+                } label: {
+                    Label("连接微信 CLAW bot", systemImage: "qrcode")
+                }
+            }
+        } header: {
+            Text("微信绑定")
+        } footer: {
+            Text("扫码绑定微信后，可通过微信与 CLAW bot 交互。")
+        }
     }
 
     // MARK: - Security Info
@@ -556,13 +623,18 @@ private var connectionSection: some View {
             return store.openAIAPIKey.isEmpty
         case .openclaw:
             return store.settings.fusionBackendURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        case .minimax:
+            return store.settings.minimaxGroupID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                || store.settings.minimaxAPIKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         case .apple:
             return false
+        case .kokoro:
+            return !KokoroModelManager.shared.hasDownloadedModel
         }
     }
 
     private func startPreview() {
-        let sampleText = "Hello! This is a preview of your selected voice."
+        let sampleText = "你好，这是你的语音预览。"
 
         let tts: any SpeechService
         switch store.settings.ttsProvider {
@@ -572,22 +644,39 @@ private var connectionSection: some View {
             tts = OpenAITTSService(voice: store.settings.openAIVoice, apiKey: store.openAIAPIKey)
         case .openclaw:
             tts = OpenClawTTSService(backendURL: store.settings.fusionBackendURL, voice: nil)
+        case .minimax:
+            tts = MiniMaxTTSService(
+                groupID: store.settings.minimaxGroupID,
+                apiKey: store.settings.minimaxAPIKey,
+                domain: store.settings.minimaxDomain,
+                voiceID: store.settings.minimaxVoiceID
+            )
         case .apple:
             tts = AppleTTSService()
+        case .kokoro:
+            tts = KokoroTTSService()
         }
 
         previewService = tts
         isPreviewing = true
 
-        if store.settings.ttsProvider == .apple {
-            // Apple TTS plays directly via AVSpeechSynthesizer
-            let _ = tts.streamSpeech(text: sampleText)
-            // Auto-reset after a delay since Apple TTS doesn't give us completion
+        switch store.settings.ttsProvider {
+        case .apple:
+            // Apple TTS 通过 AVSpeechSynthesizer 直接发声（Kokoro 走 PCM 播放分支）。
+            // 必须真正消费流，AVSpeechSynthesizer 才会开始朗读。
+            Task {
+                do {
+                    for await _ in tts.streamSpeech(text: sampleText) {}
+                } catch {
+                    previewErrorMessage = "语音预览失败：\(error.localizedDescription)"
+                }
+            }
+            // 保持原有 4 秒自动复位逻辑（Apple TTS 无完成回调）
             Task {
                 try? await Task.sleep(for: .seconds(4))
                 if isPreviewing { isPreviewing = false }
             }
-        } else {
+        default:
             // ElevenLabs/OpenAI stream PCM through playback manager
             let playback = AudioPlaybackManager()
             previewPlayback = playback

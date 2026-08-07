@@ -24,7 +24,7 @@ enum CameraCapability {
 
         var errorDescription: String? {
             switch self {
-            case .denied: return "Camera permission denied"
+            case .denied: return "相机权限被拒绝"
             case .unavailable(let msg): return msg
             case .captureFailed(let msg): return msg
             }
@@ -75,7 +75,7 @@ enum CameraCapability {
         // Find camera device
         let position: AVCaptureDevice.Position = camera == "front" ? .front : .back
         guard let device = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: position) else {
-            throw CameraError.unavailable("No \(camera ?? "back") camera available")
+            throw CameraError.unavailable("没有可用的\(camera ?? "后置")摄像头")
         }
 
         // Set up capture session
@@ -83,16 +83,16 @@ enum CameraCapability {
         session.sessionPreset = .photo
 
         guard let input = try? AVCaptureDeviceInput(device: device) else {
-            throw CameraError.unavailable("Cannot access camera input")
+            throw CameraError.unavailable("无法访问相机输入")
         }
         guard session.canAddInput(input) else {
-            throw CameraError.unavailable("Cannot add camera input to session")
+            throw CameraError.unavailable("无法将相机输入添加到会话")
         }
         session.addInput(input)
 
         let output = AVCapturePhotoOutput()
         guard session.canAddOutput(output) else {
-            throw CameraError.unavailable("Cannot add photo output to session")
+            throw CameraError.unavailable("无法将照片输出添加到会话")
         }
         session.addOutput(output)
 
@@ -110,13 +110,13 @@ enum CameraCapability {
         session.stopRunning()
 
         guard let image = UIImage(data: photoData) else {
-            throw CameraError.captureFailed("Failed to create image from capture data")
+            throw CameraError.captureFailed("无法从拍摄数据创建图像")
         }
 
         // Resize if needed
         let resized = resizeImage(image, maxWidth: maxWidth)
         guard let jpegData = resized.jpegData(compressionQuality: quality) else {
-            throw CameraError.captureFailed("Failed to encode JPEG")
+            throw CameraError.captureFailed("JPEG 编码失败")
         }
 
         return SnapResult(
@@ -158,7 +158,7 @@ private class PhotoCaptureDelegate: NSObject, AVCapturePhotoCaptureDelegate {
         } else if let data = photo.fileDataRepresentation() {
             continuation?.resume(returning: data)
         } else {
-            continuation?.resume(throwing: CameraCapability.CameraError.captureFailed("No photo data"))
+            continuation?.resume(throwing: CameraCapability.CameraError.captureFailed("没有照片数据"))
         }
         continuation = nil
     }

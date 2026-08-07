@@ -33,7 +33,7 @@ enum CalendarCapability {
 
         var errorDescription: String? {
             switch self {
-            case .denied(let type): return "\(type) permission denied"
+            case .denied(let type): return "\(type) 权限被拒绝"
             case .failed(let msg): return msg
             }
         }
@@ -82,7 +82,7 @@ enum CalendarCapability {
         try await requestCalendarAccess()
 
         guard let start = formatter.date(from: startDate) else {
-            throw CalendarError.failed("Invalid start date format")
+            throw CalendarError.failed("无效的开始日期格式")
         }
 
         let event = EKEvent(eventStore: store)
@@ -164,20 +164,20 @@ enum CalendarCapability {
     private static func requestCalendarAccess() async throws {
         if #available(iOS 17.0, *) {
             let granted = try await store.requestFullAccessToEvents()
-            guard granted else { throw CalendarError.denied("Calendar") }
+            guard granted else { throw CalendarError.denied("日历") }
         } else {
             let granted = try await store.requestAccess(to: .event)
-            guard granted else { throw CalendarError.denied("Calendar") }
+            guard granted else { throw CalendarError.denied("日历") }
         }
     }
 
     private static func requestRemindersAccess() async throws {
         if #available(iOS 17.0, *) {
             let granted = try await store.requestFullAccessToReminders()
-            guard granted else { throw CalendarError.denied("Reminders") }
+            guard granted else { throw CalendarError.denied("提醒事项") }
         } else {
             let granted = try await store.requestAccess(to: .reminder)
-            guard granted else { throw CalendarError.denied("Reminders") }
+            guard granted else { throw CalendarError.denied("提醒事项") }
         }
     }
 }

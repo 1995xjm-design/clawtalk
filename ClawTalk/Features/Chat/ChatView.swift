@@ -14,6 +14,7 @@ struct ChatView: View {
     @State private var showDeleteConfirm = false
     @State private var selectedPhotos: [PhotosPickerItem] = []
     @State private var attachedImages: [Data] = []
+    @FocusState private var isInputFocused: Bool
 
     var body: some View {
         VStack(spacing: 0) {
@@ -164,22 +165,56 @@ struct ChatView: View {
                 }
                 .padding(.vertical, 12)
             }
-            .defaultScrollAnchor(.bottom)
-            .scrollDismissesKeyboard(.interactively)
+            // 点击聊天区任意位置收起键盘（simultaneousGesture 不会吞掉气泡内按钮点击）
+            .simultaneousGesture(
+                TapGesture().onEnded { isInputFocused = false }
+            )
+            // 自定义左缘右滑返回：仅拦截屏幕左缘 40pt 内开始的横向右滑
+            .simultaneousGesture(edgeSwipeBackGesture)
+            .scrollDismissesKeyboard(.immediately)
             .scrollBounceBehavior(.basedOnSize)
             .overlay {
                 if viewModel.messages.isEmpty {
                     emptyState
                 }
             }
+            // 进入界面、布局稳定后定位到最新消息（移除 defaultScrollAnchor(.bottom)，
+            // 避免内容不满一屏时被顶出视口导致列表空白）
+            .onAppear {
+                scrollToBottom(using: proxy)
+            }
+            // 服务器历史异步加载、整体替换 messages 后也滚到底部
+            .onChange(of: viewModel.messages.count) {
+                scrollToBottom(using: proxy)
+            }
+            // 新消息/流式内容变化时保持滚到底部
             .onChange(of: viewModel.messages.last?.content) {
-                if let lastID = viewModel.messages.last?.id {
-                    withAnimation(.easeOut(duration: 0.2)) {
-                        proxy.scrollTo(lastID, anchor: .bottom)
-                    }
-                }
+                scrollToBottom(using: proxy)
             }
         }
+    }
+
+    // MARK: - 滚动与手势辅助
+
+    // 滚到最新一条消息（无消息时不动作）
+    private func scrollToBottom(using proxy: ScrollViewProxy) {
+        if let lastID = viewModel.messages.last?.id {
+            withAnimation(.easeOut(duration: 0.2)) {
+                proxy.scrollTo(lastID, anchor: .bottom)
+            }
+        }
+    }
+
+    // 左缘右滑返回手势：从屏幕左缘约 40pt 内开始、横向为主且右移超过 60pt 时触发返回
+    private var edgeSwipeBackGesture: some Gesture {
+        DragGesture(minimumDistance: 12, coordinateSpace: .global)
+            .onEnded { value in
+                guard value.startLocation.x <= 40 else { return }
+                let dx = value.translation.width
+                let dy = value.translation.height
+                guard dx > 60, abs(dx) > abs(dy) else { return }
+                onBack?()
+            }
     }
 
     // MARK: - Input Area
@@ -256,6 +291,7 @@ struct ChatView: View {
                 TextField("Message…", text: $textInput, axis: .vertical)
                     .textFieldStyle(.plain)
                     .lineLimit(1...5)
+                    .focused($isInputFocused)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 10)
                     .background(Color(.systemGray5))

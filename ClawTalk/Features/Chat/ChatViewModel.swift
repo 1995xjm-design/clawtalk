@@ -58,7 +58,7 @@ final class ChatViewModel {
             recordingStart = Date()
             state = .recording
         } catch {
-            errorMessage = "Microphone access failed: \(error.localizedDescription)"
+            errorMessage = "麦克风访问失败：\(error.localizedDescription)"
         }
     }
 
@@ -80,7 +80,7 @@ final class ChatViewModel {
         sendTask = Task {
             do {
                 guard let stt = transcriptionService else {
-                    throw ChatError.notConfigured("Speech-to-text not initialized")
+                    throw ChatError.notConfigured("语音转文字服务未初始化")
                 }
 
                 let transcript = try await stt.transcribe(audioSamples: samples)
@@ -91,7 +91,7 @@ final class ChatViewModel {
 
                 await sendMessage(transcript, images: images.isEmpty ? nil : images)
             } catch {
-                errorMessage = "Transcription failed: \(error.localizedDescription)"
+                errorMessage = "转写失败：\(error.localizedDescription)"
                 state = .idle
             }
         }
@@ -141,7 +141,7 @@ final class ChatViewModel {
             try audioCapture.startRecording()
             state = .recording
         } catch {
-            errorMessage = "Microphone access failed: \(error.localizedDescription)"
+            errorMessage = "麦克风访问失败：\(error.localizedDescription)"
             return
         }
 
@@ -185,7 +185,7 @@ final class ChatViewModel {
         sendTask = Task {
             do {
                 guard let stt = transcriptionService else {
-                    throw ChatError.notConfigured("Speech-to-text not initialized")
+                    throw ChatError.notConfigured("语音转文字服务未初始化")
                 }
 
                 let transcript = try await stt.transcribe(audioSamples: samples)
@@ -201,7 +201,7 @@ final class ChatViewModel {
             } catch is CancellationError {
                 // Interrupted - don't change state
             } catch {
-                errorMessage = "Transcription failed: \(error.localizedDescription)"
+                errorMessage = "转写失败：\(error.localizedDescription)"
                 if isConversationMode {
                     audioCapture.resumeListening()
                     state = .recording
@@ -242,7 +242,7 @@ final class ChatViewModel {
 
         do {
             guard settings.isConfigured else {
-                throw ChatError.notConfigured("Configure your OpenClaw gateway in Settings.")
+                throw ChatError.notConfigured("请在设置中配置你的 OpenClaw 网关。")
             }
 
             if settings.settings.useWebSocket, let gateway = gatewayConnection,
@@ -400,7 +400,7 @@ final class ChatViewModel {
                 break // Exit the for-await loop after processing final
 
             case "error":
-                let msg = event.errorMessage ?? "Agent error"
+                let msg = event.errorMessage ?? "智能体错误"
                 throw ChatError.notConfigured(msg)
 
             default:
@@ -755,7 +755,7 @@ enum ChatError: LocalizedError {
         case .notConfigured(let msg): return msg
         case .authenticationFailed(let msg): return msg
         case .networkError(let msg): return msg
-        case .serverError(let code, let msg): return "Server error (\(code)): \(msg)"
+        case .serverError(let code, let msg): return "服务器错误（\(code)）：\(msg)"
         case .agentError(let msg): return msg
         }
     }
@@ -775,22 +775,22 @@ enum ChatError: LocalizedError {
             case .httpError(let code), .httpErrorDetailed(let code, _, _):
                 switch code {
                 case 401, 403:
-                    return .authenticationFailed("Authentication failed. Try again or check your gateway token in Settings.")
+                    return .authenticationFailed("认证失败，请重试，或在设置中检查网关令牌。")
                 case 408, 429:
-                    return .networkError("Request timed out or rate limited. Try again.")
+                    return .networkError("请求超时或触发限流，请重试。")
                 case 400, 422:
-                    return .agentError("Bad request. The agent couldn't process this message.")
+                    return .agentError("请求无效，智能体无法处理这条消息。")
                 case 500...599:
-                    return .serverError(code, "The gateway encountered an error. Try again.")
+                    return .serverError(code, "网关遇到错误，请重试。")
                 default:
-                    return .serverError(code, "Unexpected error from gateway.")
+                    return .serverError(code, "网关返回了未知错误。")
                 }
             case .invalidURL:
-                return .notConfigured("Invalid gateway URL. Check Settings.")
+                return .notConfigured("网关 URL 无效，请在设置中检查。")
             case .insecureConnection:
-                return .notConfigured("HTTPS is required. Update your gateway URL in Settings.")
+                return .notConfigured("必须使用 HTTPS，请在设置中更新网关 URL。")
             case .invalidResponse, .emptyResponse:
-                return .agentError("Invalid or empty response from agent.")
+                return .agentError("智能体返回了无效或空的响应。")
             case .responseError(let msg):
                 return .agentError(msg)
             case .toolError(let msg), .toolNotFound(let msg):
@@ -801,22 +801,22 @@ enum ChatError: LocalizedError {
         if let urlError = error as? URLError {
             switch urlError.code {
             case .notConnectedToInternet:
-                return .networkError("No internet connection.")
+                return .networkError("没有网络连接。")
             case .timedOut:
-                return .networkError("Connection timed out. Check your network and gateway.")
+                return .networkError("连接超时，请检查网络和网关。")
             case .cannotFindHost, .cannotConnectToHost:
-                return .networkError("Cannot reach gateway. Check the URL and your network.")
+                return .networkError("无法连接网关，请检查 URL 和网络。")
             case .secureConnectionFailed:
-                return .networkError("SSL/TLS connection failed.")
+                return .networkError("SSL/TLS 连接失败。")
             case .cancelled:
-                return .networkError("Request cancelled.")
+                return .networkError("请求已取消。")
             default:
                 return .networkError(urlError.localizedDescription)
             }
         }
 
         if error is CancellationError {
-            return .networkError("Cancelled")
+            return .networkError("已取消")
         }
 
         return .agentError(error.localizedDescription)

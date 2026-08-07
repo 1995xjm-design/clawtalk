@@ -23,7 +23,7 @@ enum ContactsCapability {
 
         var errorDescription: String? {
             switch self {
-            case .denied: return "Contacts permission denied"
+            case .denied: return "通讯录权限被拒绝"
             case .failed(let msg): return msg
             }
         }
