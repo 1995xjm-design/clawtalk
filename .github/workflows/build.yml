@@ -51,6 +51,36 @@ jobs:
             -destination 'platform=iOS Simulator,name=iPhone 16' \
             CODE_SIGNING_ALLOWED=NO | tee test.log
 
+      - name: Build device .app (unsigned, for sideloading)
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -project ClawTalk.xcodeproj \
+            -scheme ClawTalk \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build-dd \
+            CODE_SIGNING_ALLOWED=NO | tee build-device.log
+
+      - name: Package .ipa (unsigned)
+        run: |
+          set -o pipefail
+          APP_PATH=$(find build-dd/Build/Products -name "*.app" -maxdepth 2 | head -1)
+          echo "APP_PATH=$APP_PATH"
+          ls -la "$APP_PATH"
+          # 确认键盘扩展已嵌入
+          ls "$APP_PATH/PlugIns" 2>/dev/null || echo "!! 未找到 PlugIns 目录"
+          mkdir -p Payload
+          cp -R "$APP_PATH" Payload/
+          zip -qry ClawTalk-unsigned.ipa Payload/
+          ls -lh ClawTalk-unsigned.ipa
+
+      - name: Upload .ipa artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: clawtalk-unsigned-ipa
+          path: ClawTalk-unsigned.ipa
+          if-no-files-found: error
+
       - name: Upload build logs on failure
         if: failure()
         uses: actions/upload-artifact@v4
