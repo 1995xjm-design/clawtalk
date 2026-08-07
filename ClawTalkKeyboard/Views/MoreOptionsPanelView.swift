@@ -4,6 +4,7 @@ import UIKit
 protocol MoreOptionsPanelViewDelegate: AnyObject {
     func moreOptionsPanelDidTapClose()
     func moreOptionsPanelDidSelectKeyboardType(_ type: KeyboardType)
+    func moreOptionsPanelDidTapConfig()
 }
 
 /// 更多选项面板视图
@@ -23,6 +24,13 @@ class MoreOptionsPanelView: UIView {
         ("9键", .t9),
         ("手写", .handwriting)
     ]
+
+    // 其他功能选项 tag（区分点击）
+    private enum OtherOptionTag: Int {
+        case config = 1001
+        case emoji = 1002
+        case clipboard = 1003
+    }
 
     // MARK: - 初始化
     override init(frame: CGRect) {
@@ -128,9 +136,14 @@ class MoreOptionsPanelView: UIView {
             stack.heightAnchor.constraint(equalToConstant: 44)
         ])
 
-        let otherOptions = ["设置", "表情", "剪贴板"]
+        let otherOptions: [(title: String, tag: OtherOptionTag)] = [
+            ("设置", .config),
+            ("表情", .emoji),
+            ("剪贴板", .clipboard)
+        ]
         for option in otherOptions {
-            let button = createOptionButton(title: option)
+            let button = createOptionButton(title: option.title)
+            button.tag = option.tag.rawValue
             button.addTarget(self, action: #selector(otherOptionTapped(_:)), for: .touchUpInside)
             stack.addArrangedSubview(button)
         }
@@ -168,7 +181,13 @@ class MoreOptionsPanelView: UIView {
     }
 
     @objc private func otherOptionTapped(_ sender: UIButton) {
-        // 其他选项暂时只关闭面板
-        delegate?.moreOptionsPanelDidTapClose()
+        switch sender.tag {
+        case OtherOptionTag.config.rawValue:
+            // 打开网关配置面板（绕过 App Group 的独立配置）
+            delegate?.moreOptionsPanelDidTapConfig()
+        default:
+            // 表情/剪贴板暂时只关闭面板
+            delegate?.moreOptionsPanelDidTapClose()
+        }
     }
 }

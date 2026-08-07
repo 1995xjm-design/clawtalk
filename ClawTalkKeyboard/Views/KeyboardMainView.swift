@@ -16,6 +16,7 @@ protocol KeyboardMainViewDelegate: AnyObject {
     func didTapHelpReply()
     func didTapSuperTalk()
     func didTapMore()
+    func didTapConfig()
     func didTapContact()
     func didTapPaste()
     func didTapGenerate()
@@ -48,6 +49,7 @@ class KeyboardMainView: UIView {
     private var helpReplyPanelView: HelpReplyPanelView!
     private var superTalkPanelView: SuperTalkPanelView!
     private var moreOptionsPanelView: MoreOptionsPanelView!
+    private var configPanelView: ConfigPanelView!
     private var contactPopupOverlay: UIButton!
     private var contactPopupContainer: UIView!
     private var contactPopupStack: UIStackView!
@@ -177,6 +179,20 @@ class KeyboardMainView: UIView {
             moreOptionsPanelView.trailingAnchor.constraint(equalTo: trailingAnchor),
             moreOptionsPanelView.bottomAnchor.constraint(equalTo: bottomAnchor)
         ])
+
+        // 网关配置面板（键盘独立配置，绕过 App Group）
+        configPanelView = ConfigPanelView()
+        configPanelView.delegate = self
+        configPanelView.translatesAutoresizingMaskIntoConstraints = false
+        configPanelView.isHidden = true
+        addSubview(configPanelView)
+
+        NSLayoutConstraint.activate([
+            configPanelView.topAnchor.constraint(equalTo: topAnchor),
+            configPanelView.leadingAnchor.constraint(equalTo: leadingAnchor),
+            configPanelView.trailingAnchor.constraint(equalTo: trailingAnchor),
+            configPanelView.bottomAnchor.constraint(equalTo: bottomAnchor)
+        ])
     }
 
     // MARK: - Public Methods
@@ -212,6 +228,7 @@ class KeyboardMainView: UIView {
         helpReplyPanelView.isHidden = true
         superTalkPanelView.isHidden = true
         moreOptionsPanelView.isHidden = true
+        configPanelView.isHidden = true
 
         hideContactPopup()
     }
@@ -224,6 +241,7 @@ class KeyboardMainView: UIView {
         helpReplyPanelView.isHidden = false
         superTalkPanelView.isHidden = true
         moreOptionsPanelView.isHidden = true
+        configPanelView.isHidden = true
 
         hideContactPopup()
         helpReplyPanelView.reset()
@@ -237,6 +255,7 @@ class KeyboardMainView: UIView {
         helpReplyPanelView.isHidden = true
         superTalkPanelView.isHidden = false
         moreOptionsPanelView.isHidden = true
+        configPanelView.isHidden = true
 
         hideContactPopup()
         superTalkPanelView.reset()
@@ -250,8 +269,23 @@ class KeyboardMainView: UIView {
         helpReplyPanelView.isHidden = true
         superTalkPanelView.isHidden = true
         moreOptionsPanelView.isHidden = false
+        configPanelView.isHidden = true
 
         hideContactPopup()
+    }
+
+    func showConfigPanel() {
+        toolbarView.isHidden = true
+        candidateBarView.isHidden = true
+        qwertyKeyboardView.isHidden = true
+        symbolKeyboardView.isHidden = true
+        helpReplyPanelView.isHidden = true
+        superTalkPanelView.isHidden = true
+        moreOptionsPanelView.isHidden = true
+        configPanelView.isHidden = false
+
+        hideContactPopup()
+        configPanelView.refresh()
     }
 
     // MARK: - AI恋爱回复专用
@@ -570,6 +604,22 @@ extension KeyboardMainView: MoreOptionsPanelViewDelegate {
     func moreOptionsPanelDidSelectKeyboardType(_ type: KeyboardType) {
         currentKeyboardType = type
         StorageService.shared.keyboardType = type
+        delegate?.didTapBackToKeyboard()
+    }
+
+    func moreOptionsPanelDidTapConfig() {
+        delegate?.didTapConfig()
+    }
+}
+
+// MARK: - ConfigPanelViewDelegate
+extension KeyboardMainView: ConfigPanelViewDelegate {
+    func configPanelDidTapClose() {
+        delegate?.didTapBackToKeyboard()
+    }
+
+    func configPanelDidSave(gatewayURL: String, token: String, agentId: String) {
+        // 保存成功：回到键盘，配置已写入 KeyboardConfigStore
         delegate?.didTapBackToKeyboard()
     }
 }

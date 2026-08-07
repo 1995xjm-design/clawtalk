@@ -230,6 +230,12 @@ extension KeyboardViewController: KeyboardMainViewDelegate {
         updateKeyboardHeight()
     }
 
+    func didTapConfig() {
+        currentPanelMode = .moreOptions
+        keyboardView?.showConfigPanel()
+        updateKeyboardHeight()
+    }
+
     // MARK: - AI恋爱回复
     func didTapContact() {
         ensureHelpReplyPanel()
