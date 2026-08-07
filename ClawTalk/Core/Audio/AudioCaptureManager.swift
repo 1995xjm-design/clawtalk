@@ -124,7 +124,7 @@ final class AudioCaptureManager {
         // the same path Zoom/FaceTime use. Speech rms ends up
         // normalized across devices (sim, iPhone, AirPods, external
         // mic), so a single threshold actually works.
-        try session.setCategory(.playAndRecord, mode: .voiceChat, options: [.defaultToSpeaker, .allowBluetoothHFP])
+        try session.setCategory(.playAndRecord, mode: .voiceChat, options: [.defaultToSpeaker, .allowBluetooth])
         try session.setActive(true)
 
         let engine = AVAudioEngine()

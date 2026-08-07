@@ -16,7 +16,7 @@ final class AudioPlaybackManager: @unchecked Sendable {
         // looping back through the mic loud enough to cross the
         // interrupt threshold and cancel the agent's response.
         let mode: AVAudioSession.Mode = (session.mode == .voiceChat) ? .voiceChat : .default
-        try session.setCategory(.playAndRecord, mode: mode, options: [.defaultToSpeaker, .allowBluetoothHFP])
+        try session.setCategory(.playAndRecord, mode: mode, options: [.defaultToSpeaker, .allowBluetooth])
         try session.setActive(true)
 
         let engine = AVAudioEngine()
