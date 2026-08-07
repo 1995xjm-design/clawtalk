@@ -8,6 +8,9 @@ import Speech
 /// 无权限/失败时通过 delegate 抛出中文提示，不崩溃。
 final class VoiceInputService: NSObject {
 
+    /// 全局单例（键盘控制器经此访问录音/识别能力）
+    static let shared = VoiceInputService()
+
     enum State {
         case idle
         case recording
