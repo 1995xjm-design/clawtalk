@@ -192,7 +192,8 @@ final class VoiceInputService: NSObject {
     }
 
     private func startRecognitionTask(with request: SFSpeechAudioBufferRecognitionRequest) {
-        let task = recognizer?.recognitionTask(with: request) { [weak self] result, error in
+        var task: SFSpeechRecognitionTask?
+        task = recognizer?.recognitionTask(with: request) { [weak self] result, error in
             guard let self else { return }
             // 用户主动取消，或已开启新会话时忽略旧回调
             if self.isCancelling { return }
