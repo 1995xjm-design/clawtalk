@@ -34,10 +34,10 @@ final class AudioCaptureManager {
     /// sits well under 0.01 on both sim and device, so 0.013 cleanly
     /// separates them.
     private let speechThreshold: Float = 0.013
-    private let interruptThreshold: Float = 0.06
+    private let interruptThreshold: Float = 0.12
     /// Time of silence-after-speech (measured on smoothed rms) before
     /// firing an utterance.
-    private let silenceDuration: TimeInterval = 0.9
+    private let silenceDuration: TimeInterval = 1.2
 
     // MARK: - Push-to-Talk
 
@@ -198,7 +198,7 @@ final class AudioCaptureManager {
                     Date().timeIntervalSince($0) >= silenceDuration
                 } ?? false
 
-                if normalFire && utteranceSamples.count > 8000 {
+                if normalFire && utteranceSamples.count > 12000 {
                     let captured = utteranceSamples
                     utteranceSamples = []
                     hasSpeechStarted = false

@@ -44,43 +44,35 @@ final class MiniMaxTTSService: SpeechService {
                         throw MiniMaxTTSError.httpError(status)
                     }
 
-                    // 先看前几个字节判断实际返回的音频格式（裸 PCM 无文件头，
-                    // mp3 以 "ID3" 或 0xFFEx MPEG 帧同步开头）
-                    var iterator = bytes.makeAsyncIterator()
-                    var head = Data()
-                    while head.count < 4, let byte = try await iterator.next() {
-                        head.append(byte)
+                    // MiniMax t2a_v2 流式接口返回 SSE 格式：
+                    //   data: {"data":"<base64 PCM>","extra_info":{...},...}
+                    //   data: [DONE]
+                    // 逐行读取，从每行 JSON 中提取 base64 音频数据。
+                    var collectedPCM = Data()
+                    for try await line in bytes.lines {
+                        if Task.isCancelled { break }
+                        let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+                        guard trimmed.hasPrefix("data:") else { continue }
+                        let payload = trimmed.dropFirst(5).trimmingCharacters(in: .whitespaces)
+                        if payload == "[DONE]" { break }
+                        guard let payloadData = payload.data(using: .utf8),
+                              let json = try? JSONSerialization.jsonObject(with: payloadData) as? [String: Any],
+                              let audioB64 = json["data"] as? String,
+                              let audioRaw = Data(base64Encoded: audioB64) else {
+                            continue
+                        }
+                        // 每帧是 16-bit LE PCM（24kHz 单声道），累积后分块下发
+                        collectedPCM.append(audioRaw)
+                        // 每 4800 字节（100ms）输出一块
+                        while collectedPCM.count >= 4800 {
+                            let chunk = collectedPCM.prefix(4800)
+                            collectedPCM.removeFirst(4800)
+                            continuation.yield(Self.int16ToFloat32(Data(chunk)))
+                        }
                     }
-                    let isMP3 = Self.dataLooksLikeMP3(head)
-
-                    if isMP3 {
-                        // 退路：服务端返回 mp3，整段收集后用 AVAudioFile 解码
-                        var mp3Data = head
-                        while let byte = try await iterator.next() {
-                            if Task.isCancelled { break }
-                            mp3Data.append(byte)
-                        }
-                        if !mp3Data.isEmpty {
-                            let pcm = try Self.decodeMP3ToFloat32PCM(mp3Data)
-                            for chunk in Self.chunkedFloat32PCM(pcm) {
-                                continuation.yield(chunk)
-                            }
-                        }
-                    } else {
-                        // 主路径：裸 PCM（16-bit LE、24kHz 单声道），Int16 → Float32
-                        var buffer = head
-                        let chunkSize = 4800 // 100ms of Int16 audio at 24kHz
-                        while let byte = try await iterator.next() {
-                            if Task.isCancelled { break }
-                            buffer.append(byte)
-                            if buffer.count >= chunkSize {
-                                continuation.yield(Self.int16ToFloat32(buffer))
-                                buffer = Data()
-                            }
-                        }
-                        if !buffer.isEmpty {
-                            continuation.yield(Self.int16ToFloat32(buffer))
-                        }
+                    // 输出剩余不足 100ms 的尾块
+                    if !collectedPCM.isEmpty {
+                        continuation.yield(Self.int16ToFloat32(collectedPCM))
                     }
 
                     continuation.finish()

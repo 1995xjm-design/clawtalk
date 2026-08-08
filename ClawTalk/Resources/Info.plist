@@ -25,13 +25,13 @@
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsArbitraryLoads</key>
-		<false/>
+		<true/>
 		<key>NSExceptionDomains</key>
 		<dict>
 			<key>ts.net</key>
 			<dict>
 				<key>NSExceptionAllowsInsecureHTTPLoads</key>
-				<false/>
+				<true/>
 				<key>NSIncludesSubdomains</key>
 				<true/>
 			</dict>

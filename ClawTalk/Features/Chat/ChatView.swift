@@ -171,7 +171,7 @@ struct ChatView: View {
             )
             // 自定义左缘右滑返回：仅拦截屏幕左缘 40pt 内开始的横向右滑
             .simultaneousGesture(edgeSwipeBackGesture)
-            .scrollDismissesKeyboard(.immediately)
+            .scrollDismissesKeyboard(.interactively)
             .scrollBounceBehavior(.basedOnSize)
             .overlay {
                 if viewModel.messages.isEmpty {

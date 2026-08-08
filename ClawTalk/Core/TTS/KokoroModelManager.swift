@@ -260,8 +260,18 @@ private enum KokoroVoiceArchive {
             throw KokoroModelError.voiceNotFound(name)
         }
         let (samples, shape) = try parseFloat32Numpy(entry)
-        let rows = shape.first ?? 0
-        let columns = shape.count > 1 ? shape[1] : (shape.first ?? 0)
+        // 音色 npy 可能是 [frames, dim]（如 [510, 256]）或带单例维的 [frames, 1, dim]
+        // （如 [510, 1, 256]）：过滤掉单例维后按 [frames, dim] 处理。
+        let dims = shape.filter { $0 > 1 }
+        let rows: Int
+        let columns: Int
+        if dims.count <= 1 {
+            rows = dims.isEmpty ? 0 : 1
+            columns = dims.last ?? 0
+        } else {
+            rows = dims[0]
+            columns = dims.last ?? dims[0]
+        }
         guard rows > 0, columns > 0, samples.count == rows * columns else {
             throw KokoroModelError.invalidVoicePack("音色 \(name) 形状非法：\(shape)")
         }
