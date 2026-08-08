@@ -33,6 +33,7 @@ final class ChatViewModel {
     private var currentRunId: String?
     private var currentEventSubId: UUID?
     private var ttsStopped = false
+    private let ttsConcurrency = TTSConcurrency()
 
     /// Stable session key for this channel, used for server-side session management.
     var sessionKey: String {
@@ -164,6 +165,7 @@ final class ChatViewModel {
     func exitConversationMode() {
         isConversationMode = false
         sendTask?.cancel()
+        ttsConcurrency.cancelAll()
         audioCapture.stopContinuousRecording()
         speechService?.stop()
         audioPlayback.stop()
@@ -217,6 +219,7 @@ final class ChatViewModel {
         guard state == .speaking || state == .streaming else { return }
 
         sendTask?.cancel()
+        ttsConcurrency.cancelAll()
         speechService?.stop()
         audioPlayback.stop()
 
@@ -371,22 +374,13 @@ final class ChatViewModel {
                         messages[idx].content = fullResponse
                     }
 
-                    // Pipeline TTS
+                    // Pipeline TTS (concurrent: don't block LLM delta loop)
                     if settings.settings.voiceOutputEnabled, !ttsStopped,
                        let tts = speechService,
                        let boundary = sentenceBuf.lastSentenceBoundary() {
                         let sentence = String(sentenceBuf.prefix(boundary))
                         sentenceBuf = String(sentenceBuf.dropFirst(boundary))
-                        do {
-                            let audioStream = tts.streamSpeech(text: sentence)
-                            for try await chunk in audioStream {
-                                guard !ttsStopped else { break }
-                                try Task.checkCancellation()
-                                audioPlayback.enqueue(pcmData: chunk)
-                            }
-                        } catch {
-                            if !ttsStopped { throw error }
-                        }
+                        ttsConcurrency.enqueue(sentence: sentence, tts: tts, playback: audioPlayback)
                     }
                 }
 
@@ -413,6 +407,7 @@ final class ChatViewModel {
 
         // Flush remaining TTS
         try await flushRemainingTTS(sentenceBuf)
+        await ttsConcurrency.waitForAll()
 
         // Mark done
         if let idx = messages.lastIndex(where: { $0.role == .assistant && $0.isStreaming }) {
@@ -482,16 +477,7 @@ final class ChatViewModel {
                        let boundary = sentenceBuf.lastSentenceBoundary() {
                         let sentence = String(sentenceBuf.prefix(boundary))
                         sentenceBuf = String(sentenceBuf.dropFirst(boundary))
-                        do {
-                            let audioStream = tts.streamSpeech(text: sentence)
-                            for try await chunk in audioStream {
-                                guard !ttsStopped else { break }
-                                try Task.checkCancellation()
-                                audioPlayback.enqueue(pcmData: chunk)
-                            }
-                        } catch {
-                            if !ttsStopped { throw error }
-                        }
+                        ttsConcurrency.enqueue(sentence: sentence, tts: tts, playback: audioPlayback)
                     }
 
                 case .modelIdentified(let model):
@@ -534,6 +520,7 @@ final class ChatViewModel {
         }
 
         try await flushRemainingTTS(sentenceBuf)
+        await ttsConcurrency.waitForAll()
 
         if let idx = messages.lastIndex(where: { $0.role == .assistant && $0.isStreaming }) {
             messages[idx].isStreaming = false
@@ -552,16 +539,7 @@ final class ChatViewModel {
         if settings.settings.voiceOutputEnabled, !ttsStopped,
            let tts = speechService,
            !sentenceBuf.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            do {
-                let audioStream = tts.streamSpeech(text: sentenceBuf)
-                for try await chunk in audioStream {
-                    guard !ttsStopped else { break }
-                    try Task.checkCancellation()
-                    audioPlayback.enqueue(pcmData: chunk)
-                }
-            } catch {
-                if !ttsStopped { throw error }
-            }
+            ttsConcurrency.enqueue(sentence: sentenceBuf, tts: tts, playback: audioPlayback)
         }
     }
 
@@ -825,15 +803,52 @@ enum ChatError: LocalizedError {
 
 extension String {
     func lastSentenceBoundary() -> Int? {
-        let terminators: [Character] = [".", "!", "?", "\n"]
+        let terminators: [Character] = [".", "!", "?", "\n", "。", "！", "？", "，", "；", "…"]
         guard let lastIndex = self.lastIndex(where: { terminators.contains($0) }) else {
-            // If buffer is long enough, break at a word boundary
-            if self.count > 120, let spaceIdx = self.lastIndex(of: " ") {
+            if self.count > 15, let spaceIdx = self.lastIndex(of: " ") {
                 return self.distance(from: self.startIndex, to: self.index(after: spaceIdx))
             }
             return nil
         }
         let pos = self.distance(from: self.startIndex, to: self.index(after: lastIndex))
-        return pos > 10 ? pos : nil // Don't send tiny fragments
+        return pos > 6 ? pos : nil
+    }
+}
+
+// MARK: - TTS Concurrency Manager
+
+/// 并发 TTS 管线：句子送入后立即返回，不阻塞 LLM delta 循环。
+/// 内部串行队列保证音频块按顺序到达播放器（避免句子乱序），
+/// 同时允许 LLM 继续接收 delta 并排队下一句。
+@MainActor
+final class TTSConcurrency {
+    private var tasks: [Task<Void, Never>] = []
+
+    func enqueue(sentence: String, tts: any SpeechService, playback: AudioPlaybackManager) {
+        let task = Task {
+            do {
+                let audioStream = tts.streamSpeech(text: sentence)
+                for try await chunk in audioStream {
+                    playback.enqueue(pcmData: chunk)
+                }
+            } catch {
+                // 单句 TTS 失败不中断整体流程
+            }
+        }
+        tasks.append(task)
+    }
+
+    /// 等待所有排队的 TTS 任务完成（在 flushRemainingTTS 之后调用）。
+    func waitForAll() async {
+        await Task.yield()
+        while !tasks.isEmpty {
+            let t = tasks.removeFirst()
+            await t.value
+        }
+    }
+
+    func cancelAll() {
+        for t in tasks { t.cancel() }
+        tasks.removeAll()
     }
 }
