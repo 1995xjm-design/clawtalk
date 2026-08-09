@@ -88,8 +88,7 @@ final class WhisperKitService: TranscriptionService {
             throw TranscriptionError.modelNotLoaded
         }
 
-        let options = DecodingOptions(language: "zh", task: .transcribe)
-        let result = try await kit.transcribe(audioArray: audioSamples, decodeOptions: options)
+        let result = try await kit.transcribe(audioArray: audioSamples)
         let raw = result.map { $0.text }.joined(separator: " ")
         return TranscriptCleanup.clean(raw)
     }
