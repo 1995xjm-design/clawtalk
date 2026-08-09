@@ -46,6 +46,19 @@ final class AppleTTSService: NSObject, SpeechService, AVSpeechSynthesizerDelegat
 
     // MARK: - Voice Selection
 
+
+    /// AVSpeechSynthesisVoice expects region-style codes (e.g. "zh-CN"), while system
+    /// locales can carry a script (e.g. "zh-Hans-CN"). Normalize to the region form.
+    static func normalizedVoiceLanguage(_ language: String) -> String {
+        let normalized = language.replacingOccurrences(of: "_", with: "-")
+        let locale = Locale(identifier: normalized)
+        guard locale.languageCode?.lowercased() == "zh" else { return normalized }
+        if let region = locale.regionCode {
+            return "zh-\(region)"
+        }
+        return "zh-CN"
+    }
+
     func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didCancel utterance: AVSpeechUtterance) {
         completionHandler?()
         completionHandler = nil
