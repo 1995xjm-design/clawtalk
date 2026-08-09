@@ -547,20 +547,8 @@ final class OpenClawClient {
     /// Static validation for testability. Throws `OpenClawError.insecureConnection` if the URL
     /// is plain HTTP to a non-local/non-private host.
     static func validateConnectionSecurity(_ url: URL) throws {
-        if url.scheme == "https" { return }
-        guard url.scheme == "http", let host = url.host?.lowercased() else {
-            throw OpenClawError.insecureConnection
-        }
-        // Allow HTTP for local/private network addresses
-        if host == "localhost" || host == "127.0.0.1" || host == "::1"
-            || host.hasSuffix(".local")
-            || host.hasPrefix("192.168.")
-            || host.hasPrefix("10.")
-            || host.hasPrefix("172.16.") || host.hasPrefix("172.17.") || host.hasPrefix("172.18.")
-            || host.hasPrefix("172.19.") || host.hasPrefix("172.2") || host.hasPrefix("172.3")
-        {
-            return
-        }
+        // 自用场景：ATS 已放开，允许公网 IP 明文 HTTP（http://124.156.180.143:18789）
+        if url.scheme == "https" || url.scheme == "http" { return }
         throw OpenClawError.insecureConnection
     }
 
