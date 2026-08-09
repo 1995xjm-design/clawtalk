@@ -219,6 +219,7 @@ final class ChatViewModel {
         guard state == .speaking || state == .streaming else { return }
 
         sendTask?.cancel()
+        audioPlayback.duckVolume()
         ttsConcurrency.cancelAll()
         speechService?.stop()
         audioPlayback.stop()
@@ -830,6 +831,12 @@ final class TTSConcurrency {
                 let audioStream = tts.streamSpeech(text: sentence)
                 for try await chunk in audioStream {
                     playback.enqueue(pcmData: chunk)
+                }
+                let last = sentence.last
+                if last == "。" || last == "？" || last == "！" || last == "." || last == "?" || last == "!" {
+                    try? await Task.sleep(nanoseconds: 300_000_000)
+                } else if last == "，" || last == "；" || last == "," || last == ";" {
+                    try? await Task.sleep(nanoseconds: 150_000_000)
                 }
             } catch {
                 // 单句 TTS 失败不中断整体流程

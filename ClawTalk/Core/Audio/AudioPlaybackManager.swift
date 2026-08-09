@@ -8,6 +8,8 @@ final class AudioPlaybackManager: @unchecked Sendable {
     private var buffersEnqueued = 0
     private var buffersCompleted = 0
     private var streamingDone = false
+    private var mixerNode: AVAudioMixerNode?
+    private var isDucked = false
 
     func start() throws {
         let session = AVAudioSession.sharedInstance()
@@ -21,15 +23,20 @@ final class AudioPlaybackManager: @unchecked Sendable {
 
         let engine = AVAudioEngine()
         let player = AVAudioPlayerNode()
+        let mixer = AVAudioMixerNode()
 
         engine.attach(player)
-        engine.connect(player, to: engine.mainMixerNode, format: playbackFormat)
+        engine.attach(mixer)
+        engine.connect(player, to: mixer, format: playbackFormat)
+        engine.connect(mixer, to: engine.mainMixerNode, format: playbackFormat)
+        mixer.outputVolume = 1.0
         engine.prepare()
         try engine.start()
 
         player.play()
         audioEngine = engine
         playerNode = player
+        mixerNode = mixer
         isPlaying = true
         buffersEnqueued = 0
         buffersCompleted = 0
@@ -69,7 +76,23 @@ final class AudioPlaybackManager: @unchecked Sendable {
         audioEngine?.stop()
         audioEngine = nil
         playerNode = nil
+        mixerNode = nil
         isPlaying = false
+        isDucked = false
+    }
+
+    // MARK: - Ducking
+
+    func duckVolume() {
+        guard !isDucked, let mixer = mixerNode else { return }
+        isDucked = true
+        mixer.outputVolume = 0.3
+    }
+
+    func restoreVolume() {
+        guard isDucked, let mixer = mixerNode else { return }
+        isDucked = false
+        mixer.outputVolume = 1.0
     }
 
     /// Wait until all enqueued audio has finished playing.

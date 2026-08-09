@@ -49,25 +49,29 @@ final class MiniMaxTTSService: SpeechService {
                     //   data: [DONE]
                     // 逐行读取，从每行 JSON 中提取 base64 音频数据。
                     var collectedPCM = Data()
-                    for try await line in bytes.lines {
+                    var lineBuf = ""
+                    for try await byte in bytes {
                         if Task.isCancelled { break }
-                        let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
-                        guard trimmed.hasPrefix("data:") else { continue }
-                        let payload = trimmed.dropFirst(5).trimmingCharacters(in: .whitespaces)
-                        if payload == "[DONE]" { break }
-                        guard let payloadData = payload.data(using: .utf8),
-                              let json = try? JSONSerialization.jsonObject(with: payloadData) as? [String: Any],
-                              let audioB64 = json["data"] as? String,
-                              let audioRaw = Data(base64Encoded: audioB64) else {
-                            continue
-                        }
+                        if byte == 0x0A {
+                            let trimmed = lineBuf.trimmingCharacters(in: .whitespacesAndNewlines)
+                            lineBuf = ""
+                            guard trimmed.hasPrefix("data:") else { continue }
+                            let payload = trimmed.dropFirst(5).trimmingCharacters(in: .whitespaces)
+                            if payload == "[DONE]" { break }
+                            guard let payloadData = payload.data(using: .utf8),
+                                  let json = try? JSONSerialization.jsonObject(with: payloadData) as? [String: Any],
+                                  let audioB64 = json["data"] as? String,
+                                  let audioRaw = Data(base64Encoded: audioB64) else {
+                                continue
+                            }
                         // 每帧是 16-bit LE PCM（24kHz 单声道），累积后分块下发
-                        collectedPCM.append(audioRaw)
-                        // 每 4800 字节（100ms）输出一块
-                        while collectedPCM.count >= 4800 {
-                            let chunk = collectedPCM.prefix(4800)
-                            collectedPCM.removeFirst(4800)
-                            continuation.yield(Self.int16ToFloat32(Data(chunk)))
+                            collectedPCM.append(audioRaw)
+                            // 每 4800 字节（100ms）输出一块
+                            while collectedPCM.count >= 4800 {
+                                let chunk = collectedPCM.prefix(4800)
+                                collectedPCM.removeFirst(4800)
+                                continuation.yield(Self.int16ToFloat32(Data(chunk)))
+                            }
                         }
                     }
                     // 输出剩余不足 100ms 的尾块
