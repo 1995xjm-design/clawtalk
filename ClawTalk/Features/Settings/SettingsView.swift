@@ -321,6 +321,12 @@ private var connectionSection: some View {
             case .openclaw:
                 TextField("Backend URL", text: $store.settings.fusionBackendURL)
                     .keyboardType(.URL)
+                TextField("Voice ID", text: $store.settings.openclawVoice)
+                    .autocorrectionDisabled()
+                    .textInputAutocapitalization(.never)
+                Text("引擎在服务器切换；此处音色用于火山引擎/豆包语音大模型，如 BV700_streaming")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
 
                 voicePreviewButton
             case .openai:

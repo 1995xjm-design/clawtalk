@@ -72,6 +72,7 @@ struct AppSettings: Codable {
     var elevenLabsVoiceID: String
     var openAIVoice: String
     var fusionBackendURL: String
+    var openclawVoice: String
     var minimaxGroupID: String
     var minimaxAPIKey: String
     var minimaxDomain: String
@@ -94,6 +95,7 @@ struct AppSettings: Codable {
         elevenLabsVoiceID: "21m00Tcm4TlvDq8ikWAM",
         openAIVoice: "alloy",
         fusionBackendURL: "http://127.0.0.1:18890",
+        openclawVoice: "BV700_streaming",
         minimaxGroupID: "",
         minimaxAPIKey: "",
         minimaxDomain: "https://api.minimaxi.com",
@@ -152,6 +154,7 @@ struct AppSettings: Codable {
         elevenLabsVoiceID: String,
         openAIVoice: String,
         fusionBackendURL: String = "http://127.0.0.1:18890",
+        openclawVoice: String = "BV700_streaming",
         minimaxGroupID: String = "",
         minimaxAPIKey: String = "",
         minimaxDomain: String = "https://api.minimaxi.com",
@@ -173,6 +176,7 @@ struct AppSettings: Codable {
         self.elevenLabsVoiceID = elevenLabsVoiceID
         self.openAIVoice = openAIVoice
         self.fusionBackendURL = fusionBackendURL
+        self.openclawVoice = openclawVoice
         self.minimaxGroupID = minimaxGroupID
         self.minimaxAPIKey = minimaxAPIKey
         self.minimaxDomain = minimaxDomain
@@ -197,6 +201,7 @@ struct AppSettings: Codable {
         elevenLabsVoiceID = try container.decode(String.self, forKey: .elevenLabsVoiceID)
         openAIVoice = try container.decode(String.self, forKey: .openAIVoice)
         fusionBackendURL = try container.decodeIfPresent(String.self, forKey: .fusionBackendURL) ?? "http://127.0.0.1:18890"
+        openclawVoice = try container.decodeIfPresent(String.self, forKey: .openclawVoice) ?? "BV700_streaming"
         minimaxGroupID = try container.decodeIfPresent(String.self, forKey: .minimaxGroupID) ?? ""
         minimaxAPIKey = try container.decodeIfPresent(String.self, forKey: .minimaxAPIKey) ?? ""
         minimaxDomain = try container.decodeIfPresent(String.self, forKey: .minimaxDomain) ?? "https://api.minimaxi.com"
@@ -220,7 +225,7 @@ struct AppSettings: Codable {
     }
 
     enum CodingKeys: String, CodingKey {
-        case gatewayURL, ttsProvider, sttProvider, elevenLabsVoiceID, openAIVoice, fusionBackendURL
+        case gatewayURL, ttsProvider, sttProvider, elevenLabsVoiceID, openAIVoice, fusionBackendURL, openclawVoice
         case minimaxGroupID, minimaxAPIKey, minimaxDomain, minimaxVoiceID, wechatBridgeURL
         case whisperModelSize, voiceOutputEnabled, voiceInputEnabled
         case agentAPIMode, showTokenUsage, useWebSocket
@@ -237,6 +242,7 @@ struct AppSettings: Codable {
         try container.encode(elevenLabsVoiceID, forKey: .elevenLabsVoiceID)
         try container.encode(openAIVoice, forKey: .openAIVoice)
         try container.encode(fusionBackendURL, forKey: .fusionBackendURL)
+        try container.encode(openclawVoice, forKey: .openclawVoice)
         try container.encode(minimaxGroupID, forKey: .minimaxGroupID)
         try container.encode(minimaxAPIKey, forKey: .minimaxAPIKey)
         try container.encode(minimaxDomain, forKey: .minimaxDomain)

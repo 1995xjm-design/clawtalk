@@ -250,7 +250,7 @@ struct ClawTalkApp: App {
                 if backendURL.isEmpty {
                     return AppleTTSService()
                 }
-                return OpenClawTTSService(backendURL: backendURL, voice: nil)
+                return OpenClawTTSService(backendURL: backendURL, voice: s.openclawVoice)
             case .minimax:
                 let groupID = s.minimaxGroupID.trimmingCharacters(in: .whitespacesAndNewlines)
                 let apiKey = s.minimaxAPIKey.trimmingCharacters(in: .whitespacesAndNewlines)
