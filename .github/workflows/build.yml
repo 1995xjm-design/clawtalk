@@ -144,7 +144,7 @@ jobs:
           set -o pipefail
           mkdir -p build
           python3 scripts/sign_ipa.py \
-            --ipa unsigned-art/clawtalk-unsigned-ipa.zip \
+            --ipa unsigned-art/ClawTalk-unsigned.ipa \
             --p12 sign.p12 \
             --password "$P12_PASSWORD" \
             --main-profile profiles/main.mobileprovision \
