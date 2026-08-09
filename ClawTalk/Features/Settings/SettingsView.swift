@@ -290,7 +290,7 @@ private var connectionSection: some View {
                     Text("温柔淑女 2.0").tag("zh_female_wenroushunv_uranus_bigtts")
                     Text("甜美小源 2.0").tag("zh_female_tianmeixiaoyuan_uranus_bigtts")
                     Text("渊博小叔 2.0").tag("zh_male_yuanboxiaoshu_uranus_bigtts")
-                    Text("爽朗少年").tag("zh_male_shuanglangshaonian_tob")
+                    Text("爽朗少年 Brayan 2.0").tag("zh_male_shaonianzixin_uranus_bigtts")
                 }
                 TextField("自定义音色 ID", text: $store.settings.doubaoVoiceID)
                     .autocorrectionDisabled()
