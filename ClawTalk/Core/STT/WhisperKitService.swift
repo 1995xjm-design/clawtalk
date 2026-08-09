@@ -88,9 +88,7 @@ final class WhisperKitService: TranscriptionService {
             throw TranscriptionError.modelNotLoaded
         }
 
-        // 显式指定中文转写：不指定语言时 Whisper 会自行检测，
-        // 中文语音（尤其口音/短句/夹英文）容易被误判为英文，输出音译或无关内容。
-        let result = try await kit.transcribe(audioArray: audioSamples, language: "zh", task: .transcribe)
+        let result = try await kit.transcribe(audioArray: audioSamples)
         let raw = result.map { $0.text }.joined(separator: " ")
         return TranscriptCleanup.clean(raw)
     }
