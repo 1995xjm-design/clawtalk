@@ -14,6 +14,7 @@ enum TTSProvider: String, Codable, CaseIterable, Identifiable {
 
 enum STTProvider: String, Codable, CaseIterable, Identifiable {
     case local = "Local Whisper"
+    case apple = "Apple (System)"
     case openclaw = "OpenClaw Backend"
 
     var id: String { rawValue }

@@ -449,8 +449,13 @@ private var connectionSection: some View {
                 Text("选中文可避免中文被识别成英文（说中文出英文问题）。")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+            case .apple:
+                Text("使用 iOS 系统自带识别（支持中文、可离线），无需下载模型。")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             case .openclaw:
-                Text("Use your OpenClaw backend STT. Supports dialects via server-side engines.")
+                Text("Use your OpenClaw backend STT.
+ Supports dialects via server-side engines.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 if !store.settings.fusionBackendURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {

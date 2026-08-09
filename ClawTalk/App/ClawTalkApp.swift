@@ -212,6 +212,10 @@ struct ClawTalkApp: App {
                     cachedSTTModelSize = s.whisperModelSize
                     stt = service
                 }
+            case .apple:
+                cachedSTT = nil
+                cachedSTTModelSize = nil
+                stt = AppleSTTService(language: s.whisperLanguage)
             case .openclaw:
                 let backendURL = s.fusionBackendURL.trimmingCharacters(in: .whitespacesAndNewlines)
                 if backendURL.isEmpty {
@@ -245,6 +249,10 @@ struct ClawTalkApp: App {
                     return OpenAITTSService(voice: s.openAIVoice, apiKey: key)
                 }
                 return AppleTTSService()
+            case .apple:
+                cachedSTT = nil
+                cachedSTTModelSize = nil
+                stt = AppleSTTService(language: s.whisperLanguage)
             case .openclaw:
                 let backendURL = s.fusionBackendURL.trimmingCharacters(in: .whitespacesAndNewlines)
                 if backendURL.isEmpty {
