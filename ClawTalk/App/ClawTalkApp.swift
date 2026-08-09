@@ -78,7 +78,7 @@ struct ClawTalkApp: App {
                    settingsStore.settings.voiceInputEnabled,
                    modelManager.hasDownloadedModel,
                    cachedSTT == nil {
-                    let warmup = WhisperKitService(modelSize: settingsStore.settings.whisperModelSize)
+                    let warmup = WhisperKitService(modelSize: settingsStore.settings.whisperModelSize, language: settingsStore.settings.whisperLanguage)
                     cachedSTT = warmup
                     cachedSTTModelSize = settingsStore.settings.whisperModelSize
                 }
@@ -207,7 +207,7 @@ struct ClawTalkApp: App {
                 if let cached = cachedSTT, cachedSTTModelSize == s.whisperModelSize {
                     stt = cached
                 } else {
-                    let service = WhisperKitService(modelSize: s.whisperModelSize)
+                    let service = WhisperKitService(modelSize: s.whisperModelSize, language: s.whisperLanguage)
                     cachedSTT = service
                     cachedSTTModelSize = s.whisperModelSize
                     stt = service
@@ -219,7 +219,7 @@ struct ClawTalkApp: App {
                     if let cached = cachedSTT, cachedSTTModelSize == s.whisperModelSize {
                         stt = cached
                     } else {
-                        let service = WhisperKitService(modelSize: s.whisperModelSize)
+                        let service = WhisperKitService(modelSize: s.whisperModelSize, language: s.whisperLanguage)
                         cachedSTT = service
                         cachedSTTModelSize = s.whisperModelSize
                         stt = service

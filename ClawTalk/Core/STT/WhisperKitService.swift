@@ -7,12 +7,14 @@ private let logger = Logger(subsystem: "com.openclaw.clawtalk", category: "whisp
 final class WhisperKitService: TranscriptionService {
     private var whisperKit: WhisperKit?
     private let modelSize: WhisperModelSize
+    private let language: String?
     private var loadTask: Task<WhisperKit, Error>?
     private(set) var isLoaded = false
     private(set) var loadingProgress: Double = 0
 
-    init(modelSize: WhisperModelSize) {
+    init(modelSize: WhisperModelSize, language: String? = "zh") {
         self.modelSize = modelSize
+        self.language = language
         // Eagerly start loading the model in the background
         self.loadTask = Task.detached(priority: .userInitiated) {
             let start = ContinuousClock.now
@@ -88,7 +90,8 @@ final class WhisperKitService: TranscriptionService {
             throw TranscriptionError.modelNotLoaded
         }
 
-        let result = try await kit.transcribe(audioArray: audioSamples)
+        let options = DecodingOptions(task: .transcribe, language: language)
+        let result = try await kit.transcribe(audioArray: audioSamples, decodeOptions: options)
         let raw = result.map { $0.text }.joined(separator: " ")
         return TranscriptCleanup.clean(raw)
     }

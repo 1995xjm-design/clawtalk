@@ -442,6 +442,13 @@ private var connectionSection: some View {
                 } message: {
                     Text("The Large Turbo model provides the best accuracy but requires ~1.6 GB of storage. It will download on next voice input.")
                 }
+                Picker("识别语言", selection: $store.settings.whisperLanguage) {
+                    Text("中文").tag("zh")
+                    Text("自动检测").tag("auto")
+                }
+                Text("选中文可避免中文被识别成英文（说中文出英文问题）。")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             case .openclaw:
                 Text("Use your OpenClaw backend STT. Supports dialects via server-side engines.")
                     .font(.caption)

@@ -79,6 +79,7 @@ struct AppSettings: Codable {
     var minimaxVoiceID: String
     var wechatBridgeURL: String
     var whisperModelSize: WhisperModelSize
+    var whisperLanguage: String
     var voiceOutputEnabled: Bool
     var voiceInputEnabled: Bool
     var agentAPIMode: AgentAPIMode
@@ -102,6 +103,7 @@ struct AppSettings: Codable {
         minimaxVoiceID: "female-shaonv",
         wechatBridgeURL: "",
         whisperModelSize: .small,
+        whisperLanguage: "zh",
         voiceOutputEnabled: true,
         voiceInputEnabled: true,
         agentAPIMode: .openResponses,
@@ -161,6 +163,7 @@ struct AppSettings: Codable {
         minimaxVoiceID: String = "female-shaonv",
         wechatBridgeURL: String = "",
         whisperModelSize: WhisperModelSize,
+        whisperLanguage: String = "zh",
         voiceOutputEnabled: Bool,
         voiceInputEnabled: Bool,
         agentAPIMode: AgentAPIMode = .openResponses,
@@ -183,6 +186,7 @@ struct AppSettings: Codable {
         self.minimaxVoiceID = minimaxVoiceID
         self.wechatBridgeURL = wechatBridgeURL
         self.whisperModelSize = whisperModelSize
+        self.whisperLanguage = whisperLanguage
         self.voiceOutputEnabled = voiceOutputEnabled
         self.voiceInputEnabled = voiceInputEnabled
         self.agentAPIMode = agentAPIMode
@@ -208,6 +212,7 @@ struct AppSettings: Codable {
         minimaxVoiceID = try container.decodeIfPresent(String.self, forKey: .minimaxVoiceID) ?? "female-shaonv"
         wechatBridgeURL = try container.decodeIfPresent(String.self, forKey: .wechatBridgeURL) ?? ""
         whisperModelSize = try container.decode(WhisperModelSize.self, forKey: .whisperModelSize)
+        whisperLanguage = try container.decodeIfPresent(String.self, forKey: .whisperLanguage) ?? "zh"
         voiceOutputEnabled = try container.decode(Bool.self, forKey: .voiceOutputEnabled)
         voiceInputEnabled = try container.decode(Bool.self, forKey: .voiceInputEnabled)
         agentAPIMode = try container.decodeIfPresent(AgentAPIMode.self, forKey: .agentAPIMode) ?? .openResponses
@@ -227,7 +232,7 @@ struct AppSettings: Codable {
     enum CodingKeys: String, CodingKey {
         case gatewayURL, ttsProvider, sttProvider, elevenLabsVoiceID, openAIVoice, fusionBackendURL, openclawVoice
         case minimaxGroupID, minimaxAPIKey, minimaxDomain, minimaxVoiceID, wechatBridgeURL
-        case whisperModelSize, voiceOutputEnabled, voiceInputEnabled
+        case whisperModelSize, whisperLanguage, voiceOutputEnabled, voiceInputEnabled
         case agentAPIMode, showTokenUsage, useWebSocket
         case webSocketPath, webSocketPort // webSocketPort for legacy decode only
         case hapticsEnabled
@@ -249,6 +254,7 @@ struct AppSettings: Codable {
         try container.encode(minimaxVoiceID, forKey: .minimaxVoiceID)
         try container.encode(wechatBridgeURL, forKey: .wechatBridgeURL)
         try container.encode(whisperModelSize, forKey: .whisperModelSize)
+        try container.encode(whisperLanguage, forKey: .whisperLanguage)
         try container.encode(voiceOutputEnabled, forKey: .voiceOutputEnabled)
         try container.encode(voiceInputEnabled, forKey: .voiceInputEnabled)
         try container.encode(agentAPIMode, forKey: .agentAPIMode)
