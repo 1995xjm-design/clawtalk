@@ -72,7 +72,7 @@ targets:
         INFOPLIST_FILE: ClawTalk/Resources/Info.plist
         CODE_SIGN_ENTITLEMENTS: ClawTalk/Resources/ClawTalk.entitlements
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
-        PRODUCT_BUNDLE_IDENTIFIER: com.openclaw.clawtalk
+        PRODUCT_BUNDLE_IDENTIFIER: app.lgm.7517
         MARKETING_VERSION: "1.1.0"
         CURRENT_PROJECT_VERSION: 2
         TARGETED_DEVICE_FAMILY: "1,2"
@@ -114,7 +114,7 @@ targets:
       - target: ClawTalk
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.openclaw.clawtalk.tests
+        PRODUCT_BUNDLE_IDENTIFIER: app.lgm.7517.tests
         GENERATE_INFOPLIST_FILE: YES
 
   ClawTalkKeyboard:
@@ -126,7 +126,7 @@ targets:
       - path: ClawTalkKeyboard/Localizable.xcstrings
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.openclaw.clawtalk.keyboard
+        PRODUCT_BUNDLE_IDENTIFIER: app.lgm.7517.123
         INFOPLIST_FILE: ClawTalkKeyboard/Info.plist
         SWIFT_ACTIVE_COMPILATION_CONDITIONS: KEYBOARD_EXTENSION
         CODE_SIGN_ENTITLEMENTS: ClawTalkKeyboard/ClawTalkKeyboard.entitlements
