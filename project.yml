@@ -9,9 +9,9 @@ options:
 settings:
   base:
     SWIFT_VERSION: "5.10"
-    DEVELOPMENT_TEAM: UL35UHH8Q4
+    DEVELOPMENT_TEAM: X5G6AN3DYX
     CODE_SIGN_IDENTITY: ""
-    CODE_SIGN_STYLE: Automatic
+    CODE_SIGN_STYLE: Manual
     ENABLE_PREVIEWS: YES
 
 packages:
@@ -73,6 +73,7 @@ targets:
         CODE_SIGN_ENTITLEMENTS: ClawTalk/Resources/ClawTalk.entitlements
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         PRODUCT_BUNDLE_IDENTIFIER: app.lgm.7517
+        PROVISIONING_PROFILE_SPECIFIER: 7517
         MARKETING_VERSION: "1.1.0"
         CURRENT_PROJECT_VERSION: 2
         TARGETED_DEVICE_FAMILY: "1,2"
@@ -127,6 +128,7 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: app.lgm.7517.123
+        PROVISIONING_PROFILE_SPECIFIER: 7517ext
         INFOPLIST_FILE: ClawTalkKeyboard/Info.plist
         SWIFT_ACTIVE_COMPILATION_CONDITIONS: KEYBOARD_EXTENSION
         CODE_SIGN_ENTITLEMENTS: ClawTalkKeyboard/ClawTalkKeyboard.entitlements
