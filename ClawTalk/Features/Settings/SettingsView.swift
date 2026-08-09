@@ -480,16 +480,12 @@ private var connectionSection: some View {
 
     private var wechatSection: some View {
         Section {
-            TextField("微信桥接服务地址", text: $store.settings.wechatBridgeURL)
-                .keyboardType(.URL)
-                .autocorrectionDisabled()
-                .textInputAutocapitalization(.never)
-
-            let bridgeURL = store.settings.wechatBridgeURL.trimmingCharacters(in: .whitespacesAndNewlines)
+            // 直接复用 OpenClaw 后端地址（服务器），无需单独填桥接地址
+            let bridgeURL = store.settings.fusionBackendURL.trimmingCharacters(in: .whitespacesAndNewlines)
             if bridgeURL.isEmpty {
                 Label("连接微信 CLAW bot", systemImage: "qrcode")
                     .foregroundStyle(.secondary)
-                Text("请在设置中填写微信桥接服务地址")
+                Text("请先在上方「OpenClaw 后端地址」填写服务器地址")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             } else {
@@ -502,7 +498,7 @@ private var connectionSection: some View {
         } header: {
             Text("微信绑定")
         } footer: {
-            Text("扫码绑定微信后，可通过微信与 CLAW bot 交互。")
+            Text("使用 OpenClaw 后端地址作为微信桥接（同一台服务器），扫码绑定后可通过微信与 CLAW bot 交互。")
         }
     }
 

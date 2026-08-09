@@ -342,6 +342,13 @@ final class KokoroModelManager {
         /// v1.1-zh 音色包（npz，含 zf_001…、zm_010… 等 100 个中文音色）
         static let voicesURLString =
             "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.1/voices-v1.1-zh.bin"
+
+        /// 国内镜像前缀（依次尝试，原 GitHub 地址放最后兜底）
+        static let mirrors: [String] = [
+            "https://gh-proxy.com/",
+            "https://mirror.ghproxy.com/",
+            ""
+        ]
     }
 
     // MARK: 本地文件路径
@@ -403,17 +410,24 @@ final class KokoroModelManager {
     /// 用 URLSessionDownloadTask（delegate 回调进度）下载单个文件到目标路径。
     /// 进度映射到 [startProgress, endProgress] 区段；目标已存在时先删除再移动。
     private func downloadFile(from urlString: String, to destination: URL, startProgress: Double, endProgress: Double) async throws {
-        guard let url = URL(string: urlString) else {
-            throw KokoroModelError.downloadFailed("非法下载地址：\(urlString)")
-        }
-        let downloader = KokoroFileDownloader(url: url, destination: destination)
-        downloader.onProgress = { [weak self] fraction in
-            Task { @MainActor in
-                self?.downloadProgress = startProgress + (endProgress - startProgress) * fraction
+        var lastError: Error?
+        for mirror in Source.mirrors {
+            guard let url = URL(string: mirror + urlString) else { continue }
+            do {
+                let downloader = KokoroFileDownloader(url: url, destination: destination)
+                downloader.onProgress = { [weak self] fraction in
+                    Task { @MainActor in
+                        self?.downloadProgress = startProgress + (endProgress - startProgress) * fraction
+                    }
+                }
+                defer { downloader.invalidate() }
+                _ = try await downloader.start()
+                return
+            } catch {
+                lastError = error
             }
         }
-        defer { downloader.invalidate() }
-        _ = try await downloader.start()
+        throw lastError ?? KokoroModelError.downloadFailed("所有下载源都失败：\(urlString)")
     }
 }
 
