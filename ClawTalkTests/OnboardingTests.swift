@@ -138,7 +138,7 @@ struct OnboardingTests {
     func enableWSPreservesSettings() throws {
         var settings = AppSettings.defaults
         settings.gatewayURL = "https://example.com"
-        settings.ttsProvider = .elevenlabs
+        settings.ttsProvider = .doubao
         settings.useWebSocket = true
         settings.webSocketPath = "/ws"
 
@@ -147,7 +147,7 @@ struct OnboardingTests {
 
         #expect(decoded.useWebSocket == true)
         #expect(decoded.gatewayURL == "https://example.com")
-        #expect(decoded.ttsProvider == .elevenlabs)
+        #expect(decoded.ttsProvider == .doubao)
         #expect(decoded.webSocketPath == "/ws")
     }
 
