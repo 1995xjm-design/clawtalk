@@ -472,6 +472,8 @@ private var connectionSection: some View {
                 switch store.settings.sttProvider {
                 case .local:
                     Text("Runs entirely on-device. Audio never leaves your phone.")
+                case .apple:
+                    Text("Uses iOS system recognition - on-device and offline, no model download.")
                 case .openclaw:
                     Text("Audio is sent to your OpenClaw backend for transcription.")
                 }
