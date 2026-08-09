@@ -61,11 +61,8 @@ targets:
         NSPhotoLibraryUsageDescription: "ClawTalk accesses your photos when your AI agent requests recent images."
         NSCameraUsageDescription: "ClawTalk uses the camera when your AI agent requests a photo."
         NSAppTransportSecurity:
-          NSAllowsArbitraryLoads: false
-          NSExceptionDomains:
-            ts.net:
-              NSExceptionAllowsInsecureHTTPLoads: false
-              NSIncludesSubdomains: true
+          # ????????? HTTP ????????18789?????18890?
+          NSAllowsArbitraryLoads: true
         ITSAppUsesNonExemptEncryption: false
         UILaunchScreen: {}
         UIRequiresFullScreen: true
