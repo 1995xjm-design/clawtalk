@@ -8,6 +8,7 @@ final class AppleTTSService: NSObject, SpeechService, AVSpeechSynthesizerDelegat
     private let synthesizer = AVSpeechSynthesizer()
 
     private struct Item {
+        let id = UUID()
         let utterance: AVSpeechUtterance
         let continuation: AsyncThrowingStream<Data, Error>.Continuation
     }
@@ -26,8 +27,9 @@ final class AppleTTSService: NSObject, SpeechService, AVSpeechSynthesizerDelegat
             let utterance = AVSpeechUtterance(string: text)
             utterance.rate = AVSpeechUtteranceDefaultSpeechRate
 
+            let itemID = UUID()
             continuation.onTermination = { [weak self] _ in
-                self?.cancel(continuation)
+                self?.cancel(itemID)
             }
 
             DispatchQueue.main.async { [weak self] in
@@ -61,14 +63,14 @@ final class AppleTTSService: NSObject, SpeechService, AVSpeechSynthesizerDelegat
     }
 
     /// ???? onTermination????????????????????????
-    private func cancel(_ continuation: AsyncThrowingStream<Data, Error>.Continuation) {
+    private func cancel(_ id: UUID) {
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
-            if self.current?.continuation === continuation {
+            if self.current?.id == id {
                 self.current = nil
                 self.synthesizer.stopSpeaking(at: .immediate)
                 self.pump()
-            } else if let idx = self.queue.firstIndex(where: { $0.continuation === continuation }) {
+            } else if let idx = self.queue.firstIndex(where: { $0.id == id }) {
                 self.queue.remove(at: idx)
             }
         }
