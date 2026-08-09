@@ -37,7 +37,7 @@ final class AudioCaptureManager {
     private let interruptThreshold: Float = 0.12
     /// Time of silence-after-speech (measured on smoothed rms) before
     /// firing an utterance.
-    private let silenceDuration: TimeInterval = 1.2
+    private let silenceDuration: TimeInterval = 0.7
 
     // MARK: - Push-to-Talk
 

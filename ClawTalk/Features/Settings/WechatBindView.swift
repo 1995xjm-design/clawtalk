@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import CoreImage
 
 /// 微信扫码绑定页：展示后端下发的二维码，每 3 秒轮询一次绑定状态。
 ///
@@ -238,6 +239,10 @@ struct WechatBindView: View {
                    let imageData = Data(base64Encoded: b64),
                    let image = UIImage(data: imageData) {
                     qrImage = image
+                } else if let urlStr = decoded.img_base64, urlStr.hasPrefix("http"),
+                          let generated = WechatBindView.makeQRCodeImage(content: urlStr) {
+                    // 后端返回的是二维码图片链接（非 base64），本地生成二维码
+                    qrImage = generated
                 }
 
                 state = .waiting
@@ -301,6 +306,20 @@ struct WechatBindView: View {
                 }
             }
         }
+    }
+
+    /// 用 CoreImage 本地生成二维码图片（不依赖后端返回 base64/图片）。
+    static func makeQRCodeImage(content: String, size: CGFloat = 240) -> UIImage? {
+        let data = Data(content.utf8)
+        guard let filter = CIFilter(name: "CIQRCodeGenerator") else { return nil }
+        filter.setValue(data, forKey: "inputMessage")
+        filter.setValue("M", forKey: "inputCorrectionLevel")
+        guard let ciImage = filter.outputImage else { return nil }
+        let scale = size / ciImage.extent.width
+        let scaled = ciImage.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
+        let context = CIContext()
+        guard let cgImage = context.createCGImage(scaled, from: scaled.extent) else { return nil }
+        return UIImage(cgImage: cgImage)
     }
 
     private func stopPolling() {
