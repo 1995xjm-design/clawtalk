@@ -10,7 +10,7 @@ settings:
   base:
     SWIFT_VERSION: "5.10"
     DEVELOPMENT_TEAM: X5G6AN3DYX
-    CODE_SIGN_IDENTITY: ""
+    CODE_SIGN_IDENTITY: "iPhone Distribution"
     CODE_SIGN_STYLE: Manual
     ENABLE_PREVIEWS: YES
 
