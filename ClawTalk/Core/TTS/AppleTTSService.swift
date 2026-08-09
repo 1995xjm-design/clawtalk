@@ -1,9 +1,20 @@
 import Foundation
 import AVFoundation
 
+/// Apple ?? TTS?AVSpeechSynthesizer??
+/// ??????????????????????"??????"?
+/// ?????????????????? voice??????????????
 final class AppleTTSService: NSObject, SpeechService, AVSpeechSynthesizerDelegate {
     private let synthesizer = AVSpeechSynthesizer()
-    private var completionHandler: (() -> Void)?
+
+    private struct Item {
+        let utterance: AVSpeechUtterance
+        let continuation: AsyncThrowingStream<Data, Error>.Continuation
+    }
+
+    private var queue: [Item] = []
+    private var current: Item?
+    private var stopped = false
 
     override init() {
         super.init()
@@ -12,40 +23,80 @@ final class AppleTTSService: NSObject, SpeechService, AVSpeechSynthesizerDelegat
 
     func streamSpeech(text: String) -> AsyncThrowingStream<Data, Error> {
         AsyncThrowingStream { continuation in
-            Task { @MainActor in
-                let utterance = AVSpeechUtterance(string: text)
-                // 跟随系统「朗读语音」设置：不显式指定 voice（显式指定会忽略系统设置）
-                utterance.rate = AVSpeechUtteranceDefaultSpeechRate
+            let utterance = AVSpeechUtterance(string: text)
+            utterance.rate = AVSpeechUtteranceDefaultSpeechRate
 
-                self.completionHandler = {
+            continuation.onTermination = { [weak self] _ in
+                self?.cancel(continuation)
+            }
+
+            DispatchQueue.main.async { [weak self] in
+                guard let self else {
                     continuation.finish()
+                    return
                 }
-
-                continuation.onTermination = { [weak self] _ in
-                    self?.synthesizer.stopSpeaking(at: .immediate)
-                    self?.completionHandler = nil
+                guard !self.stopped else {
+                    continuation.finish()
+                    return
                 }
-
-                self.synthesizer.speak(utterance)
+                self.queue.append(Item(utterance: utterance, continuation: continuation))
+                self.pump()
             }
         }
     }
 
     func stop() {
-        synthesizer.stopSpeaking(at: .immediate)
-        completionHandler?()
-        completionHandler = nil
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.stopped = true
+            self.synthesizer.stopSpeaking(at: .immediate)
+            if let item = self.current {
+                self.current = nil
+                item.continuation.finish()
+            }
+            let pending = self.queue
+            self.queue.removeAll()
+            pending.forEach { $0.continuation.finish() }
+        }
     }
 
-    // MARK: - AVSpeechSynthesizerDelegate
+    /// ???? onTermination????????????????????????
+    private func cancel(_ continuation: AsyncThrowingStream<Data, Error>.Continuation) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            if self.current?.continuation === continuation {
+                self.current = nil
+                self.synthesizer.stopSpeaking(at: .immediate)
+                self.pump()
+            } else if let idx = self.queue.firstIndex(where: { $0.continuation === continuation }) {
+                self.queue.remove(at: idx)
+            }
+        }
+    }
+
+    // MARK: - AVSpeechSynthesizerDelegate???????
 
     func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
-        completionHandler?()
-        completionHandler = nil
+        guard let item = current, item.utterance === utterance else { return }
+        current = nil
+        item.continuation.finish()
+        pump()
     }
 
-    // MARK: - Voice Selection
+    func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didCancel utterance: AVSpeechUtterance) {
+        // ????? current ?? nil?????????????
+        guard let item = current, item.utterance === utterance else { return }
+        current = nil
+        item.continuation.finish()
+        pump()
+    }
 
+    private func pump() {
+        guard !stopped, current == nil, !queue.isEmpty else { return }
+        let item = queue.removeFirst()
+        current = item
+        synthesizer.speak(item.utterance)
+    }
 
     /// AVSpeechSynthesisVoice expects region-style codes (e.g. "zh-CN"), while system
     /// locales can carry a script (e.g. "zh-Hans-CN"). Normalize to the region form.
@@ -57,10 +108,5 @@ final class AppleTTSService: NSObject, SpeechService, AVSpeechSynthesizerDelegat
             return "zh-\(region)"
         }
         return "zh-CN"
-    }
-
-    func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didCancel utterance: AVSpeechUtterance) {
-        completionHandler?()
-        completionHandler = nil
     }
 }
