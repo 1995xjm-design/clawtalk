@@ -839,7 +839,19 @@ final class TTSConcurrency {
                     try? await Task.sleep(nanoseconds: 150_000_000)
                 }
             } catch {
-                // 单句 TTS 失败不中断整体流程
+                // 单句 TTS 失败：重试一次，避免网络抖动导致"说几句就没声音"
+                if !Task.isCancelled {
+                    try? await Task.sleep(nanoseconds: 300_000_000)
+                    if Task.isCancelled { return }
+                    do {
+                        let audioStream = tts.streamSpeech(text: sentence)
+                        for try await chunk in audioStream {
+                            playback.enqueue(pcmData: chunk)
+                        }
+                    } catch {
+                        // 重试仍失败，放弃该句
+                    }
+                }
             }
         }
         tasks.append(task)

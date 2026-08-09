@@ -24,6 +24,10 @@ final class SettingsStore {
         didSet { secure.openAIAPIKey = openAIAPIKey.isEmpty ? nil : openAIAPIKey }
     }
 
+    var doubaoAPIKey: String = "" {
+        didSet { secure.doubaoAPIKey = doubaoAPIKey.isEmpty ? nil : doubaoAPIKey }
+    }
+
     var isConfigured: Bool {
         !settings.gatewayURL.isEmpty && !gatewayToken.isEmpty
     }
@@ -40,6 +44,7 @@ final class SettingsStore {
         self.gatewayToken = secure.gatewayToken ?? ""
         self.elevenLabsAPIKey = secure.elevenLabsAPIKey ?? ""
         self.openAIAPIKey = secure.openAIAPIKey ?? ""
+        self.doubaoAPIKey = secure.doubaoAPIKey ?? ""
         self.hasCompletedOnboarding = defaults.bool(forKey: "has_completed_onboarding")
 
         // Auto-skip onboarding for existing configured users

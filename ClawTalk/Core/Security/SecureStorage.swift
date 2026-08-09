@@ -11,6 +11,7 @@ final class SecureStorage {
         static let gatewayToken = "openclaw_gateway_token"
         static let elevenLabsAPIKey = "elevenlabs_api_key"
         static let openAIAPIKey = "openai_api_key"
+        static let doubaoAPIKey = "doubao_api_key"
     }
 
     private init() {
@@ -47,6 +48,17 @@ final class SecureStorage {
                 try? keychain.set(value, key: Keys.openAIAPIKey)
             } else {
                 try? keychain.remove(Keys.openAIAPIKey)
+            }
+        }
+    }
+
+    var doubaoAPIKey: String? {
+        get { try? keychain.get(Keys.doubaoAPIKey) }
+        set {
+            if let value = newValue {
+                try? keychain.set(value, key: Keys.doubaoAPIKey)
+            } else {
+                try? keychain.remove(Keys.doubaoAPIKey)
             }
         }
     }

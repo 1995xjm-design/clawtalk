@@ -15,15 +15,6 @@ settings:
     ENABLE_PREVIEWS: YES
 
 packages:
-  onnxruntime:
-    # ONNX Runtime Swift Package Manager（product 名 onnxruntime，模块名 OnnxRuntimeBindings）
-    # 注意：任务书写的 microsoft/onnxruntime-spm-package 仓库不存在（404），
-    # 官方 SPM 仓库实为 microsoft/onnxruntime-swift-package-manager，v1.17.0 标签已确认存在。
-    url: https://github.com/microsoft/onnxruntime-swift-package-manager.git
-    from: "1.17.0"
-  WhisperKit:
-    url: https://github.com/argmaxinc/WhisperKit.git
-    from: "0.9.0"
   KeychainAccess:
     url: https://github.com/kishikawakatsumi/KeychainAccess.git
     from: "4.2.2"
@@ -40,71 +31,9 @@ targets:
     resources:
       - ClawTalk/Resources
     dependencies:
-      - package: WhisperKit
-      - package: onnxruntime
       - package: KeychainAccess
       - package: MarkdownUI
       - target: ClawTalkKeyboard
-    postCompileScripts:
-      - name: Bundle WhisperKit model (Debug only)
-        script: |
-          if [ "$CONFIGURATION" != "Debug" ]; then
-            echo "Skipping bundled WhisperKit model (Release build)."
-            exit 0
-          fi
-          SRC="$SRCROOT/.dev-resources/whisperkit-coreml"
-          DEST="$BUILT_PRODUCTS_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/whisperkit-coreml"
-          if [ ! -d "$SRC" ]; then
-            echo "No dev-resources WhisperKit model found at $SRC. Skipping bundle."
-            exit 0
-          fi
-          if [ -d "$DEST" ] && [ "$DEST/openai_whisper-small" -nt "$SRC/openai_whisper-small" ]; then
-            echo "Bundled WhisperKit model already up to date."
-            exit 0
-          fi
-          mkdir -p "$BUILT_PRODUCTS_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH"
-          rsync -a --delete "$SRC/" "$DEST/"
-          echo "Copied dev WhisperKit model into Debug build."
-        outputFiles:
-          - $(BUILT_PRODUCTS_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/whisperkit-coreml
-    settings:
-      base:
-        INFOPLIST_FILE: ClawTalk/Resources/Info.plist
-        CODE_SIGN_ENTITLEMENTS: ClawTalk/Resources/ClawTalk.entitlements
-        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
-        PRODUCT_BUNDLE_IDENTIFIER: app.lgm.7517
-        PROVISIONING_PROFILE_SPECIFIER: 7517
-        MARKETING_VERSION: "1.1.0"
-        CURRENT_PROJECT_VERSION: 2
-        TARGETED_DEVICE_FAMILY: "1,2"
-    info:
-      path: ClawTalk/Resources/Info.plist
-      properties:
-        CFBundleDisplayName: ClawTalk
-        CFBundleShortVersionString: "$(MARKETING_VERSION)"
-        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
-        NSMicrophoneUsageDescription: "ClawTalk needs microphone access for voice input to your AI agent."
-        NSSpeechRecognitionUsageDescription: "ClawTalk uses speech recognition to transcribe your voice messages."
-        NSUserNotificationsUsageDescription: "ClawTalk sends notifications when your AI agent needs your attention."
-        NSLocationWhenInUseUsageDescription: "ClawTalk shares your location with your AI agent when requested."
-        NSContactsUsageDescription: "ClawTalk accesses contacts when your AI agent needs to look up or add a contact."
-        NSCalendarsFullAccessUsageDescription: "ClawTalk accesses your calendar when your AI agent needs to view or create events."
-        NSRemindersFullAccessUsageDescription: "ClawTalk accesses reminders when your AI agent needs to view or create reminders."
-        NSMotionUsageDescription: "ClawTalk accesses motion data when your AI agent requests activity or step information."
-        NSPhotoLibraryUsageDescription: "ClawTalk accesses your photos when your AI agent requests recent images."
-        NSCameraUsageDescription: "ClawTalk uses the camera when your AI agent requests a photo."
-        NSAppTransportSecurity:
-          NSAllowsArbitraryLoads: false
-          NSExceptionDomains:
-            ts.net:
-              NSExceptionAllowsInsecureHTTPLoads: false
-              NSIncludesSubdomains: true
-        ITSAppUsesNonExemptEncryption: false
-        UILaunchScreen: {}
-        UIRequiresFullScreen: true
-        UISupportedInterfaceOrientations:
-          - UIInterfaceOrientationPortrait
-          - UIInterfaceOrientationPortraitUpsideDown
 
   ClawTalkTests:
     type: bundle.unit-test

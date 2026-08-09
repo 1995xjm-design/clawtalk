@@ -7,10 +7,6 @@ struct ClawTalkApp: App {
     @State private var channelStore: ChannelStore
     @State private var selectedChannel: Channel?
     @State private var chatViewModel: ChatViewModel?
-    @State private var showModelDownload = false
-    @State private var modelManager = WhisperModelManager.shared
-    @State private var cachedSTT: WhisperKitService?
-    @State private var cachedSTTModelSize: WhisperModelSize?
     @State private var gatewayConnection = GatewayConnection()
     @State private var nodeConnection = NodeConnection()
 
@@ -29,16 +25,6 @@ struct ClawTalkApp: App {
                     OnboardingView(settingsStore: settingsStore) {
                         // Onboarding complete
                     }
-                } else if showModelDownload {
-                    ModelDownloadView(
-                        modelSize: settingsStore.settings.whisperModelSize,
-                        onComplete: {
-                            showModelDownload = false
-                        },
-                        onSkip: {
-                            showModelDownload = false
-                        }
-                    )
                 } else if let vm = chatViewModel, selectedChannel != nil {
                     ChatView(viewModel: vm, settingsStore: settingsStore, gatewayConnection: gatewayConnection, onBack: goBack, onDeleteChannel: deleteCurrentChannel)
                 } else {
@@ -50,11 +36,6 @@ struct ClawTalkApp: App {
                             selectChannel(channel)
                         }
                     )
-                    .onAppear {
-                        if !modelManager.hasDownloadedModel && settingsStore.settings.voiceInputEnabled {
-                            showModelDownload = true
-                        }
-                    }
                 }
             }
             .overlay {
@@ -69,20 +50,6 @@ struct ClawTalkApp: App {
             .tint(.openClawRed)
             .preferredColorScheme(settingsStore.settings.appearance == .dark ? .dark : .light)
             .task {
-                // Pre-warm WhisperKit at app launch so the first
-                // conversation-mode utterance doesn't pay the 3s
-                // CoreML cold-load cost. Triggers Task.detached load
-                // inside the service's init; the eager work runs in
-                // the background while the user navigates to a chat.
-                if settingsStore.settings.sttProvider == .local,
-                   settingsStore.settings.voiceInputEnabled,
-                   modelManager.hasDownloadedModel,
-                   cachedSTT == nil {
-                    let warmup = WhisperKitService(modelSize: settingsStore.settings.whisperModelSize, language: settingsStore.settings.whisperLanguage)
-                    cachedSTT = warmup
-                    cachedSTTModelSize = settingsStore.settings.whisperModelSize
-                }
-
                 guard settingsStore.settings.useWebSocket,
                       settingsStore.isConfigured else { return }
 
@@ -114,7 +81,7 @@ struct ClawTalkApp: App {
                 }
                 reconfigureServices()
             }
-            .onChange(of: settingsStore.settings.whisperModelSize) {
+            .onChange(of: settingsStore.doubaoAPIKey) {
                 reconfigureServices()
             }
             .onChange(of: settingsStore.elevenLabsAPIKey) {
@@ -192,46 +159,26 @@ struct ClawTalkApp: App {
         let secure = SecureStorage.shared
         let s = settingsStore.settings
 
-        // STT: Local Whisper transcribes on-device; OpenClaw Backend
-        // relays audio to the fusion-backend /api/stt endpoint. The
-        // on-device service stays cached while the local provider is
-        // active; the backend provider is created per configuration.
+        // STT: Apple 系统识别 / OpenClaw Backend / 豆包（Doubao）
         let stt: (any TranscriptionService)?
         if !s.voiceInputEnabled {
-            cachedSTT = nil
-            cachedSTTModelSize = nil
             stt = nil
         } else {
             switch s.sttProvider {
-            case .local:
-                if let cached = cachedSTT, cachedSTTModelSize == s.whisperModelSize {
-                    stt = cached
-                } else {
-                    let service = WhisperKitService(modelSize: s.whisperModelSize, language: s.whisperLanguage)
-                    cachedSTT = service
-                    cachedSTTModelSize = s.whisperModelSize
-                    stt = service
-                }
             case .apple:
-                cachedSTT = nil
-                cachedSTTModelSize = nil
                 stt = AppleSTTService(language: s.whisperLanguage)
             case .openclaw:
                 let backendURL = s.fusionBackendURL.trimmingCharacters(in: .whitespacesAndNewlines)
                 if backendURL.isEmpty {
-                    // Fall back to on-device Whisper when no backend URL is configured.
-                    if let cached = cachedSTT, cachedSTTModelSize == s.whisperModelSize {
-                        stt = cached
-                    } else {
-                        let service = WhisperKitService(modelSize: s.whisperModelSize, language: s.whisperLanguage)
-                        cachedSTT = service
-                        cachedSTTModelSize = s.whisperModelSize
-                        stt = service
-                    }
+                    stt = AppleSTTService(language: s.whisperLanguage)
                 } else {
-                    cachedSTT = nil
-                    cachedSTTModelSize = nil
                     stt = OpenClawSTTService(backendURL: backendURL, language: nil)
+                }
+            case .doubao:
+                if let key = secure.doubaoAPIKey, !key.isEmpty {
+                    stt = DoubaoSTTService(apiKey: key, language: s.whisperLanguage)
+                } else {
+                    stt = AppleSTTService(language: s.whisperLanguage)
                 }
             }
         }
@@ -239,43 +186,19 @@ struct ClawTalkApp: App {
         // TTS
         let tts: any SpeechService = {
             switch s.ttsProvider {
-            case .elevenlabs:
-                if let key = secure.elevenLabsAPIKey, !key.isEmpty {
-                    return ElevenLabsTTSService(voiceID: s.elevenLabsVoiceID, apiKey: key)
-                }
-                return AppleTTSService()
-            case .openai:
-                if let key = secure.openAIAPIKey, !key.isEmpty {
-                    return OpenAITTSService(voice: s.openAIVoice, apiKey: key)
-                }
-                return AppleTTSService()
             case .apple:
-                cachedSTT = nil
-                cachedSTTModelSize = nil
-                stt = AppleSTTService(language: s.whisperLanguage)
+                return AppleTTSService()
             case .openclaw:
                 let backendURL = s.fusionBackendURL.trimmingCharacters(in: .whitespacesAndNewlines)
                 if backendURL.isEmpty {
                     return AppleTTSService()
                 }
                 return OpenClawTTSService(backendURL: backendURL, voice: s.openclawVoice)
-            case .minimax:
-                let groupID = s.minimaxGroupID.trimmingCharacters(in: .whitespacesAndNewlines)
-                let apiKey = s.minimaxAPIKey.trimmingCharacters(in: .whitespacesAndNewlines)
-                if groupID.isEmpty || apiKey.isEmpty {
-                    // MiniMax 配置缺失时兜底 Apple 语音
-                    return AppleTTSService()
+            case .doubao:
+                if let key = secure.doubaoAPIKey, !key.isEmpty {
+                    return DoubaoTTSService(apiKey: key, voiceID: s.doubaoVoiceID)
                 }
-                return MiniMaxTTSService(
-                    groupID: groupID,
-                    apiKey: apiKey,
-                    domain: s.minimaxDomain,
-                    voiceID: s.minimaxVoiceID
-                )
-            case .apple:
                 return AppleTTSService()
-            case .kokoro:
-                return KokoroTTSService()
             }
         }()
 

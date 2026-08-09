@@ -8,13 +8,11 @@ struct OnboardingView: View {
     @State private var gatewayURL = ""
     @State private var gatewayToken = ""
     @State private var connectionState: ConnectionTestState = .idle
-    @State private var modelManager = WhisperModelManager.shared
 
     enum Step: Int, CaseIterable {
         case welcome = 0
         case gatewaySetup
         case gateway
-        case voice
     }
 
     enum ConnectionTestState: Equatable {
@@ -29,7 +27,6 @@ struct OnboardingView: View {
             welcomeStep.tag(Step.welcome)
             gatewaySetupStep.tag(Step.gatewaySetup)
             gatewayStep.tag(Step.gateway)
-            voiceStep.tag(Step.voice)
         }
         .tabViewStyle(.page(indexDisplayMode: .always))
         .indexViewStyle(.page(backgroundDisplayMode: .always))
@@ -117,7 +114,7 @@ struct OnboardingView: View {
             }
 
             Button("I'll set this up later") {
-                withAnimation { step = .voice }
+                finishOnboarding()
             }
             .font(.subheadline)
             .foregroundStyle(.secondary)
@@ -221,7 +218,7 @@ struct OnboardingView: View {
 
             primaryButton(connectionState == .success ? "Continue" : "Test Connection") {
                 if connectionState == .success {
-                    withAnimation { step = .voice }
+                    finishOnboarding()
                 } else {
                     settingsStore.settings.gatewayURL = gatewayURL
                     settingsStore.gatewayToken = gatewayToken
@@ -236,94 +233,13 @@ struct OnboardingView: View {
                 settingsStore.settings.gatewayURL = gatewayURL
                 settingsStore.gatewayToken = gatewayToken
                 settingsStore.save()
-                withAnimation { step = .voice }
+                finishOnboarding()
             }
             .font(.subheadline)
             .foregroundStyle(.secondary)
             .padding(.bottom, 60)
         }
         .animation(.easeInOut(duration: 0.2), value: connectionState)
-    }
-
-    // MARK: - Voice Setup
-
-    private var voiceStep: some View {
-        VStack(spacing: 24) {
-            Spacer()
-
-            Image(systemName: "waveform.badge.mic")
-                .font(.system(size: 48))
-                .foregroundStyle(.openClawRed)
-
-            Text("Add Voice (Optional)")
-                .font(.title2)
-                .fontWeight(.bold)
-
-            Text("Text chat works without this. To also talk to your agent — push-to-talk or hands-free — ClawTalk can transcribe on-device for privacy, or you can enable server-side transcription later in Settings.")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 32)
-
-            VStack(spacing: 8) {
-                Text(settingsStore.settings.whisperModelSize.displayName)
-                    .font(.subheadline)
-                    .fontWeight(.medium)
-
-                if modelManager.isDownloading {
-                    ProgressView(value: modelManager.downloadProgress)
-                        .tint(.openClawRed)
-                        .padding(.horizontal, 32)
-                        .padding(.top, 8)
-                    Text("Downloading... \(Int(modelManager.downloadProgress * 100))%")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                } else if let error = modelManager.errorMessage {
-                    Text(error)
-                        .font(.caption)
-                        .foregroundStyle(.red)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal, 32)
-                }
-            }
-            .padding(.top, 8)
-
-            Spacer()
-
-            if modelManager.isDownloading {
-                Button("Continue Without Voice") {
-                    finishOnboarding()
-                }
-                .foregroundStyle(.secondary)
-                .padding(.bottom, 60)
-            } else if modelManager.hasDownloadedModel {
-                primaryButton("Done") {
-                    finishOnboarding()
-                }
-                .padding(.bottom, 60)
-            } else {
-                primaryButton("Download for On-Device Voice") {
-                    Task {
-                        await modelManager.downloadModel(size: settingsStore.settings.whisperModelSize)
-                        if modelManager.isModelReady {
-                            finishOnboarding()
-                        }
-                    }
-                }
-
-                Button("Skip — I'll just type for now") {
-                    settingsStore.settings.voiceInputEnabled = false
-                    settingsStore.save()
-                    finishOnboarding()
-                }
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .padding(.bottom, 60)
-            }
-        }
-        .onAppear {
-            UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
-        }
     }
 
     // MARK: - Helpers

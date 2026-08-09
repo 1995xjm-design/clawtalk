@@ -6,8 +6,6 @@ struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
 
     @State private var connectionTestState: ConnectionTestState = .idle
-    @State private var elevenLabsVoices: [ElevenLabsVoice] = []
-    @State private var voicesFetchState: FetchState = .idle
     @State private var previewService: (any SpeechService)?
     @State private var previewPlayback: AudioPlaybackManager?
     @State private var isPreviewing = false
@@ -18,13 +16,6 @@ struct SettingsView: View {
         case testing
         case success
         case failed(String)
-    }
-
-    enum FetchState: Equatable {
-        case idle
-        case loading
-        case loaded
-        case loadedDefaults
     }
 
     var body: some View {
@@ -279,44 +270,7 @@ private var connectionSection: some View {
             }
 
             switch store.settings.ttsProvider {
-            case .elevenlabs:
-                SecureField("API Key", text: $store.elevenLabsAPIKey)
-                    .textContentType(.password)
-                    .onChange(of: store.elevenLabsAPIKey) { oldValue, newValue in
-                        guard oldValue != newValue else { return }
-                        // Reset voices when key changes so user re-fetches
-                        elevenLabsVoices = []
-                        voicesFetchState = .idle
-                    }
-
-                if elevenLabsVoices.isEmpty {
-                    Button(action: { fetchElevenLabsVoices() }) {
-                        HStack {
-                            Text("Load Voices")
-                            Spacer()
-                            if voicesFetchState == .loading {
-                                ProgressView()
-                                    .scaleEffect(0.8)
-                            } else {
-                                Image(systemName: "arrow.clockwise")
-                            }
-                        }
-                    }
-                    .disabled(store.elevenLabsAPIKey.isEmpty || voicesFetchState == .loading)
-                } else {
-                    Picker("Voice", selection: $store.settings.elevenLabsVoiceID) {
-                        ForEach(elevenLabsVoices) { voice in
-                            Text(voice.name).tag(voice.voice_id)
-                        }
-                    }
-                }
-
-                if voicesFetchState == .loadedDefaults {
-                    Text("Showing default voices. Enable \"voices_read\" on your API key to see all voices including custom ones.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-
+            case .apple:
                 voicePreviewButton
             case .openclaw:
                 TextField("Backend URL", text: $store.settings.fusionBackendURL)
@@ -324,88 +278,42 @@ private var connectionSection: some View {
                 TextField("Voice ID", text: $store.settings.openclawVoice)
                     .autocorrectionDisabled()
                     .textInputAutocapitalization(.never)
-                Text("引擎在服务器切换；此处音色用于火山引擎/豆包语音大模型，如 BV700_streaming")
+                Text("引擎在服务器切换；音色如 BV700_streaming / 豆包大模型音色 ID")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-
                 voicePreviewButton
-            case .openai:
-                SecureField("API Key", text: $store.openAIAPIKey)
+            case .doubao:
+                SecureField("豆包 API Key", text: $store.doubaoAPIKey)
                     .textContentType(.password)
-                Picker("Voice", selection: $store.settings.openAIVoice) {
-                    Text("Alloy").tag("alloy")
-                    Text("Echo").tag("echo")
-                    Text("Fable").tag("fable")
-                    Text("Onyx").tag("onyx")
-                    Text("Nova").tag("nova")
-                    Text("Shimmer").tag("shimmer")
+                Picker("音色", selection: $store.settings.doubaoVoiceID) {
+                    Text("鸡汤妹妹 Hope 2.0").tag("zh_female_jitangmei_uranus_bigtts")
+                    Text("温柔淑女 2.0").tag("zh_female_wenroushunv_uranus_bigtts")
+                    Text("甜美小源 2.0").tag("zh_female_tianmeixiaoyuan_uranus_bigtts")
+                    Text("渊博小叔 2.0").tag("zh_male_yuanboxiaoshu_uranus_bigtts")
+                    Text("爽朗少年").tag("zh_male_shuanglangshaonian_tob")
                 }
-
-                voicePreviewButton
-            case .minimax:
-                TextField("Group ID", text: $store.settings.minimaxGroupID)
+                TextField("自定义音色 ID", text: $store.settings.doubaoVoiceID)
                     .autocorrectionDisabled()
                     .textInputAutocapitalization(.never)
-                SecureField("API Key", text: $store.settings.minimaxAPIKey)
-                    .textContentType(.password)
-                TextField("Domain", text: $store.settings.minimaxDomain)
-                    .keyboardType(.URL)
-                    .autocorrectionDisabled()
-                    .textInputAutocapitalization(.never)
-                TextField("Voice ID", text: $store.settings.minimaxVoiceID)
-                    .autocorrectionDisabled()
-                    .textInputAutocapitalization(.never)
-
+                Text("在豆包语音控制台「音色库」获取音色 ID。中文合成需账号开通。")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                 voicePreviewButton
-            case .apple:
-                voicePreviewButton
-            case .kokoro:
-                voicePreviewButton
-                if KokoroModelManager.shared.hasDownloadedModel {
-                    Text("Kokoro 本地语音模型已就绪，完全离线。")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                } else {
-                    Button {
-                        Task { await KokoroModelManager.shared.downloadModel() }
-                    } label: {
-                        if KokoroModelManager.shared.isDownloading {
-                            Label("下载中... \(Int(KokoroModelManager.shared.downloadProgress * 100))%", systemImage: "arrow.down.circle")
-                        } else {
-                            Label("下载 Kokoro 中文语音模型（约 380MB）", systemImage: "arrow.down.circle")
-                        }
-                    }
-                }
             }
         } header: {
             Text("Text-to-Speech")
         } footer: {
             switch store.settings.ttsProvider {
-            case .elevenlabs:
-                Text("ElevenLabs provides the most natural voices.\nFree tier: 10,000 chars/month.")
-            case .openai:
-                Text("OpenAI TTS is cost-effective with good quality.")
-            case .openclaw:
-                Text("Use your OpenClaw backend TTS relay. Configure engine on the server.")
-            case .minimax:
-                Text("MiniMax 语音服务，中文音色自然。需填写 Group ID 与 API Key。")
             case .apple:
                 Text("Apple's built-in voice. Free and works offline, but less natural.")
-            case .kokoro:
-                Text("Kokoro 本地神经语音模型，中文音色自然，完全离线。需先下载模型（约 380MB）。")
-            }
-        }
-        .onAppear {
-            if store.settings.ttsProvider == .elevenlabs && !store.elevenLabsAPIKey.isEmpty && elevenLabsVoices.isEmpty {
-                fetchElevenLabsVoices()
+            case .openclaw:
+                Text("Use your OpenClaw backend TTS relay. Configure engine on the server.")
+            case .doubao:
+                Text("豆包语音合成大模型（seed-tts-2.0），流式直连，音质自然。")
             }
         }
     }
-
     // MARK: - STT Model
-
-    @State private var pendingModelSize: WhisperModelSize?
-    @State private var showModelConfirm = false
 
     private var sttSection: some View {
         Section {
@@ -416,40 +324,11 @@ private var connectionSection: some View {
             }
 
             switch store.settings.sttProvider {
-            case .local:
-                Picker("Whisper Model", selection: Binding(
-                    get: { store.settings.whisperModelSize },
-                    set: { newSize in
-                        if newSize == .largeTurbo && store.settings.whisperModelSize != .largeTurbo {
-                            pendingModelSize = newSize
-                            showModelConfirm = true
-                        } else {
-                            store.settings.whisperModelSize = newSize
-                        }
-                    }
-                )) {
-                    ForEach(WhisperModelSize.allCases) { model in
-                        Text(model.displayName).tag(model)
-                    }
-                }
-                .confirmationDialog("Download Large Model?", isPresented: $showModelConfirm, titleVisibility: .visible) {
-                    Button("Download (~1.6 GB)") {
-                        if let size = pendingModelSize {
-                            store.settings.whisperModelSize = size
-                        }
-                    }
-                    Button("Cancel", role: .cancel) {}
-                } message: {
-                    Text("The Large Turbo model provides the best accuracy but requires ~1.6 GB of storage. It will download on next voice input.")
-                }
+            case .apple:
                 Picker("识别语言", selection: $store.settings.whisperLanguage) {
                     Text("中文").tag("zh")
-                    Text("自动检测").tag("auto")
+                    Text("跟随系统").tag("auto")
                 }
-                Text("选中文可避免中文被识别成英文（说中文出英文问题）。")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            case .apple:
                 Text("使用 iOS 系统自带识别（支持中文、可离线），无需下载模型。")
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -462,6 +341,12 @@ private var connectionSection: some View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
+            case .doubao:
+                SecureField("豆包 API Key", text: $store.doubaoAPIKey)
+                    .textContentType(.password)
+                Text("豆包流式语音识别大模型，支持普通话与方言（粤语等），需在豆包语音控制台开通。")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
         } header: {
             Text("Speech-to-Text")
@@ -470,18 +355,17 @@ private var connectionSection: some View {
                 Text("Voice Input is off — turn it on above to use speech-to-text.")
             } else {
                 switch store.settings.sttProvider {
-                case .local:
-                    Text("Runs entirely on-device. Audio never leaves your phone.")
                 case .apple:
                     Text("Uses iOS system recognition - on-device and offline, no model download.")
                 case .openclaw:
                     Text("Audio is sent to your OpenClaw backend for transcription.")
+                case .doubao:
+                    Text("音频发送到豆包语音识别服务（网络识别，支持方言）。")
                 }
             }
         }
         .disabled(!store.settings.voiceInputEnabled)
     }
-
     // MARK: - WeChat Bind
 
     private var wechatSection: some View {
@@ -591,26 +475,6 @@ private var connectionSection: some View {
         }
     }
 
-    // MARK: - ElevenLabs Voices
-
-    private func voiceLabel(for id: String) -> String {
-        if let voice = elevenLabsVoices.first(where: { $0.voice_id == id }) {
-            return voice.name
-        }
-        return id.isEmpty ? "Select a voice" : "Voice (\(id.prefix(8))...)"
-    }
-
-    private func fetchElevenLabsVoices() {
-        let apiKey = store.elevenLabsAPIKey
-        guard !apiKey.isEmpty else { return }
-        voicesFetchState = .loading
-        Task {
-            let result = await ElevenLabsVoice.fetchAll(apiKey: apiKey)
-            elevenLabsVoices = result.voices
-            voicesFetchState = result.usedAPI ? .loaded : .loadedDefaults
-        }
-    }
-
     // MARK: - Voice Preview
 
     private var voicePreviewButton: some View {
@@ -632,52 +496,32 @@ private var connectionSection: some View {
 
     private var previewDisabled: Bool {
         switch store.settings.ttsProvider {
-        case .elevenlabs:
-            return store.elevenLabsAPIKey.isEmpty || store.settings.elevenLabsVoiceID.isEmpty
-        case .openai:
-            return store.openAIAPIKey.isEmpty
         case .openclaw:
             return store.settings.fusionBackendURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        case .minimax:
-            return store.settings.minimaxGroupID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                || store.settings.minimaxAPIKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        case .doubao:
+            return store.doubaoAPIKey.isEmpty
         case .apple:
             return false
-        case .kokoro:
-            return !KokoroModelManager.shared.hasDownloadedModel
         }
     }
-
     private func startPreview() {
         let sampleText = "你好，这是你的语音预览。"
 
         let tts: any SpeechService
         switch store.settings.ttsProvider {
-        case .elevenlabs:
-            tts = ElevenLabsTTSService(voiceID: store.settings.elevenLabsVoiceID, apiKey: store.elevenLabsAPIKey)
-        case .openai:
-            tts = OpenAITTSService(voice: store.settings.openAIVoice, apiKey: store.openAIAPIKey)
         case .openclaw:
             tts = OpenClawTTSService(backendURL: store.settings.fusionBackendURL, voice: nil)
-        case .minimax:
-            tts = MiniMaxTTSService(
-                groupID: store.settings.minimaxGroupID,
-                apiKey: store.settings.minimaxAPIKey,
-                domain: store.settings.minimaxDomain,
-                voiceID: store.settings.minimaxVoiceID
-            )
+        case .doubao:
+            tts = DoubaoTTSService(apiKey: store.doubaoAPIKey, voiceID: store.settings.doubaoVoiceID)
         case .apple:
             tts = AppleTTSService()
-        case .kokoro:
-            tts = KokoroTTSService()
         }
-
         previewService = tts
         isPreviewing = true
 
         switch store.settings.ttsProvider {
         case .apple:
-            // Apple TTS 通过 AVSpeechSynthesizer 直接发声（Kokoro 走 PCM 播放分支）。
+            // Apple TTS 通过 AVSpeechSynthesizer 直接发声。
             // 必须真正消费流，AVSpeechSynthesizer 才会开始朗读。
             Task {
                 do {
@@ -692,7 +536,7 @@ private var connectionSection: some View {
                 if isPreviewing { isPreviewing = false }
             }
         default:
-            // ElevenLabs/OpenAI stream PCM through playback manager
+            // ?? TTS ?? PCM ??
             let playback = AudioPlaybackManager()
             previewPlayback = playback
 
