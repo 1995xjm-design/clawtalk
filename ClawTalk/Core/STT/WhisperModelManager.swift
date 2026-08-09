@@ -1,6 +1,10 @@
 import Foundation
 import WhisperKit
 
+enum WhisperModelError: Error {
+    case downloadFailed
+}
+
 @Observable
 @MainActor
 final class WhisperModelManager {
@@ -31,16 +35,32 @@ final class WhisperModelManager {
         errorMessage = nil
 
         do {
-            // Download with progress tracking
-            let modelURL = try await WhisperKit.download(
-                variant: size.rawValue,
-                from: "argmaxinc/whisperkit-coreml",
-                progressCallback: { [weak self] progress in
-                    Task { @MainActor in
-                        self?.downloadProgress = progress.fractionCompleted
-                    }
+            // 国内优先：先试 hf-mirror.com（国内镜像），失败再回退官方 huggingface.co。
+            // WhisperKit.download 支持 endpoint 参数（仓库 argmaxinc/whisperkit-coreml）。
+            let mirrors = ["https://hf-mirror.com", "https://huggingface.co"]
+            var modelURL: URL?
+            var lastError: Error?
+            for mirror in mirrors {
+                do {
+                    modelURL = try await WhisperKit.download(
+                        variant: size.rawValue,
+                        from: "argmaxinc/whisperkit-coreml",
+                        endpoint: mirror,
+                        progressCallback: { [weak self] progress in
+                            Task { @MainActor in
+                                self?.downloadProgress = progress.fractionCompleted
+                            }
+                        }
+                    )
+                    break
+                } catch {
+                    lastError = error
+                    print("[whisper] \(mirror) 下载失败: \(error.localizedDescription)")
                 }
-            )
+            }
+            guard let modelURL else {
+                throw lastError ?? WhisperModelError.downloadFailed
+            }
 
             // Initialize with local model (no re-download)
             let config = WhisperKitConfig(
