@@ -9,12 +9,11 @@ struct AppSettingsTests {
         let settings = AppSettings.defaults
 
         #expect(settings.gatewayURL.isEmpty)
-        #expect(settings.ttsProvider == .openai)
-        #expect(settings.sttProvider == .local)
+        #expect(settings.ttsProvider == .apple)
+        #expect(settings.sttProvider == .apple)
         #expect(settings.fusionBackendURL == "http://127.0.0.1:18890")
         #expect(settings.voiceOutputEnabled == true)
         #expect(settings.voiceInputEnabled == true)
-        #expect(settings.whisperModelSize == .small)
         #expect(settings.agentAPIMode == .openResponses)
         #expect(settings.showTokenUsage == false)
         #expect(settings.useWebSocket == false)
@@ -26,7 +25,7 @@ struct AppSettingsTests {
     func codableRoundTrip() throws {
         var settings = AppSettings.defaults
         settings.gatewayURL = "https://openclaw.samdavid.net"
-        settings.ttsProvider = .elevenlabs
+        settings.ttsProvider = .doubao
         settings.sttProvider = .openclaw
         settings.fusionBackendURL = "http://127.0.0.1:18890"
         settings.agentAPIMode = .openResponses
@@ -36,7 +35,7 @@ struct AppSettingsTests {
         let decoded = try JSONDecoder().decode(AppSettings.self, from: data)
 
         #expect(decoded.gatewayURL == "https://openclaw.samdavid.net")
-        #expect(decoded.ttsProvider == .elevenlabs)
+        #expect(decoded.ttsProvider == .doubao)
         #expect(decoded.sttProvider == .openclaw)
         #expect(decoded.fusionBackendURL == "http://127.0.0.1:18890")
         #expect(decoded.agentAPIMode == .openResponses)
@@ -62,12 +61,12 @@ struct AppSettingsTests {
 
         // Existing fields preserved
         #expect(decoded.gatewayURL == "https://openclaw.samdavid.net")
-        #expect(decoded.ttsProvider == .openai)
+        #expect(decoded.ttsProvider == .apple)
 
         // New fields get defaults
         #expect(decoded.agentAPIMode == .openResponses)
         #expect(decoded.showTokenUsage == false)
-        #expect(decoded.sttProvider == .local)
+        #expect(decoded.sttProvider == .apple)
         #expect(decoded.fusionBackendURL == "http://127.0.0.1:18890")
     }
 
@@ -84,14 +83,6 @@ struct AppSettingsTests {
         for provider in STTProvider.allCases {
             #expect(!provider.rawValue.isEmpty)
             #expect(!provider.id.isEmpty)
-        }
-    }
-
-    @Test("All Whisper model sizes have display names")
-    func whisperModelDisplayNames() {
-        for model in WhisperModelSize.allCases {
-            #expect(!model.displayName.isEmpty)
-            #expect(!model.rawValue.isEmpty)
         }
     }
 
