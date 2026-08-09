@@ -454,8 +454,7 @@ private var connectionSection: some View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             case .openclaw:
-                Text("Use your OpenClaw backend STT.
- Supports dialects via server-side engines.")
+                Text("Use your OpenClaw backend STT. Supports dialects via server-side engines.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 if !store.settings.fusionBackendURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
