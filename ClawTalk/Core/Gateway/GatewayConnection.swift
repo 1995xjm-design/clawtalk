@@ -34,6 +34,7 @@ final class GatewayConnection {
     func connect(resolvedURL: String, token: String) async {
         guard let wsURL = URL(string: resolvedURL) else {
             lastError = "无效的 WebSocket URL：\(resolvedURL)"
+            LogCollector.record(module: "网关连接", lastError ?? "")
             return
         }
 
@@ -66,6 +67,7 @@ final class GatewayConnection {
             logger.error("gateway connect failed: \(error.localizedDescription, privacy: .public)")
             connectionState = .disconnected
             lastError = error.localizedDescription
+            LogCollector.record(module: "网关连接", AppErrorText.localized(error.localizedDescription))
         }
     }
 
