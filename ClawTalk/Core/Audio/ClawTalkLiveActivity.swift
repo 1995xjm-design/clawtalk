@@ -1,15 +1,6 @@
 import ActivityKit
 import Foundation
 
-/// Live Activity（锁屏/灵动岛）数据模型：显示当前语音对话状态。
-struct ClawTalkLiveActivityAttributes: ActivityAttributes {
-    struct ContentState: Codable, Hashable {
-        var statusText: String
-    }
-
-    var channelName: String
-}
-
 /// Live Activity（锁屏/灵动岛）控制器：开启 / 更新 / 结束。
 /// 部署目标 iOS 17.0，ActivityKit 自 iOS 16.1 起可用；仍用 #available 保护，
 /// 避免将来降低部署目标时编译报错。

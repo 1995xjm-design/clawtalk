@@ -30,13 +30,6 @@ struct ToolsView: View {
                         BrowserView(viewModel: viewModel)
                     }
 
-                    NavigationLink {
-                        FileTransferChannelView(settings: settings, embeddedInNavigation: true)
-                    } label: {
-                        Label("文件传输助手", systemImage: "paperplane")
-                            .foregroundStyle(.openClawRed)
-                    }
-
 } header: {
                     Text("智能体工具")
                 } footer: {

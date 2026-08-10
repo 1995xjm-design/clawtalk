@@ -9,13 +9,32 @@ struct SessionsView: View {
     var body: some View {
         List {
             if viewModel.sessions.isEmpty && !viewModel.isLoading {
-                ContentUnavailableView(
-                    "暂无会话",
-                    systemImage: "list.bullet.rectangle",
-                    description: Text("未找到活跃会话。")
-                )
-                .listRowBackground(Color.clear)
-                .listRowSeparator(.hidden)
+                if let errorMessage = viewModel.errorMessage {
+                    ContentUnavailableView {
+                        Label("加载失败", systemImage: "exclamationmark.triangle")
+                    } description: {
+                        Text(errorMessage)
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    } actions: {
+                        Button("重试") {
+                            Task {
+                                await viewModel.listSessions()
+                            }
+                        }
+                        .buttonStyle(.borderedProminent)
+                    }
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
+                } else {
+                    ContentUnavailableView(
+                        "暂无会话",
+                        systemImage: "list.bullet.rectangle",
+                        description: Text("未找到活跃会话。\n下拉刷新试试")
+                    )
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
+                }
             }
 
             ForEach(viewModel.sessions) { session in

@@ -43,6 +43,15 @@ jobs:
             -destination 'generic/platform=iOS Simulator' \
             CODE_SIGNING_ALLOWED=NO | tee build-keyboard.log
 
+      - name: Build ClawTalkWidget extension (standalone)
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -project ClawTalk.xcodeproj \
+            -scheme ClawTalkWidget \
+            -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO | tee build-widget.log
+
       - name: Run unit tests
         run: |
           set -o pipefail
@@ -91,6 +100,7 @@ jobs:
           path: |
             build-app.log
             build-keyboard.log
+            build-widget.log
             test.log
   # 真签名打包：直接对 unsigned ipa 用 codesign 签名（p12 + 主/扩展两张描述文件）
   # Secrets 必填：P12_BASE64 / P12_PASSWORD / PROFILE_MAIN_B64 / PROFILE_EXT_B64

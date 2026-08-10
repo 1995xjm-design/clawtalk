@@ -296,10 +296,16 @@ private var connectionSection: some View {
             Toggle("触感反馈", isOn: $store.settings.hapticsEnabled)
             Toggle("语音唤醒", isOn: $store.settings.voiceWakeEnabled)
             if store.settings.voiceWakeEnabled {
+                Picker("唤醒后进入的频道", selection: $store.settings.voiceWakeChannelID) {
+                    Text("自动（默认频道）").tag(nil as String?)
+                    ForEach(ChannelStore.shared.channels) { channel in
+                        Text(channel.name).tag(channel.id.uuidString as String?)
+                    }
+                }
                 TextField("唤醒词", text: $store.settings.voiceWakeWord)
                     .autocorrectionDisabled()
                     .textInputAutocapitalization(.never)
-                Text("前台/后台均可唤醒；说「你好小爪」进入免提对话。")
+                Text("前台/后台均可唤醒；说「你好小爪」进入免提对话；唤醒后进入你选的频道。")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

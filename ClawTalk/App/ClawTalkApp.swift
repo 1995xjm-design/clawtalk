@@ -269,12 +269,16 @@ struct ClawTalkApp: App {
         speakAck()
     }
 
-    /// 后台命中唤醒词且当前没有打开的聊天页时，自动选中现有第一个频道（没有则创建默认频道），
+    /// 后台命中唤醒词且当前没有打开的聊天页时，优先进入设置里选的「唤醒后进入的频道」，
+    /// 找不到所选频道则回退现有第一个频道（没有则创建默认频道），
     /// 不重启唤醒（免提对话即将接管麦克风）。
     private func ensureDefaultChannel() {
         guard chatViewModel == nil else { return }
         let channel: Channel
-        if let first = channelStore.channels.first {
+        if let wakeChannelID = settingsStore.settings.voiceWakeChannelID,
+           let matched = channelStore.channels.first(where: { $0.id.uuidString == wakeChannelID }) {
+            channel = matched
+        } else if let first = channelStore.channels.first {
             channel = first
         } else {
             channel = .default

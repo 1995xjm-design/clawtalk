@@ -72,6 +72,8 @@ struct AppSettings: Codable {
     var voiceWakeEnabled: Bool
     /// 唤醒词
     var voiceWakeWord: String
+    /// 语音唤醒命中后进入的频道 ID（UUID 字符串，nil=跟随默认/第一个频道）
+    var voiceWakeChannelID: String?
     /// 文件传输助手服务地址（留空则从网关地址自动推断：同主机、端口 8899）
     var fileServerURL: String
 
@@ -145,6 +147,7 @@ struct AppSettings: Codable {
         appearance: Appearance = .dark,
         voiceWakeEnabled: Bool = false,
         voiceWakeWord: String = "你好小爪",
+        voiceWakeChannelID: String? = nil,
         fileServerURL: String = ""
     ) {
         self.gatewayURL = gatewayURL
@@ -167,6 +170,7 @@ struct AppSettings: Codable {
         self.appearance = appearance
         self.voiceWakeEnabled = voiceWakeEnabled
         self.voiceWakeWord = voiceWakeWord
+        self.voiceWakeChannelID = voiceWakeChannelID
         self.fileServerURL = fileServerURL
     }
 
@@ -191,6 +195,7 @@ struct AppSettings: Codable {
         appearance = try container.decodeIfPresent(Appearance.self, forKey: .appearance) ?? .dark
         voiceWakeEnabled = try container.decodeIfPresent(Bool.self, forKey: .voiceWakeEnabled) ?? false
         voiceWakeWord = try container.decodeIfPresent(String.self, forKey: .voiceWakeWord) ?? "你好小爪"
+        voiceWakeChannelID = try container.decodeIfPresent(String.self, forKey: .voiceWakeChannelID)
         fileServerURL = try container.decodeIfPresent(String.self, forKey: .fileServerURL) ?? ""
 
         // Migrate legacy webSocketPort -> webSocketPath
@@ -210,6 +215,7 @@ struct AppSettings: Codable {
         case appearance
         case voiceWakeEnabled
         case voiceWakeWord
+        case voiceWakeChannelID
         case fileServerURL
     }
 
@@ -235,6 +241,7 @@ struct AppSettings: Codable {
         try container.encode(appearance, forKey: .appearance)
         try container.encode(voiceWakeEnabled, forKey: .voiceWakeEnabled)
         try container.encode(voiceWakeWord, forKey: .voiceWakeWord)
+        try container.encodeIfPresent(voiceWakeChannelID, forKey: .voiceWakeChannelID)
         try container.encode(fileServerURL, forKey: .fileServerURL)
         // webSocketPort intentionally not encoded - legacy only
     }

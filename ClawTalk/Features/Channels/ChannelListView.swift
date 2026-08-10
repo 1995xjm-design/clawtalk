@@ -27,8 +27,10 @@ struct ChannelListView: View {
                 Section {
                     Button(action: { onSelectFileTransfer?() }) {
                         HStack(spacing: 12) {
-                            Text("📁")
+                            Image(systemName: "tray.and.arrow.down")
                                 .font(.title2)
+                                .fontWeight(.bold)
+                                .foregroundStyle(.openClawRed)
                                 .frame(width: 40, height: 40)
                                 .background(Color(.systemGray5))
                                 .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
