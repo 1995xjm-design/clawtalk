@@ -34,7 +34,7 @@ enum MuteSwitchDetector {
 
             try engine.start()
             player.play()
-            player.scheduleBuffer(buffer)
+            player.scheduleBuffer(buffer, completionHandler: nil)
 
             // 播放期间多次采样（0.6s 内），静音时 outputVolume 归 0
             let deadline = Date().addingTimeInterval(0.6)
