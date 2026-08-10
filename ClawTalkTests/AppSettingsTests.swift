@@ -26,7 +26,7 @@ struct AppSettingsTests {
         var settings = AppSettings.defaults
         settings.gatewayURL = "https://openclaw.samdavid.net"
         settings.ttsProvider = .doubao
-        settings.sttProvider = .openclaw
+        settings.sttProvider = .doubao
         settings.fusionBackendURL = "http://127.0.0.1:18890"
         settings.agentAPIMode = .openResponses
         settings.showTokenUsage = true
@@ -36,7 +36,7 @@ struct AppSettingsTests {
 
         #expect(decoded.gatewayURL == "https://openclaw.samdavid.net")
         #expect(decoded.ttsProvider == .doubao)
-        #expect(decoded.sttProvider == .openclaw)
+        #expect(decoded.sttProvider == .doubao)
         #expect(decoded.fusionBackendURL == "http://127.0.0.1:18890")
         #expect(decoded.agentAPIMode == .openResponses)
         #expect(decoded.showTokenUsage == true)
