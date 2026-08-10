@@ -384,6 +384,14 @@ final class OpenClawClient {
         return request
     }
 
+    /// 按系统语言生成给网关的语言要求（跟随 App 语言）。
+    static func languageInstruction() -> String {
+        let lang = Locale.current.language.languageCode?.identifier ?? "en"
+        return lang.hasPrefix("zh")
+            ? "请始终使用简体中文回复，包括错误提示和工具结果。"
+            : "Always reply in English, including error messages and tool results."
+    }
+
     private func buildRequest(
         messages: [Message],
         gatewayURL: String,
@@ -411,9 +419,13 @@ final class OpenClawClient {
         // Only include image data for the most recent user message to avoid huge payloads
         let lastUserIndex = messages.lastIndex(where: { $0.role == .user })
 
+        let languageMessage = ChatCompletionRequest.ChatMessage(
+            role: "system",
+            content: .text(Self.languageInstruction())
+        )
         let body = ChatCompletionRequest(
             model: model,
-            messages: messages.enumerated().map { index, msg in
+            messages: [languageMessage] + messages.enumerated().map { index, msg in
                 if index == lastUserIndex, msg.hasImages, let images = msg.imageData {
                     var parts: [ChatCompletionRequest.ChatMessage.ContentPart] = []
                     for imageData in images {

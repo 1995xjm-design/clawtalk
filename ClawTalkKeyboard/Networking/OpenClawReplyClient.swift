@@ -137,8 +137,13 @@ final class OpenClawReplyClient {
         style: String?,
         count: Int = 1
     ) -> [ChatCompletionRequestBody.Message] {
+        let lang = Locale.current.language.languageCode?.identifier ?? "en"
+        let langInstruction = lang.hasPrefix("zh")
+            ? "请始终使用简体中文回复，包括错误提示和工具结果。"
+            : "Always reply in English, including error messages and tool results."
         var systemLines = [
             "你是 ClawTalk 的 AI 回复助手，正在帮用户回复聊天消息。",
+            langInstruction,
             "请结合你记忆中对用户与该联系人的了解（记忆引擎 + 数字孪生推演），生成一条自然、贴切的回复。",
             count > 1
                 ? "请生成 \(count) 条候选回复，每行一条，只输出回复内容本身，不要编号、不要前缀、不要引号或多余标点。"

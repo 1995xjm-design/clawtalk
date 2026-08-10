@@ -11,6 +11,15 @@ struct SettingsView: View {
     @State private var previewPlayback: AudioPlaybackManager?
     @State private var isPreviewing = false
     @State private var previewErrorMessage: String?
+    @State private var showResetConfirm = false
+    @State private var pendingReset: ResetOption?
+
+    enum ResetOption: String, CaseIterable, Identifiable {
+        case onboarding = "仅重置新手引导"
+        case gateway = "重置引导并清除网关配置"
+        case full = "完全重置（含聊天记录）"
+        var id: String { rawValue }
+    }
 
     enum ConnectionTestState: Equatable {
         case idle
@@ -31,6 +40,15 @@ struct SettingsView: View {
                 wechatSection
                 dataSection
                 securitySection
+                resetSection
+            }
+            .confirmationDialog("重置新手引导", isPresented: $showResetConfirm, titleVisibility: .visible) {
+                Button("仅重置新手引导") { performReset(.onboarding) }
+                Button("重置引导并清除网关配置") { performReset(.gateway) }
+                Button("完全重置（含聊天记录）", role: .destructive) { performReset(.full) }
+                Button("取消", role: .cancel) {}
+            } message: {
+                Text("请选择重置范围：")
             }
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
@@ -404,20 +422,50 @@ private var connectionSection: some View {
 
     private var dataSection: some View {
         Section {
-            Button("Clear Chat History", role: .destructive) {
+            Button("清空聊天记录", role: .destructive) {
                 showClearConfirm = true
             }
-            .confirmationDialog("Clear all chat history?", isPresented: $showClearConfirm, titleVisibility: .visible) {
-                Button("Clear History", role: .destructive) {
+            .confirmationDialog("清空全部聊天记录？", isPresented: $showClearConfirm, titleVisibility: .visible) {
+                Button("清空记录", role: .destructive) {
                     ConversationStore.shared.clearAll()
                 }
             } message: {
-                Text("This cannot be undone.")
+                Text("此操作无法撤销。")
             }
         } header: {
-            Text("Data")
+            Text("数据")
         } footer: {
-            Text("Chat history is stored locally on this device with iOS Data Protection (encrypted at rest).")
+            Text("聊天记录仅存储在本设备，受 iOS 数据保护（静态加密）。")
+        }
+    }
+
+    /// 重置新手引导
+    private var resetSection: some View {
+        Section {
+            Button(role: .destructive) {
+                showResetConfirm = true
+            } label: {
+                Text("重置新手引导")
+            }
+        } footer: {
+            Text("重置后重新进入新手引导。")
+        }
+    }
+
+    private func performReset(_ option: ResetOption) {
+        store.hasCompletedOnboarding = false
+        switch option {
+        case .gateway, .full:
+            store.settings.gatewayURL = ""
+            store.gatewayToken = ""
+            store.settings.useWebSocket = false
+        case .onboarding:
+            break
+        }
+        store.save()
+        if option == .full {
+            ChannelStore.shared.channels = [.default]
+            ConversationStore.shared.clearAll()
         }
     }
 
@@ -432,7 +480,7 @@ private var connectionSection: some View {
             do {
                 let baseURL = store.settings.gatewayURL.trimmingCharacters(in: .whitespacesAndNewlines).trimmingCharacters(in: CharacterSet(charactersIn: "/"))
                 guard let url = URL(string: "\(baseURL)/v1/chat/completions") else {
-                    connectionTestState = .failed("Invalid gateway URL")
+                    connectionTestState = .failed(AppErrorText.localized("Invalid gateway URL"))
                     return
                 }
 
@@ -453,9 +501,9 @@ private var connectionSection: some View {
                         // 400 = auth passed, just invalid request body (empty messages)
                         connectionTestState = .success
                     case 401, 403:
-                        connectionTestState = .failed("Authentication failed (HTTP \(http.statusCode)). Check your gateway token.")
+                        connectionTestState = .failed(AppErrorText.httpStatus(http.statusCode))
                     default:
-                        connectionTestState = .failed("Gateway returned HTTP \(http.statusCode)")
+                        connectionTestState = .failed(AppErrorText.httpStatus(http.statusCode))
                     }
                 } else {
                     connectionTestState = .failed("Unexpected response")

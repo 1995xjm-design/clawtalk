@@ -62,7 +62,7 @@ final class ChatViewModel {
             recordingStart = Date()
             state = .recording
         } catch {
-            errorMessage = "麦克风访问失败：\(error.localizedDescription)"
+            errorMessage = "麦克风访问失败：\(AppErrorText.localized(error.localizedDescription))"
         }
     }
 
@@ -100,7 +100,7 @@ final class ChatViewModel {
 
                 await sendMessage(transcript, images: images.isEmpty ? nil : images)
             } catch {
-                errorMessage = "转写失败：\(error.localizedDescription)"
+                errorMessage = "转写失败：\(AppErrorText.localized(error.localizedDescription))"
                 state = .idle
             }
         }
@@ -158,7 +158,7 @@ final class ChatViewModel {
             try audioCapture.startRecording()
             state = .recording
         } catch {
-            errorMessage = "麦克风访问失败：\(error.localizedDescription)"
+            errorMessage = "麦克风访问失败：\(AppErrorText.localized(error.localizedDescription))"
             return
         }
 
@@ -232,7 +232,7 @@ final class ChatViewModel {
             } catch is CancellationError {
                 // Interrupted - don't change state
             } catch {
-                errorMessage = "转写失败：\(error.localizedDescription)"
+                errorMessage = "转写失败：\(AppErrorText.localized(error.localizedDescription))"
                 if isConversationMode {
                     audioCapture.resumeListening()
                     state = .recording
@@ -821,7 +821,7 @@ enum ChatError: LocalizedError {
             case .cancelled:
                 return .networkError("请求已取消。")
             default:
-                return .networkError(urlError.localizedDescription)
+                return .networkError(AppErrorText.localized(urlError.localizedDescription))
             }
         }
 
@@ -832,29 +832,9 @@ enum ChatError: LocalizedError {
         return .agentError(Self.localizedGatewayMessage(error.localizedDescription))
     }
 
-    /// 把网关返回的英文错误转成中文提示（含解决指引）。
+    /// 把网关返回的错误转成本地化提示（按系统语言中英）。
     static func localizedGatewayMessage(_ msg: String) -> String {
-        let lower = msg.lowercased()
-        if lower.contains("pairing required") || lower.contains("device is not approved") || lower.contains("not approved") {
-            return "设备未获批准：请在 OpenClaw 网关侧批准此设备后再试。"
-        }
-        if lower.contains("unauthorized") || lower.contains("invalid token")
-            || (lower.contains("token") && (lower.contains("invalid") || lower.contains("expired"))) {
-            return "网关令牌无效或已过期：请在设置中重新填写网关令牌。"
-        }
-        if lower.contains("insecure") || (lower.contains("https") && (lower.contains("plain") || lower.contains("http"))) {
-            return "必须使用 HTTPS：请在设置中更新网关地址（本机/内网地址可例外）。"
-        }
-        if lower.contains("connection refused") || lower.contains("connection closed") || lower.contains("network is unreachable") {
-            return "无法连接网关：请检查网络和网关地址，确认 OpenClaw 正在运行。"
-        }
-        if lower.contains("timed out") || lower.contains("timeout") {
-            return "连接网关超时：请检查网络后重试。"
-        }
-        if lower.contains("ext:") {
-            return "网关返回扩展错误（EXT）：请查看原始信息或网关日志。\(msg)"
-        }
-        return msg
+        AppErrorText.localized(msg)
     }
 }
 
