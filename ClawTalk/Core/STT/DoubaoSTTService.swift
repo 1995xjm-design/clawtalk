@@ -90,9 +90,9 @@ final class DoubaoSTTService: TranscriptionService {
                     message = try await task.receive()
                 } catch {
                     if !finalText.isEmpty {
-                        cont?.yield(finalText)
+                        resultCont?.yield(finalText)
                     }
-                    cont?.finish()
+                    resultCont?.finish()
                     return
                 }
                 guard case .data(let data) = message else { continue }
