@@ -165,6 +165,7 @@ struct AppSettings: Codable {
         agentAPIMode = try container.decodeIfPresent(AgentAPIMode.self, forKey: .agentAPIMode) ?? .openResponses
         showTokenUsage = try container.decodeIfPresent(Bool.self, forKey: .showTokenUsage) ?? false
         useWebSocket = try container.decodeIfPresent(Bool.self, forKey: .useWebSocket) ?? false
+        followMuteSwitch = try container.decodeIfPresent(Bool.self, forKey: .followMuteSwitch) ?? true
         hapticsEnabled = try container.decodeIfPresent(Bool.self, forKey: .hapticsEnabled) ?? true
         appearance = try container.decodeIfPresent(Appearance.self, forKey: .appearance) ?? .dark
 
@@ -173,7 +174,6 @@ struct AppSettings: Codable {
             webSocketPath = ":\(legacyPort)"
         } else {
             webSocketPath = try container.decodeIfPresent(String.self, forKey: .webSocketPath) ?? "/ws"
-        followMuteSwitch = try container.decodeIfPresent(Bool.self, forKey: .followMuteSwitch) ?? true
         }
     }
 
