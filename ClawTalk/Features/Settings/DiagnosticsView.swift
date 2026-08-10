@@ -38,7 +38,7 @@ struct DiagnosticsView: View {
             } header: {
                 Text("操作")
             } footer: {
-                Text("把错误日志发送到电脑端 OpenClaw，让它分析原因和给出解决方法。")
+                Text("把错误日志发送到电脑端 OpenClaw（会进入「日志诊断」频道），让它分析原因和给出解决方法，可回到该频道继续追问。")
             }
 
             if let resultText {
@@ -97,6 +97,7 @@ struct DiagnosticsView: View {
         isSyncing = true
         syncError = nil
         resultText = nil
+        InstructionChannels.ensureChannel(name: "日志诊断", systemEmoji: "🩺", sessionKey: InstructionChannels.diagnostics)
         let text = logText
         let instruction = "请分析以下 ClawTalk 客户端错误日志，逐条说明可能的原因和解决方法，用简体中文回复，最后给一个总结：\n\n" + text
 
@@ -108,7 +109,8 @@ struct DiagnosticsView: View {
                 let reply = try await OpenClawClient().chat(
                     messages: [Message(role: .user, content: instruction)],
                     gatewayURL: gw,
-                    token: settings.gatewayToken
+                    token: settings.gatewayToken,
+                    sessionKey: InstructionChannels.diagnostics
                 )
                 isSyncing = false
                 resultText = reply

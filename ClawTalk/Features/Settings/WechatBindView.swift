@@ -285,6 +285,8 @@ struct WechatBindView: View {
             return
         }
 
+        InstructionChannels.ensureChannel(name: "微信 Claw Bot", systemEmoji: "💬", sessionKey: InstructionChannels.wechatBind)
+
         let instruction = "请生成微信 Claw Bot（openclaw-weixin 渠道）的连接二维码，按以下步骤执行：\n1. 找到 OpenClaw 命令行入口（优先 PATH 中 openclaw 命令，找不到则在安装目录搜索 gateway-bundle.mjs 或 index.js）。\n2. 运行渠道登录命令：openclaw channels login --channel openclaw-weixin（node 入口则为 node <入口> channels login --channel openclaw-weixin），需要交互式终端请用 PTY 方式运行并等待输出。\n3. 从输出中提取一次性登录链接（形如 https://liteapp.weixin.qq.com/q/...?qrcode=...&bot_type=3）。\n4. 回复我：只输出这个登录链接本身，不要其他任何内容。"
 
         Task {
@@ -292,7 +294,8 @@ struct WechatBindView: View {
                 let reply = try await OpenClawClient().chat(
                     messages: [Message(role: .user, content: instruction)],
                     gatewayURL: gatewayURL,
-                    token: gatewayToken
+                    token: gatewayToken,
+                    sessionKey: InstructionChannels.wechatBind
                 )
                 guard let link = Self.extractLoginLink(from: reply) else {
                     LogCollector.record(module: "微信", "连接失败")
@@ -320,7 +323,8 @@ struct WechatBindView: View {
             let reply = try await OpenClawClient().chat(
                 messages: [Message(role: .user, content: instruction)],
                 gatewayURL: gatewayURL,
-                token: gatewayToken
+                token: gatewayToken,
+                sessionKey: InstructionChannels.wechatBind
             )
             let lower = reply.lowercased()
             if lower.contains("login_success") {

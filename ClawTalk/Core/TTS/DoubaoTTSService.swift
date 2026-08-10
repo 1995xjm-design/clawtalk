@@ -88,7 +88,14 @@ final class DoubaoTTSService: SpeechService {
             receive()
 
             continuation.onTermination = { [weak self] _ in
-                self?.stop()
+                // 只取消「自己的」连接，避免误杀下一次朗读新建的 WebSocket
+                guard let self else { return }
+                self.lock.lock()
+                let isCurrent = self.webSocketTask === task
+                self.lock.unlock()
+                if isCurrent {
+                    self.stop()
+                }
             }
         }
     }
