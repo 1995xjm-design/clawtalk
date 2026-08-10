@@ -3,8 +3,10 @@ import SwiftUI
 struct ToolsView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var viewModel: ToolsViewModel
+    private let settings: SettingsStore
 
     init(settings: SettingsStore, gatewayConnection: GatewayConnection? = nil) {
+        self.settings = settings
         _viewModel = State(initialValue: ToolsViewModel(settings: settings, gatewayConnection: gatewayConnection))
     }
 
@@ -26,6 +28,13 @@ struct ToolsView: View {
 
                     toolRow(.browser, label: "浏览器", icon: "globe") {
                         BrowserView(viewModel: viewModel)
+                    }
+
+                    NavigationLink {
+                        FileTransferView(settings: settings)
+                    } label: {
+                        Label("文件传输助手", systemImage: "paperplane")
+                            .foregroundStyle(.openClawRed)
                     }
 
 } header: {

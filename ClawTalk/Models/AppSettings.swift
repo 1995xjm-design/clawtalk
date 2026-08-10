@@ -72,6 +72,8 @@ struct AppSettings: Codable {
     var voiceWakeEnabled: Bool
     /// 唤醒词
     var voiceWakeWord: String
+    /// 文件传输助手服务地址（留空则从网关地址自动推断：同主机、端口 8899）
+    var fileServerURL: String
 
     static let defaults = AppSettings(
         gatewayURL: "",
@@ -93,7 +95,8 @@ struct AppSettings: Codable {
         hapticsEnabled: true,
         appearance: .dark,
         voiceWakeEnabled: false,
-        voiceWakeWord: "你好小爪"
+        voiceWakeWord: "你好小爪",
+        fileServerURL: ""
     )
 
     /// Build the full WebSocket URL from the gateway URL + port/path override.
@@ -141,7 +144,8 @@ struct AppSettings: Codable {
         hapticsEnabled: Bool = true,
         appearance: Appearance = .dark,
         voiceWakeEnabled: Bool = false,
-        voiceWakeWord: String = "你好小爪"
+        voiceWakeWord: String = "你好小爪",
+        fileServerURL: String = ""
     ) {
         self.gatewayURL = gatewayURL
         self.ttsProvider = ttsProvider
@@ -163,6 +167,7 @@ struct AppSettings: Codable {
         self.appearance = appearance
         self.voiceWakeEnabled = voiceWakeEnabled
         self.voiceWakeWord = voiceWakeWord
+        self.fileServerURL = fileServerURL
     }
 
     init(from decoder: Decoder) throws {
@@ -186,6 +191,7 @@ struct AppSettings: Codable {
         appearance = try container.decodeIfPresent(Appearance.self, forKey: .appearance) ?? .dark
         voiceWakeEnabled = try container.decodeIfPresent(Bool.self, forKey: .voiceWakeEnabled) ?? false
         voiceWakeWord = try container.decodeIfPresent(String.self, forKey: .voiceWakeWord) ?? "你好小爪"
+        fileServerURL = try container.decodeIfPresent(String.self, forKey: .fileServerURL) ?? ""
 
         // Migrate legacy webSocketPort -> webSocketPath
         if let legacyPort = try container.decodeIfPresent(Int.self, forKey: .webSocketPort) {
@@ -204,6 +210,7 @@ struct AppSettings: Codable {
         case appearance
         case voiceWakeEnabled
         case voiceWakeWord
+        case fileServerURL
     }
 
     func encode(to encoder: Encoder) throws {
@@ -228,6 +235,7 @@ struct AppSettings: Codable {
         try container.encode(appearance, forKey: .appearance)
         try container.encode(voiceWakeEnabled, forKey: .voiceWakeEnabled)
         try container.encode(voiceWakeWord, forKey: .voiceWakeWord)
+        try container.encode(fileServerURL, forKey: .fileServerURL)
         // webSocketPort intentionally not encoded - legacy only
     }
 }

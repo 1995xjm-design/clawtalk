@@ -6,6 +6,8 @@ enum InstructionChannels {
     static let diagnostics = "agent:main:clawtalk-user:diag"
     /// 微信 Claw Bot 绑定会话 key
     static let wechatBind = "agent:main:clawtalk-user:wechat-bind"
+    /// 文件传输助手会话 key
+    static let fileTransfer = "agent:main:clawtalk-user:file-transfer"
 
     /// 查找或创建绑定固定会话 key 的频道，返回频道（供提示使用）
     @discardableResult
