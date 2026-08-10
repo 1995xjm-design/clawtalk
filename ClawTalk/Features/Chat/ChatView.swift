@@ -235,12 +235,11 @@ struct ChatView: View {
                 dragOffset = dx
             }
             .onEnded { value in
-                guard value.startLocation.x <= 40 else { return }
                 let dx = value.translation.width
                 let dy = value.translation.height
-                guard dx > 0, abs(dx) > abs(dy) else { return }
                 let screenWidth = UIScreen.main.bounds.width
-                if dx > screenWidth / 3 {
+                let shouldPop = value.startLocation.x <= 40 && dx > 0 && abs(dx) > abs(dy) && dx > screenWidth / 3
+                if shouldPop {
                     withAnimation(.easeOut(duration: 0.25)) {
                         dragOffset = screenWidth
                     }
@@ -249,6 +248,7 @@ struct ChatView: View {
                         dragOffset = 0
                     }
                 } else {
+                    // 无论手势是否被中断/条件变化，未滑出一律回弹复位，避免页面偏移残留
                     withAnimation(.easeOut(duration: 0.2)) {
                         dragOffset = 0
                     }
