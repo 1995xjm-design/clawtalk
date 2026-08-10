@@ -15,12 +15,12 @@ struct BrowserView: View {
                     Button(action: {
                         Task { await viewModel.getBrowserStatus() }
                     }) {
-                        Label("Refresh Status", systemImage: "arrow.clockwise")
+                        Label("刷新状态", systemImage: "arrow.clockwise")
                             .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.bordered)
                 } header: {
-                    Label("Status", systemImage: "info.circle")
+                    Label("状态", systemImage: "info.circle")
                         .font(.headline)
                         .foregroundStyle(.primary)
                 }
@@ -43,13 +43,13 @@ struct BrowserView: View {
                     Button(action: {
                         Task { await viewModel.takeBrowserScreenshot() }
                     }) {
-                        Label("Take Screenshot", systemImage: "camera")
+                        Label("截取屏幕", systemImage: "camera")
                             .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.bordered)
                     .tint(.openClawRed)
                 } header: {
-                    Label("Screenshot", systemImage: "camera.viewfinder")
+                    Label("截图", systemImage: "camera.viewfinder")
                         .font(.headline)
                         .foregroundStyle(.primary)
                 }
@@ -65,19 +65,19 @@ struct BrowserView: View {
                     Button(action: {
                         Task { await viewModel.getBrowserTabs() }
                     }) {
-                        Label("List Tabs", systemImage: "square.on.square")
+                        Label("列出标签页", systemImage: "square.on.square")
                             .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.bordered)
                 } header: {
-                    Label("Tabs", systemImage: "square.on.square")
+                    Label("标签页", systemImage: "square.on.square")
                         .font(.headline)
                         .foregroundStyle(.primary)
                 }
             }
             .padding()
         }
-        .navigationTitle("Browser")
+        .navigationTitle("浏览器")
         .overlay {
             if viewModel.isLoading {
                 ProgressView()

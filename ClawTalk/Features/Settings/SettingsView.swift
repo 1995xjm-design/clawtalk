@@ -272,16 +272,6 @@ private var connectionSection: some View {
             switch store.settings.ttsProvider {
             case .apple:
                 voicePreviewButton
-            case .openclaw:
-                TextField("Backend URL", text: $store.settings.fusionBackendURL)
-                    .keyboardType(.URL)
-                TextField("Voice ID", text: $store.settings.openclawVoice)
-                    .autocorrectionDisabled()
-                    .textInputAutocapitalization(.never)
-                Text("引擎在服务器切换；音色如 BV700_streaming / 豆包大模型音色 ID")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                voicePreviewButton
             case .doubao:
                 SecureField("豆包 API Key", text: $store.doubaoAPIKey)
                     .textContentType(.password)
@@ -306,8 +296,6 @@ private var connectionSection: some View {
             switch store.settings.ttsProvider {
             case .apple:
                 Text("Apple's built-in voice. Free and works offline, but less natural.")
-            case .openclaw:
-                Text("Use your OpenClaw backend TTS relay. Configure engine on the server.")
             case .doubao:
                 Text("豆包语音合成大模型（seed-tts-2.0），流式直连，音质自然。")
             }
@@ -332,15 +320,6 @@ private var connectionSection: some View {
                 Text("使用 iOS 系统自带识别（支持中文、可离线），无需下载模型。")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-            case .openclaw:
-                Text("Use your OpenClaw backend STT. Supports dialects via server-side engines.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                if !store.settings.fusionBackendURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    Text("Backend: \(store.settings.fusionBackendURL)")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
             case .doubao:
                 SecureField("豆包 API Key", text: $store.doubaoAPIKey)
                     .textContentType(.password)
@@ -357,8 +336,6 @@ private var connectionSection: some View {
                 switch store.settings.sttProvider {
                 case .apple:
                     Text("Uses iOS system recognition - on-device and offline, no model download.")
-                case .openclaw:
-                    Text("Audio is sent to your OpenClaw backend for transcription.")
                 case .doubao:
                     Text("音频发送到豆包语音识别服务（网络识别，支持方言）。")
                 }
@@ -370,25 +347,30 @@ private var connectionSection: some View {
 
     private var wechatSection: some View {
         Section {
-            // 直接复用 OpenClaw 后端地址（服务器），无需单独填桥接地址
-            let bridgeURL = store.settings.fusionBackendURL.trimmingCharacters(in: .whitespacesAndNewlines)
-            if bridgeURL.isEmpty {
-                Label("连接微信 CLAW bot", systemImage: "qrcode")
-                    .foregroundStyle(.secondary)
-                Text("请先在上方「OpenClaw 后端地址」填写服务器地址")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            } else {
-                NavigationLink {
-                    WechatBindView(bridgeURL: bridgeURL)
-                } label: {
-                    Label("连接微信 CLAW bot", systemImage: "qrcode")
+            NavigationLink {
+                WechatBindView(settings: store)
+            } label: {
+                HStack {
+                    Label("连接微信 Claw Bot", systemImage: "qrcode")
+                    Spacer()
+                    if UserDefaults.standard.bool(forKey: "clawtalk_wechat_connected") {
+                        HStack(spacing: 4) {
+                            Circle().fill(.green).frame(width: 8, height: 8)
+                            Text("已连接")
+                                .font(.caption)
+                                .foregroundStyle(.green)
+                        }
+                    } else {
+                        Text("未连接")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                 }
             }
         } header: {
-            Text("微信绑定")
+            Text("微信")
         } footer: {
-            Text("使用 OpenClaw 后端地址作为微信桥接（同一台服务器），扫码绑定后可通过微信与 CLAW bot 交互。")
+            Text("连接后，微信里与 Claw Bot 的对话和电脑端 OpenClaw 同源。")
         }
     }
 
@@ -496,8 +478,6 @@ private var connectionSection: some View {
 
     private var previewDisabled: Bool {
         switch store.settings.ttsProvider {
-        case .openclaw:
-            return store.settings.fusionBackendURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         case .doubao:
             return store.doubaoAPIKey.isEmpty
         case .apple:
@@ -509,8 +489,6 @@ private var connectionSection: some View {
 
         let tts: any SpeechService
         switch store.settings.ttsProvider {
-        case .openclaw:
-            tts = OpenClawTTSService(backendURL: store.settings.fusionBackendURL, voice: nil)
         case .doubao:
             tts = DoubaoTTSService(apiKey: store.doubaoAPIKey, voiceID: store.settings.doubaoVoiceID)
         case .apple:

@@ -6,29 +6,29 @@ struct ModelsView: View {
     var body: some View {
         Group {
             if viewModel.isLoadingModels {
-                ProgressView("Loading models...")
+                ProgressView("正在加载模型...")
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if let error = viewModel.errorMessage {
                 ContentUnavailableView {
-                    Label("Error", systemImage: "exclamationmark.triangle")
+                    Label("错误", systemImage: "exclamationmark.triangle")
                 } description: {
                     Text(error)
                 } actions: {
-                    Button("Retry") {
+                    Button("重试") {
                         Task { await viewModel.loadModels() }
                     }
                 }
             } else if viewModel.availableModels.isEmpty {
                 ContentUnavailableView(
-                    "No Models",
+                    "暂无模型",
                     systemImage: "sparkles",
-                    description: Text("No models returned from the gateway.")
+                    description: Text("网关未返回模型。")
                 )
             } else {
                 modelsList
             }
         }
-        .navigationTitle("Models")
+        .navigationTitle("模型")
         .navigationBarTitleDisplayMode(.inline)
         .task {
             if viewModel.availableModels.isEmpty {
@@ -55,7 +55,7 @@ struct ModelsView: View {
                                 }
 
                                 if model.reasoning == true {
-                                    Label("Reasoning", systemImage: "brain")
+                                    Label("推理", systemImage: "brain")
                                         .font(.caption)
                                         .foregroundStyle(.openClawRed)
                                 }
@@ -80,16 +80,16 @@ struct ModelsView: View {
     }
 
     private var groupedProviders: [ProviderGroup] {
-        let grouped = Dictionary(grouping: viewModel.availableModels) { $0.provider ?? "Other" }
+        let grouped = Dictionary(grouping: viewModel.availableModels) { $0.provider ?? "其他" }
         return grouped.keys.sorted().map { ProviderGroup(provider: $0, models: grouped[$0]!) }
     }
 
     private func formatTokenCount(_ count: Int) -> String {
         if count >= 1_000_000 {
-            return "\(count / 1_000)k context"
+            return "\(count / 1_000)k 上下文"
         } else if count >= 1_000 {
-            return "\(count / 1_000)k context"
+            return "\(count / 1_000)k 上下文"
         }
-        return "\(count) context"
+        return "\(count) 上下文"
     }
 }

@@ -23,52 +23,16 @@ final class ReplySuggestService {
         let config = SharedConfig.load()
         guard !config.isEmpty else { return fallbackReplies }
 
-        let baseURL = config.gatewayURL
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-        guard let url = URL(string: "\(baseURL)/api/reply-suggest") else {
-            return fallbackReplies
-        }
         do {
-            try GatewaySecurity.validate(url)
-        } catch {
-            return fallbackReplies
-        }
-
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("Bearer \(config.token)", forHTTPHeaderField: "Authorization")
-        request.timeoutInterval = 30
-
-        let body = ReplySuggestRequestBody(
-            contactID: contact?.id,
-            text: trimmedText,
-            count: count,
-            style: style
-        )
-        guard let bodyData = try? JSONEncoder().encode(body) else {
-            return fallbackReplies
-        }
-        request.httpBody = bodyData
-
-        do {
-            let (data, response) = try await URLSession.shared.data(for: request)
-
-            guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
-                return fallbackReplies
-            }
-
-            let decoded = try JSONDecoder().decode(ReplySuggestResponse.self, from: data)
-            let suggestions = decoded.suggestions
-                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-                .filter { !$0.isEmpty }
-
+            let suggestions = try await OpenClawReplyClient.generateSuggestions(
+                text: trimmedText,
+                contact: contact,
+                style: style,
+                count: count,
+                config: config
+            )
             guard !suggestions.isEmpty else { return fallbackReplies }
-            if count > 0, suggestions.count > count {
-                return Array(suggestions.prefix(count))
-            }
-            return suggestions
+            return count > 0 ? Array(suggestions.prefix(count)) : suggestions
         } catch {
             return fallbackReplies
         }
@@ -87,22 +51,4 @@ final class ReplySuggestService {
         "今天也要元气满满呀",
         "这么巧，我也刚好在想你"
     ]
-}
-
-private struct ReplySuggestRequestBody: Encodable {
-    let contactID: String?
-    let text: String
-    let count: Int
-    let style: String?
-
-    enum CodingKeys: String, CodingKey {
-        case contactID = "contact_id"
-        case text
-        case count
-        case style
-    }
-}
-
-private struct ReplySuggestResponse: Decodable {
-    let suggestions: [String]
 }

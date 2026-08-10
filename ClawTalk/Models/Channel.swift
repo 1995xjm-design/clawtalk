@@ -8,6 +8,8 @@ struct Channel: Identifiable, Codable {
     let createdAt: Date
     var sessionVersion: Int
     var selectedModel: String?
+    /// 外部已有会话的 key（如电脑端 OpenClaw 会话），有值时聊天复用该会话延续上下文
+    var serverSessionKey: String?
 
     init(name: String, agentId: String, systemEmoji: String = "🤖") {
         self.id = UUID()
@@ -27,6 +29,7 @@ struct Channel: Identifiable, Codable {
         createdAt = try container.decode(Date.self, forKey: .createdAt)
         sessionVersion = try container.decodeIfPresent(Int.self, forKey: .sessionVersion) ?? 0
         selectedModel = try container.decodeIfPresent(String.self, forKey: .selectedModel)
+        serverSessionKey = try container.decodeIfPresent(String.self, forKey: .serverSessionKey)
     }
 
     /// The model string to send to the OpenClaw gateway.

@@ -14,6 +14,7 @@ final class ToolsViewModel {
 
     // Sessions
     var sessions: [SessionEntry] = []
+    var sessionTitles: [String: String] = [:]
     var sessionStatus: String?
     var sessionHistory: SessionHistoryResult?
 
@@ -189,12 +190,54 @@ final class ToolsViewModel {
                 token: token
             )
             let wrapper = try JSONDecoder().decode(ToolResultWrapper<SessionsListResult>.self, from: data)
-            sessions = wrapper.details?.sessions ?? []
+            let all = wrapper.details?.sessions ?? []
+            // 过滤系统会话（evolution-check / subagent / cron / hook / preset）
+            sessions = all.filter { !Self.isSystemSession($0.key) }
+            // 为近期会话生成可读标题（取第一条用户消息），串行执行避免并发问题
+            sessionTitles = [:]
+            for session in sessions.prefix(20) {
+                if let title = await fetchSessionTitle(session.key) {
+                    sessionTitles[session.key] = title
+                }
+            }
         } catch {
             errorMessage = error.localizedDescription
         }
 
         isLoading = false
+    }
+
+    /// 判断是否为系统会话（无对话内容，默认隐藏）
+    static func isSystemSession(_ key: String) -> Bool {
+        let markers = ["evolution-check", "subagent", "cron:", "hook:", "preset"]
+        return markers.contains { key.contains($0) }
+    }
+
+    /// 取会话的第一条用户文本消息作为标题（最多 20 字）
+    private func fetchSessionTitle(_ key: String) async -> String? {
+        do {
+            let data = try await client.invokeTool(
+                tool: "sessions_history",
+                args: ["sessionKey": .string(key), "limit": .int(1)],
+                gatewayURL: gatewayURL,
+                token: token
+            )
+            let wrapper = try JSONDecoder().decode(ToolResultWrapper<SessionHistoryResult>.self, from: data)
+            guard let history = wrapper.details else { return nil }
+            for message in history.messages where message.role == "user" {
+                for content in message.content where content.type == "text" {
+                    if let text = content.text {
+                        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                        if !trimmed.isEmpty {
+                            return trimmed.count > 20 ? String(trimmed.prefix(20)) + "…" : trimmed
+                        }
+                    }
+                }
+            }
+            return nil
+        } catch {
+            return nil
+        }
     }
 
     func getSessionStatus(sessionKey: String? = nil) async {

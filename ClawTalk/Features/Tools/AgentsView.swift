@@ -6,7 +6,7 @@ struct AgentsView: View {
     var body: some View {
         List {
             if viewModel.isLoading && viewModel.agents.isEmpty {
-                ProgressView("Loading agents...")
+                ProgressView("正在加载智能体...")
                     .frame(maxWidth: .infinity, alignment: .center)
                     .listRowBackground(Color.clear)
             } else if let error = viewModel.errorMessage {
@@ -14,7 +14,7 @@ struct AgentsView: View {
                     .foregroundStyle(.red)
                     .font(.callout)
             } else if viewModel.agents.isEmpty {
-                Text("No agents found")
+                Text("未找到智能体")
                     .foregroundStyle(.secondary)
             } else {
                 ForEach(viewModel.agents) { agent in
@@ -30,7 +30,7 @@ struct AgentsView: View {
                         Spacer()
 
                         if agent.configured == true {
-                            Text("configured")
+                            Text("已配置")
                                 .font(.caption2)
                                 .fontWeight(.medium)
                                 .padding(.horizontal, 8)
@@ -39,7 +39,7 @@ struct AgentsView: View {
                                 .foregroundStyle(.green)
                                 .clipShape(Capsule())
                         } else {
-                            Text("default")
+                            Text("默认")
                                 .font(.caption2)
                                 .fontWeight(.medium)
                                 .padding(.horizontal, 8)
@@ -53,7 +53,7 @@ struct AgentsView: View {
             }
         }
         .listStyle(.insetGrouped)
-        .navigationTitle("Agents")
+        .navigationTitle("智能体")
         .refreshable {
             await viewModel.listAgents()
         }

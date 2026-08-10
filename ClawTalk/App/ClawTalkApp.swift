@@ -15,7 +15,7 @@ struct ClawTalkApp: App {
         DemoDataSeeder.seedIfNeeded()
         #endif
         _settingsStore = State(initialValue: SettingsStore())
-        _channelStore = State(initialValue: ChannelStore())
+        _channelStore = State(initialValue: ChannelStore.shared)
     }
 
     var body: some Scene {
@@ -167,13 +167,6 @@ struct ClawTalkApp: App {
             switch s.sttProvider {
             case .apple:
                 stt = AppleSTTService(language: s.whisperLanguage)
-            case .openclaw:
-                let backendURL = s.fusionBackendURL.trimmingCharacters(in: .whitespacesAndNewlines)
-                if backendURL.isEmpty {
-                    stt = AppleSTTService(language: s.whisperLanguage)
-                } else {
-                    stt = OpenClawSTTService(backendURL: backendURL, language: nil)
-                }
             case .doubao:
                 if let key = secure.doubaoAPIKey, !key.isEmpty {
                     stt = DoubaoSTTService(apiKey: key, language: s.whisperLanguage)
@@ -188,12 +181,6 @@ struct ClawTalkApp: App {
             switch s.ttsProvider {
             case .apple:
                 return AppleTTSService()
-            case .openclaw:
-                let backendURL = s.fusionBackendURL.trimmingCharacters(in: .whitespacesAndNewlines)
-                if backendURL.isEmpty {
-                    return AppleTTSService()
-                }
-                return OpenClawTTSService(backendURL: backendURL, voice: s.openclawVoice)
             case .doubao:
                 if let key = secure.doubaoAPIKey, !key.isEmpty {
                     return DoubaoTTSService(apiKey: key, voiceID: s.doubaoVoiceID)

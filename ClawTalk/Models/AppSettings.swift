@@ -2,7 +2,6 @@ import Foundation
 
 enum TTSProvider: String, Codable, CaseIterable, Identifiable {
     case apple = "Apple (Offline)"
-    case openclaw = "OpenClaw Backend"
     case doubao = "豆包 (Doubao)"
 
     // 兼容旧数据：未知/已删除的 Provider 回退到 Apple
@@ -16,7 +15,6 @@ enum TTSProvider: String, Codable, CaseIterable, Identifiable {
 
 enum STTProvider: String, Codable, CaseIterable, Identifiable {
     case apple = "Apple (System)"
-    case openclaw = "OpenClaw Backend"
     case doubao = "豆包 (Doubao)"
 
     // 兼容旧数据：未知/已删除的 Provider 回退到 Apple
@@ -150,8 +148,8 @@ struct AppSettings: Codable {
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         gatewayURL = try container.decode(String.self, forKey: .gatewayURL)
-        ttsProvider = try container.decode(TTSProvider.self, forKey: .ttsProvider)
-        sttProvider = try container.decodeIfPresent(STTProvider.self, forKey: .sttProvider) ?? .apple
+        ttsProvider = (try? container.decode(TTSProvider.self, forKey: .ttsProvider)) ?? .apple
+        sttProvider = (try? container.decodeIfPresent(STTProvider.self, forKey: .sttProvider)) ?? .apple
         fusionBackendURL = try container.decodeIfPresent(String.self, forKey: .fusionBackendURL) ?? "http://127.0.0.1:18890"
         openclawVoice = try container.decodeIfPresent(String.self, forKey: .openclawVoice) ?? "BV700_streaming"
         doubaoVoiceID = try container.decodeIfPresent(String.self, forKey: .doubaoVoiceID) ?? "zh_female_jitangmei_uranus_bigtts"

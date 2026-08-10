@@ -3,14 +3,16 @@ import SwiftUI
 struct SessionsView: View {
     @Bindable var viewModel: ToolsViewModel
     @State private var selectedSession: SessionEntry?
+    @State private var showAddedAlert = false
+    @State private var addedChannelName = ""
 
     var body: some View {
         List {
             if viewModel.sessions.isEmpty && !viewModel.isLoading {
                 ContentUnavailableView(
-                    "No Sessions",
+                    "暂无会话",
                     systemImage: "list.bullet.rectangle",
-                    description: Text("No active sessions found.")
+                    description: Text("未找到活跃会话。")
                 )
                 .listRowBackground(Color.clear)
                 .listRowSeparator(.hidden)
@@ -22,7 +24,7 @@ struct SessionsView: View {
                 } label: {
                     VStack(alignment: .leading, spacing: 6) {
                         HStack {
-                            Text(session.displayName ?? session.key)
+                            Text(viewModel.sessionTitles[session.key] ?? session.displayName ?? session.key)
                                 .font(.body)
                                 .fontWeight(.medium)
                                 .foregroundStyle(.primary)
@@ -56,13 +58,13 @@ struct SessionsView: View {
 
                         HStack(spacing: 12) {
                             if let tokens = session.contextTokens {
-                                Text("\(tokens) ctx tokens")
+                                Text("\(tokens) 上下文令牌")
                                     .font(.caption2)
                                     .foregroundStyle(.tertiary)
                             }
 
                             if let total = session.totalTokens {
-                                Text("\(total) total")
+                                Text("\(total) 总计")
                                     .font(.caption2)
                                     .foregroundStyle(.tertiary)
                             }
@@ -78,21 +80,46 @@ struct SessionsView: View {
                     }
                     .padding(.vertical, 4)
                 }
+                .swipeActions(edge: .trailing) {
+                    Button {
+                        addSessionToChannel(session)
+                    } label: {
+                        Label("添加到频道", systemImage: "plus")
+                    }
+                    .tint(.openClawRed)
+                }
             }
         }
         .listStyle(.plain)
-        .navigationTitle("Sessions")
+        .navigationTitle("会话")
         .refreshable {
             await viewModel.listSessions()
         }
         .task {
             await viewModel.listSessions()
         }
+        .alert("已添加到频道", isPresented: $showAddedAlert) {
+            Button("好的", role: .cancel) {}
+        } message: {
+            Text("「\(addedChannelName)」已加入频道列表，返回主界面后即可在频道里接着聊。")
+        }
         .overlay {
             if viewModel.isLoading && viewModel.sessions.isEmpty {
                 ProgressView()
             }
         }
+    }
+
+    private func addSessionToChannel(_ session: SessionEntry) {
+        let agentId = session.key.split(separator: ":").dropFirst().first.map(String.init) ?? "main"
+        let title = viewModel.sessionTitles[session.key]
+            ?? session.displayName
+            ?? "会话 \(session.key.suffix(8))"
+        var channel = Channel(name: title, agentId: agentId, systemEmoji: "💬")
+        channel.serverSessionKey = session.key
+        ChannelStore.shared.add(channel)
+        addedChannelName = title
+        showAddedAlert = true
     }
 
     private func kindColor(_ kind: String) -> Color {
@@ -123,9 +150,9 @@ private struct SessionDetailView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            Picker("View", selection: $selectedTab) {
-                Text("Status").tag(0)
-                Text("History").tag(1)
+            Picker("视图", selection: $selectedTab) {
+                Text("状态").tag(0)
+                Text("历史记录").tag(1)
             }
             .pickerStyle(.segmented)
             .padding()
@@ -160,7 +187,7 @@ private struct StatusTab: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding()
             } else {
-                Text("No status available")
+                Text("暂无状态")
                     .foregroundStyle(.secondary)
                     .padding(.top, 40)
             }
@@ -179,7 +206,7 @@ private struct HistoryTab: View {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 12) {
                     if let bytes = history.bytes {
-                        Text("\(history.messages.count) messages · \(ByteCountFormatter.string(fromByteCount: Int64(bytes), countStyle: .file))")
+                        Text("\(history.messages.count) 条消息 · \(ByteCountFormatter.string(fromByteCount: Int64(bytes), countStyle: .file))")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .padding(.horizontal)
@@ -196,7 +223,7 @@ private struct HistoryTab: View {
                 .foregroundStyle(.red)
                 .padding()
         } else {
-            Text("No history available")
+            Text("暂无历史记录")
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
@@ -234,7 +261,7 @@ private struct HistoryMessageRow: View {
             }
 
             if let stopReason = message.stopReason, stopReason == "toolUse" {
-                Label("tool_use", systemImage: "arrow.right.circle")
+                Label("工具调用", systemImage: "arrow.right.circle")
                     .font(.caption2)
                     .foregroundStyle(.tertiary)
             }
@@ -252,14 +279,21 @@ private struct HistoryMessageRow: View {
                             .foregroundStyle(.secondary)
                             .textSelection(.enabled)
                     } label: {
-                        Label("Thinking", systemImage: "brain")
+                        Label("思考过程", systemImage: "brain")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
                 } else if content.type == "toolCall", let name = content.name {
-                    Label("Tool: \(name)", systemImage: "wrench.and.screwdriver")
-                        .font(.caption)
-                        .foregroundStyle(.orange)
+                    DisclosureGroup {
+                        Text(content.text ?? content.thinking ?? "无参数")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .textSelection(.enabled)
+                    } label: {
+                        Label("工具：\(name)", systemImage: "wrench.and.screwdriver")
+                            .font(.caption)
+                            .foregroundStyle(.orange)
+                    }
                 }
             }
         }

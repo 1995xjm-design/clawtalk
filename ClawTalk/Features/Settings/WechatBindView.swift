@@ -10,8 +10,15 @@ import CoreImage
 /// - POST {wechatBridgeURL}/api/wechat/qrcode/status  body {"qrcode":"..."}
 ///   → {"status":"wait|scaned|need_verifycode|expired|login_success","verify_code":...}
 struct WechatBindView: View {
-    let bridgeURL: String
+    let settings: SettingsStore
     @Environment(\.dismiss) private var dismiss
+
+    private var gatewayURL: String {
+        settings.settings.gatewayURL
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+    }
+    private var gatewayToken: String { settings.gatewayToken }
 
     private enum BindState: Equatable {
         case loading
@@ -66,7 +73,7 @@ struct WechatBindView: View {
 
             switch state {
             case .loading:
-                ProgressView("正在获取二维码…")
+                ProgressView("正在让 OpenClaw 生成二维码，首次约需 1 分钟…")
 
             case .waiting, .scanned, .needVerifyCode:
                 qrImageView
@@ -84,7 +91,7 @@ struct WechatBindView: View {
                 Text("绑定成功")
                     .font(.title2)
                     .fontWeight(.semibold)
-                Text("现在可以通过微信与 CLAW bot 对话了。")
+                Text("现在可以通过微信与 Claw Bot 对话了。")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                 Button("完成") {
@@ -210,86 +217,57 @@ struct WechatBindView: View {
         qrcode = nil
         qrImage = nil
 
-        let base = bridgeURL.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !base.isEmpty, let url = URL(string: base + "/api/wechat/qrcode") else {
-            state = .failed("微信桥接服务地址未配置")
+        guard !gatewayURL.isEmpty else {
+            state = .failed("未配置网关地址，请先在设置中填写网关地址和令牌。")
             return
         }
 
+        let instruction = "请生成微信 Claw Bot（openclaw-weixin 渠道）的连接二维码，按以下步骤执行：\n1. 找到 OpenClaw 命令行入口（优先 PATH 中 openclaw 命令，找不到则在安装目录搜索 gateway-bundle.mjs 或 index.js）。\n2. 运行渠道登录命令：openclaw channels login --channel openclaw-weixin（node 入口则为 node <入口> channels login --channel openclaw-weixin），需要交互式终端请用 PTY 方式运行并等待输出。\n3. 从输出中提取一次性登录链接（形如 https://liteapp.weixin.qq.com/q/...?qrcode=...&bot_type=3）。\n4. 回复我：只输出这个登录链接本身，不要其他任何内容。"
+
         Task {
             do {
-                var request = URLRequest(url: url)
-                request.httpMethod = "POST"
-                request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-                request.httpBody = Data("{}".utf8)
-                request.timeoutInterval = 15
-
-                let (data, response) = try await URLSession.shared.data(for: request)
-                guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
-                    let status = (response as? HTTPURLResponse)?.statusCode ?? -1
-                    throw WechatBindError.http(status)
+                let reply = try await OpenClawClient().chat(
+                    messages: [Message(role: .user, content: instruction)],
+                    gatewayURL: gatewayURL,
+                    token: gatewayToken
+                )
+                guard let link = Self.extractLoginLink(from: reply) else {
+                    state = .failed("未从 OpenClaw 回复中提取到二维码链接，请重试。")
+                    return
                 }
-
-                let decoded = try JSONDecoder().decode(QRCodeResponse.self, from: data)
-                guard let qr = decoded.qrcode, !qr.isEmpty else {
-                    throw WechatBindError.invalidResponse
-                }
-                qrcode = qr
-                if let b64 = decoded.img_base64, !b64.isEmpty,
-                   let imageData = Data(base64Encoded: b64),
-                   let image = UIImage(data: imageData) {
-                    qrImage = image
-                } else if let urlStr = decoded.img_base64, urlStr.hasPrefix("http"),
-                          let generated = WechatBindView.makeQRCodeImage(content: urlStr) {
-                    // 后端返回的是二维码图片链接（非 base64），本地生成二维码
-                    qrImage = generated
-                }
-
+                qrcode = link
+                qrImage = Self.makeQRCodeImage(content: link)
                 state = .waiting
                 startPolling()
             } catch {
-                state = .failed(error.localizedDescription)
+                state = .failed("指令执行失败：\(error.localizedDescription)")
             }
         }
     }
 
     @MainActor
     private func checkBindingStatus() async {
-        guard let qr = qrcode, !qr.isEmpty else { return }
-        let base = bridgeURL.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let url = URL(string: base + "/api/wechat/qrcode/status") else { return }
+        guard !gatewayURL.isEmpty else { return }
+        let instruction = "请查询微信 Claw Bot（openclaw-weixin 渠道）的扫码登录状态，按以下步骤执行：\n1. 查找微信渠道账户目录（如 openclaw-weixin/accounts/），查看账户文件（*.json）是否存在及其内容。\n2. 判断状态：无账户文件或没有有效 token → 返回 wait；有账户文件且渠道已上线 → 返回 login_success；无法判断时运行 openclaw channels list 确认渠道 enabled/online。\n3. 回复格式固定为一行：wait 或 scanned 或 login_success。"
 
         do {
-            var request = URLRequest(url: url)
-            request.httpMethod = "POST"
-            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-            request.httpBody = try JSONSerialization.data(withJSONObject: ["qrcode": qr])
-            request.timeoutInterval = 15
-
-            let (data, response) = try await URLSession.shared.data(for: request)
-            guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
-                throw WechatBindError.http((response as? HTTPURLResponse)?.statusCode ?? -1)
-            }
-
-            let decoded = try JSONDecoder().decode(QRStatusResponse.self, from: data)
-            switch decoded.status ?? "" {
-            case "wait":
-                state = .waiting
-            case "scaned":
-                state = .scanned
-            case "need_verifycode":
-                state = .needVerifyCode(decoded.verify_code ?? "")
-            case "expired":
-                state = .expired
-                stopPolling()
-            case "login_success":
+            let reply = try await OpenClawClient().chat(
+                messages: [Message(role: .user, content: instruction)],
+                gatewayURL: gatewayURL,
+                token: gatewayToken
+            )
+            let lower = reply.lowercased()
+            if lower.contains("login_success") {
                 state = .success
+                UserDefaults.standard.set(true, forKey: "clawtalk_wechat_connected")
                 stopPolling()
-            default:
-                break
+            } else if lower.contains("scaned") {
+                state = .scanned
+            } else {
+                state = .waiting
             }
         } catch {
-            // 单次轮询失败不打断流程，保持当前状态等待下一次轮询
+            // 单次轮询失败不打断流程，保持当前状态等待下一次
         }
     }
 
@@ -306,6 +284,13 @@ struct WechatBindView: View {
                 }
             }
         }
+    }
+
+    /// 从 OpenClaw 回复文本中提取一次性登录链接
+    static func extractLoginLink(from text: String) -> String? {
+        let pattern = #"https://liteapp\.weixin\.qq\.com/q/[^\s"'》]+"#
+        guard let range = text.range(of: pattern, options: .regularExpression) else { return nil }
+        return String(text[range]).trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     /// 用 CoreImage 本地生成二维码图片（不依赖后端返回 base64/图片）。

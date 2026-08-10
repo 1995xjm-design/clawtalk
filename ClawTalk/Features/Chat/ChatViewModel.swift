@@ -37,6 +37,9 @@ final class ChatViewModel {
 
     /// Stable session key for this channel, used for server-side session management.
     var sessionKey: String {
+        if let external = channel.serverSessionKey, !external.isEmpty {
+            return external
+        }
         let base = "agent:\(channel.agentId):clawtalk-user:\(openClaw.deviceID):\(channel.id.uuidString.prefix(8).lowercased())"
         return channel.sessionVersion > 0 ? "\(base)-v\(channel.sessionVersion)" : base
     }
@@ -107,7 +110,14 @@ final class ChatViewModel {
 
     func sendText(_ text: String, images: [Data] = []) {
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !images.isEmpty else { return }
-        guard state == .idle else { return }
+        // 允许在语音播放/流式回复时发送新消息：先打断当前语音和正在进行的回复
+        if state == .speaking || state == .streaming {
+            ttsStopped = true
+            speechService?.stop()
+            audioPlayback.stop()
+            abortCurrentRun()
+        }
+        guard state == .idle || state == .speaking || state == .streaming else { return }
         errorMessage = nil
 
         // Debug: /testimage sends a tiny red pixel to test image pipeline
@@ -789,7 +799,7 @@ enum ChatError: LocalizedError {
             case .invalidResponse, .emptyResponse:
                 return .agentError("智能体返回了无效或空的响应。")
             case .responseError(let msg):
-                return .agentError(msg)
+                return .agentError(Self.localizedGatewayMessage(msg))
             case .toolError(let msg), .toolNotFound(let msg):
                 return .agentError(msg)
             }
@@ -816,7 +826,32 @@ enum ChatError: LocalizedError {
             return .networkError("已取消")
         }
 
-        return .agentError(error.localizedDescription)
+        return .agentError(Self.localizedGatewayMessage(error.localizedDescription))
+    }
+
+    /// 把网关返回的英文错误转成中文提示（含解决指引）。
+    static func localizedGatewayMessage(_ msg: String) -> String {
+        let lower = msg.lowercased()
+        if lower.contains("pairing required") || lower.contains("device is not approved") || lower.contains("not approved") {
+            return "设备未获批准：请在 OpenClaw 网关侧批准此设备后再试。"
+        }
+        if lower.contains("unauthorized") || lower.contains("invalid token")
+            || (lower.contains("token") && (lower.contains("invalid") || lower.contains("expired"))) {
+            return "网关令牌无效或已过期：请在设置中重新填写网关令牌。"
+        }
+        if lower.contains("insecure") || (lower.contains("https") && (lower.contains("plain") || lower.contains("http"))) {
+            return "必须使用 HTTPS：请在设置中更新网关地址（本机/内网地址可例外）。"
+        }
+        if lower.contains("connection refused") || lower.contains("connection closed") || lower.contains("network is unreachable") {
+            return "无法连接网关：请检查网络和网关地址，确认 OpenClaw 正在运行。"
+        }
+        if lower.contains("timed out") || lower.contains("timeout") {
+            return "连接网关超时：请检查网络后重试。"
+        }
+        if lower.contains("ext:") {
+            return "网关返回扩展错误（EXT）：请查看原始信息或网关日志。\(msg)"
+        }
+        return msg
     }
 }
 

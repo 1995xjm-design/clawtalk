@@ -32,6 +32,7 @@ final class OpenClawReplyClient {
         text: String,
         contact: ChatContact?,
         style: String?,
+        count: Int = 1,
         config: SharedConfig,
         sessionKey: String? = nil,
         messageChannel: String? = nil
@@ -45,7 +46,7 @@ final class OpenClawReplyClient {
 
         let body = ChatCompletionRequestBody(
             model: "openclaw:\(config.agentId)",
-            messages: makeMessages(text: text, contact: contact, style: style),
+            messages: makeMessages(text: text, contact: contact, style: style, count: count),
             stream: false
         )
         request.httpBody = try JSONEncoder().encode(body)
@@ -69,6 +70,36 @@ final class OpenClawReplyClient {
             throw GatewayAPIError.emptyResponse
         }
         return content.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// 生成 N 条候选回复（每行一条），供键盘候选栏使用。
+    static func generateSuggestions(
+        text: String,
+        contact: ChatContact?,
+        style: String?,
+        count: Int,
+        config: SharedConfig,
+        sessionKey: String? = nil
+    ) async throws -> [String] {
+        let content = try await generateReply(
+            text: text,
+            contact: contact,
+            style: style,
+            count: count,
+            config: config,
+            sessionKey: sessionKey
+        )
+        var lines = content.components(separatedBy: .newlines)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        lines = lines.map { line in
+            line
+                .replacingOccurrences(of: #"^\d+[.、)]\s*"#, with: "", options: .regularExpression)
+                .replacingOccurrences(of: #"^[-–—•]\s*"#, with: "", options: .regularExpression)
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        let cleaned = lines.filter { !$0.isEmpty }
+        return cleaned.isEmpty ? [content] : cleaned
     }
 
     // MARK: - 私有构建
@@ -103,12 +134,15 @@ final class OpenClawReplyClient {
     private static func makeMessages(
         text: String,
         contact: ChatContact?,
-        style: String?
+        style: String?,
+        count: Int = 1
     ) -> [ChatCompletionRequestBody.Message] {
         var systemLines = [
             "你是 ClawTalk 的 AI 回复助手，正在帮用户回复聊天消息。",
             "请结合你记忆中对用户与该联系人的了解（记忆引擎 + 数字孪生推演），生成一条自然、贴切的回复。",
-            "只输出回复内容本身，不要解释、前缀、引号或多余标点。"
+            count > 1
+                ? "请生成 \(count) 条候选回复，每行一条，只输出回复内容本身，不要编号、不要前缀、不要引号或多余标点。"
+                : "只输出回复内容本身，不要解释、前缀、引号或多余标点。"
         ]
         if let contact {
             systemLines.append("对方：\(contact.name)（画像完整度 \(scoreText(contact.profileScore))）")

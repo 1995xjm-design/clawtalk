@@ -7,9 +7,9 @@ struct MemorySearchView: View {
         List {
             if viewModel.memoryResults.isEmpty && !viewModel.isLoading {
                 ContentUnavailableView(
-                    "Search Memory",
+                    "搜索记忆",
                     systemImage: "brain.head.profile",
-                    description: Text("Search your agent's memory for stored knowledge.")
+                    description: Text("搜索智能体记忆中存储的知识。")
                 )
                 .listRowBackground(Color.clear)
                 .listRowSeparator(.hidden)
@@ -53,8 +53,8 @@ struct MemorySearchView: View {
             }
         }
         .listStyle(.plain)
-        .navigationTitle("Memory")
-        .searchable(text: $viewModel.memorySearchQuery, prompt: "Search agent memory...")
+        .navigationTitle("记忆")
+        .searchable(text: $viewModel.memorySearchQuery, prompt: "搜索智能体记忆...")
         .onSubmit(of: .search) {
             Task { await viewModel.searchMemory() }
         }

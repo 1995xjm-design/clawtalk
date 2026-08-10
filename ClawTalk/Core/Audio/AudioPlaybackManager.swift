@@ -122,11 +122,15 @@ final class AudioPlaybackManager: @unchecked Sendable {
 
     /// Wait until all enqueued audio has finished playing.
     func waitUntilFinished() async {
-        while true {
+        // 兜底超时：避免播放完成回调丢失/无音频入队时永久卡死（卡死会阻塞整个发送流程）
+        let deadline = Date().addingTimeInterval(60)
+        while Date() < deadline {
             lock.lock()
-            let done = streamingDone && buffersEnqueued > 0 && buffersCompleted >= buffersEnqueued
+            let enqueued = buffersEnqueued
+            let done = streamingDone && enqueued > 0 && buffersCompleted >= enqueued
+            let empty = streamingDone && enqueued == 0
             lock.unlock()
-            if done { break }
+            if done || empty { break }
             try? await Task.sleep(nanoseconds: 100_000_000)
         }
         // Small grace period for audio output to flush

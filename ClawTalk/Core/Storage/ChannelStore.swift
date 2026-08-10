@@ -2,6 +2,8 @@ import Foundation
 
 @Observable
 final class ChannelStore {
+    /// 全局共享实例：主界面与会话页共用，添加频道即时同步
+    static let shared = ChannelStore()
     private let defaults = UserDefaults.standard
     private let key = "channels"
 
