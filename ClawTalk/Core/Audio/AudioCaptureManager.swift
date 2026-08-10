@@ -12,6 +12,7 @@ final class AudioCaptureManager {
     // Conversation mode VAD
     private(set) var isContinuousMode = false
     private var onUtteranceDetected: (([Float]) -> Void)?
+    private var onAudioChunk: (([Float]) -> Void)?
     private var onInterrupt: (() -> Void)?
     private var utteranceSamples: [Float] = []
     private var hasSpeechStarted = false
@@ -37,7 +38,7 @@ final class AudioCaptureManager {
     private let interruptThreshold: Float = 0.12
     /// Time of silence-after-speech (measured on smoothed rms) before
     /// firing an utterance.
-    private let silenceDuration: TimeInterval = 0.7
+    private let silenceDuration: TimeInterval = 0.5
 
     // MARK: - Push-to-Talk
 
@@ -62,9 +63,10 @@ final class AudioCaptureManager {
     /// audio can't trigger a premature empty utterance — the fire
     /// check requires a non-nil lastSpeechTime, which only gets set
     /// once real speech crosses speechThreshold.
-    func enableVAD(onUtterance: @escaping ([Float]) -> Void, onInterrupt: @escaping () -> Void) {
+    func enableVAD(onUtterance: @escaping ([Float]) -> Void, onAudioChunk: (([Float]) -> Void)? = nil, onInterrupt: @escaping () -> Void) {
         isContinuousMode = true
         self.onUtteranceDetected = onUtterance
+        self.onAudioChunk = onAudioChunk
         self.onInterrupt = onInterrupt
         utteranceSamples = []
         samples = []
@@ -180,6 +182,14 @@ final class AudioCaptureManager {
 
     // MARK: - VAD
 
+    private func fireAudioChunk(_ bufferSamples: [Float]) {
+        guard let onAudioChunk else { return }
+        let resampled = resampleTo16kHz(bufferSamples)
+        if !resampled.isEmpty {
+            onAudioChunk(resampled)
+        }
+    }
+
     private func processVAD(_ bufferSamples: [Float], smoothedRms: Float) {
         if isListening {
             // Ignore first 800ms after resuming (TTS tail audio / echo)
@@ -191,8 +201,10 @@ final class AudioCaptureManager {
                 hasSpeechStarted = true
                 lastSpeechTime = Date()
                 utteranceSamples.append(contentsOf: bufferSamples)
+                fireAudioChunk(bufferSamples)
             } else if hasSpeechStarted {
                 utteranceSamples.append(contentsOf: bufferSamples)
+                fireAudioChunk(bufferSamples)
 
                 let normalFire = lastSpeechTime.map {
                     Date().timeIntervalSince($0) >= silenceDuration

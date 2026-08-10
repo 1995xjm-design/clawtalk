@@ -84,7 +84,12 @@ final class ChatViewModel {
                     throw ChatError.notConfigured("语音转文字服务未初始化")
                 }
 
-                let transcript = try await stt.transcribe(audioSamples: samples)
+                let transcript: String
+                if let doubao = stt as? DoubaoSTTService {
+                    transcript = try await doubao.finishStreaming()
+                } else {
+                    transcript = try await stt.transcribe(audioSamples: samples)
+                }
                 guard !transcript.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
                     state = .idle
                     return
@@ -148,11 +153,18 @@ final class ChatViewModel {
 
         isConversationMode = true
 
+        // 豆包 STT：实时识别（边说边送）；其他提供商保持整段识别
+        if let doubao = transcriptionService as? DoubaoSTTService {
+            Task { try? await doubao.startStreaming() }
+        }
         audioCapture.enableVAD(
             onUtterance: { [weak self] samples in
                 Task { @MainActor in
                     self?.handleConversationUtterance(samples)
                 }
+            },
+            onAudioChunk: { [weak self] chunk in
+                Task { try? await (self?.transcriptionService as? DoubaoSTTService)?.feedStreaming(samples: chunk) }
             },
             onInterrupt: { [weak self] in
                 Task { @MainActor in
@@ -166,6 +178,7 @@ final class ChatViewModel {
         isConversationMode = false
         sendTask?.cancel()
         ttsConcurrency.cancelAll()
+        (transcriptionService as? DoubaoSTTService)?.cancelStreaming()
         audioCapture.stopContinuousRecording()
         speechService?.stop()
         audioPlayback.stop()
@@ -190,7 +203,12 @@ final class ChatViewModel {
                     throw ChatError.notConfigured("语音转文字服务未初始化")
                 }
 
-                let transcript = try await stt.transcribe(audioSamples: samples)
+                let transcript: String
+                if let doubao = stt as? DoubaoSTTService {
+                    transcript = try await doubao.finishStreaming()
+                } else {
+                    transcript = try await stt.transcribe(audioSamples: samples)
+                }
                 guard !transcript.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
                     if isConversationMode {
                         audioCapture.resumeListening()
@@ -816,7 +834,7 @@ extension String {
             return nil
         }
         let pos = self.distance(from: self.startIndex, to: self.index(after: lastIndex))
-        return pos > 8 ? pos : nil
+        return pos > 4 ? pos : nil
     }
 }
 

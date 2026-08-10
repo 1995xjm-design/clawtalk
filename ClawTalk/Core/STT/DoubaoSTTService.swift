@@ -12,6 +12,136 @@ final class DoubaoSTTService: TranscriptionService {
     private let language: String?
     private let resourceID: String
 
+    // 流式识别（实时通话）
+    private var streamTask: URLSessionWebSocketTask?
+    private var streamSender: StreamSender?
+    private var streamResult: AsyncThrowingStream<String, Error>?
+    private var streamResultContinuation: AsyncThrowingStream<String, Error>.Continuation?
+
+    /// 保证音频帧按序发送的串行发送器
+    private actor StreamSender {
+        private let task: URLSessionWebSocketTask
+        private var seq: Int32 = 2
+        init(task: URLSessionWebSocketTask) { self.task = task }
+        func feed(pcm: Data) async throws {
+            var frame = Data([0x11, 0x21, 0x10, 0x00])
+            let v = seq.bigEndian
+            frame.append(Data(bytes: &v, count: 4))
+            var len = UInt32(pcm.count).bigEndian
+            frame.append(Data(bytes: &len, count: 4))
+            frame.append(pcm)
+            try await task.send(.data(frame))
+            seq += 1
+        }
+        func finish() async throws {
+            var frame = Data([0x11, 0x23, 0x10, 0x00])
+            let v = (-seq).bigEndian
+            frame.append(Data(bytes: &v, count: 4))
+            var len = UInt32(0).bigEndian
+            frame.append(Data(bytes: &len, count: 4))
+            try await task.send(.data(frame))
+        }
+    }
+
+    // MARK: - 流式识别
+
+    func startStreaming() async throws {
+        guard streamTask == nil else { return }
+        let url = URL(string: "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async")!
+        var request = URLRequest(url: url)
+        request.setValue(apiKey, forHTTPHeaderField: "X-Api-Key")
+        request.setValue(resourceID, forHTTPHeaderField: "X-Api-Resource-Id")
+        request.setValue(UUID().uuidString, forHTTPHeaderField: "X-Api-Request-Id")
+        request.setValue("-1", forHTTPHeaderField: "X-Api-Sequence")
+        request.setValue(UUID().uuidString, forHTTPHeaderField: "X-Api-Connect-Id")
+        let session = URLSession(configuration: .default)
+        let task = session.webSocketTask(with: request)
+        task.resume()
+        streamTask = task
+        streamSender = StreamSender(task: task)
+
+        let (stream, cont) = AsyncThrowingStream<String, Error>.makeStream()
+        streamResult = stream
+        streamResultContinuation = cont
+
+        // init 帧
+        let payload: [String: Any] = [
+            "user": ["uid": "clawtalk-ios"],
+            "audio": ["format": "pcm", "codec": "raw", "rate": 16000, "bits": 16, "channel": 1],
+            "request": ["model_name": "bigmodel", "enable_itn": true, "enable_punc": true,
+                        "enable_ddc": true, "show_utterances": false, "enable_nonstream": false]
+        ]
+        let json = try JSONSerialization.data(withJSONObject: payload)
+        var frame = Data([0x11, 0x11, 0x10, 0x00])
+        var seq = Int32(1).bigEndian
+        frame.append(Data(bytes: &seq, count: 4))
+        var len = UInt32(json.count).bigEndian
+        frame.append(Data(bytes: &len, count: 4))
+        frame.append(json)
+        try await task.send(.data(frame))
+
+        // 接收结果
+        let cont = self.streamResultContinuation
+        Task {
+            var finalText = ""
+            while true {
+                let message: URLSessionWebSocketTask.Message
+                do {
+                    message = try await task.receive()
+                } catch {
+                    if !finalText.isEmpty {
+                        cont?.yield(finalText)
+                    }
+                    cont?.finish()
+                    return
+                }
+                guard case .data(let data) = message else { continue }
+                guard let parsed = try? Self.parseResponse(data) else { continue }
+                if let text = parsed.text, !text.isEmpty {
+                    finalText = text
+                }
+                if parsed.isFinal {
+                    cont?.yield(finalText)
+                    cont?.finish()
+                    return
+                }
+            }
+        }
+    }
+
+    func feedStreaming(samples: [Float]) async throws {
+        guard let sender = streamSender, !samples.isEmpty else { return }
+        let pcm = Self.samplesToPCM16(samples)
+        try await sender.feed(pcm: pcm)
+    }
+
+    func finishStreaming() async throws -> String {
+        guard let sender = streamSender else { return "" }
+        try await sender.finish()
+        var result = ""
+        if let stream = streamResult {
+            for try await text in stream {
+                result = text
+                break
+            }
+        }
+        streamTask?.cancel(with: .goingAway, reason: nil)
+        streamTask = nil
+        streamSender = nil
+        streamResult = nil
+        streamResultContinuation = nil
+        return result
+    }
+
+    func cancelStreaming() {
+        streamTask?.cancel(with: .goingAway, reason: nil)
+        streamTask = nil
+        streamSender = nil
+        streamResultContinuation?.finish()
+        streamResult = nil
+        streamResultContinuation = nil
+    }
+
     init(apiKey: String, language: String? = nil, resourceID: String = "volc.seedasr.sauc.duration") {
         self.apiKey = apiKey
         self.language = language
