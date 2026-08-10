@@ -22,6 +22,42 @@ struct ClawTalkApp: App {
         _channelStore = State(initialValue: ChannelStore.shared)
     }
 
+    // MARK: - 主界面 ZStack（拆出独立计算属性，避免 SwiftUI 类型检查超时）
+
+    @ViewBuilder
+    private var mainZStack: some View {
+        ZStack {
+        ChannelListView(
+        channelStore: channelStore,
+        settingsStore: settingsStore,
+        gatewayConnection: gatewayConnection,
+        onSelectFileTransfer: { showFileTransferChannel = true },
+        onSelect: { channel in
+        selectChannel(channel)
+        }
+        )
+        .zIndex(0)
+                if let vm = chatViewModel, selectedChannel != nil {
+        ChatView(viewModel: vm, settingsStore: settingsStore, gatewayConnection: gatewayConnection, onBack: goBack, onDeleteChannel: deleteCurrentChannel)
+        .zIndex(1)
+        .onChange(of: vm.isConversationMode) { _, isOn in
+        if isOn {
+        stopVoiceWake()
+        } else {
+        startVoiceWakeIfNeeded()
+        }
+        }
+        }
+                if showFileTransferChannel {
+        FileTransferChannelView(
+        settings: settingsStore,
+        onBack: { showFileTransferChannel = false }
+        )
+        .zIndex(1)
+        }
+        }
+    }
+
     var body: some Scene {
         WindowGroup {
             Group {
@@ -30,39 +66,7 @@ struct ClawTalkApp: App {
                         // Onboarding complete
                     }
                 } else {
-                    // 底层常驻频道列表，聊天页浮在上面（支持跟手滑出）
-                    ZStack {
-                        ChannelListView(
-                            channelStore: channelStore,
-                            settingsStore: settingsStore,
-                            gatewayConnection: gatewayConnection,
-                            onSelectFileTransfer: { showFileTransferChannel = true },
-                            onSelect: { channel in
-                                selectChannel(channel)
-                            }
-                        )
-                        .zIndex(0)
-
-                        if let vm = chatViewModel, selectedChannel != nil {
-                            ChatView(viewModel: vm, settingsStore: settingsStore, gatewayConnection: gatewayConnection, onBack: goBack, onDeleteChannel: deleteCurrentChannel)
-                                .zIndex(1)
-                                .onChange(of: vm.isConversationMode) { _, isOn in
-                                    if isOn {
-                                        stopVoiceWake()
-                                    } else {
-                                        startVoiceWakeIfNeeded()
-                                    }
-                                }
-                        }
-
-                        if showFileTransferChannel {
-                            FileTransferChannelView(
-                                settings: settingsStore,
-                                onBack: { showFileTransferChannel = false }
-                            )
-                            .zIndex(1)
-                        }
-                    }
+                    mainZStack
                 }
             }
             .overlay {
