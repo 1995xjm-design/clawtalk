@@ -848,6 +848,11 @@ private actor TTSBufferSequencer {
             expected += 1
         }
     }
+
+    func reset() {
+        expected = 0
+        pending.removeAll()
+    }
 }
 
 @MainActor
@@ -901,5 +906,7 @@ final class TTSConcurrency {
     func cancelAll() {
         for t in tasks { t.cancel() }
         tasks.removeAll()
+        seqCounter = 0
+        Task { await sequencer.reset() }
     }
 }
