@@ -65,6 +65,9 @@ targets:
           NSAllowsArbitraryLoads: true
         ITSAppUsesNonExemptEncryption: false
         NSSupportsLiveActivities: true
+        NSPhotoLibraryAddUsageDescription: "用于保存微信连接二维码图片到相册"
+        UIFileSharingEnabled: true
+        LSSupportsOpeningDocumentsInPlace: true
         UILaunchScreen: {}
         UIRequiresFullScreen: true
         UISupportedInterfaceOrientations:

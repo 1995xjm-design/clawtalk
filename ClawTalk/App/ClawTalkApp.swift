@@ -31,10 +31,10 @@ struct ClawTalkApp: App {
         channelStore: channelStore,
         settingsStore: settingsStore,
         gatewayConnection: gatewayConnection,
-        onSelectFileTransfer: { showFileTransferChannel = true },
         onSelect: { channel in
         selectChannel(channel)
-        }
+        },
+        onSelectFileTransfer: { showFileTransferChannel = true }
         )
         .zIndex(0)
                 if let vm = chatViewModel, selectedChannel != nil {
