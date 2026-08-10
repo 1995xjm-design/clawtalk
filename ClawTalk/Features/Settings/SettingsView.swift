@@ -299,7 +299,6 @@ private var connectionSection: some View {
         Section {
             Toggle("语音输入（语音转文字）", isOn: $store.settings.voiceInputEnabled)
             Toggle("语音输出（文字转语音）", isOn: $store.settings.voiceOutputEnabled)
-            Toggle("跟随静音键", isOn: $store.settings.followMuteSwitch)
             Toggle("触感反馈", isOn: $store.settings.hapticsEnabled)
             Toggle("语音唤醒", isOn: $store.settings.voiceWakeEnabled)
             if store.settings.voiceWakeEnabled {
@@ -319,7 +318,7 @@ private var connectionSection: some View {
         } header: {
             Text("语音")
         } footer: {
-            Text("关闭语音输出可纯文字聊天；语音输入使用设备端识别；开启「跟随静音键」后，iPhone 物理静音键开启时朗读自动静音。语音唤醒需麦克风与语音识别权限；开启后前台/后台均可唤醒。")
+            Text("关闭语音输出可纯文字聊天；语音输入使用设备端识别；语音唤醒需麦克风与语音识别权限；开启后前台/后台均可唤醒。")
         }
     }
 
