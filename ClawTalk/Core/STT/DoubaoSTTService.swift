@@ -3,7 +3,7 @@ import Foundation
 /// 豆包（火山引擎）流式语音识别客户端直连（Doubao ASR）。
 ///
 /// 协议：openspeech v3 大模型 ASR（流式输入模式）
-///   wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_nostream
+///   wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async
 /// 鉴权：X-Api-Key + X-Api-Resource-Id: volc.seedasr.sauc.duration
 /// 输入：Float32 PCM 16kHz mono → s16le 分帧（约 200ms/包），末包负序号（不压缩）。
 /// 返回：服务端在收到最后一包后返回最终识别文本。
@@ -23,7 +23,7 @@ final class DoubaoSTTService: TranscriptionService {
 
         let pcm = DoubaoSTTService.samplesToPCM16(audioSamples)
 
-        let url = URL(string: "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_nostream")!
+        let url = URL(string: "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async")!
         var request = URLRequest(url: url)
         request.setValue(apiKey, forHTTPHeaderField: "X-Api-Key")
         request.setValue(resourceID, forHTTPHeaderField: "X-Api-Resource-Id")
@@ -100,7 +100,13 @@ final class DoubaoSTTService: TranscriptionService {
     private static func receiveResults(_ task: URLSessionWebSocketTask) async throws -> String {
         var finalText = ""
         while true {
-            let message = try await task.receive()
+            let message: URLSessionWebSocketTask.Message
+            do {
+                message = try await task.receive()
+            } catch {
+                // 服务端发完最终结果后正常关闭连接，返回已累积的文本
+                return finalText
+            }
             switch message {
             case .data(let data):
                 let parsed = try parseResponse(data)

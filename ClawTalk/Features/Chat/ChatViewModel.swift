@@ -804,15 +804,19 @@ enum ChatError: LocalizedError {
 
 extension String {
     func lastSentenceBoundary() -> Int? {
-        let terminators: [Character] = [".", "!", "?", "\n", "。", "！", "？", "，", "；", "…"]
+        // 整句送 TTS：只在句末标点切，超 30 字兜底硬切，句内由服务端流式断句自然衔接
+        let terminators: [Character] = [".", "!", "?", "\n", "。", "！", "？"]
         guard let lastIndex = self.lastIndex(where: { terminators.contains($0) }) else {
-            if self.count > 15, let spaceIdx = self.lastIndex(of: " ") {
-                return self.distance(from: self.startIndex, to: self.index(after: spaceIdx))
+            if self.count > 30 {
+                if let spaceIdx = self.lastIndex(of: " ") {
+                    return self.distance(from: self.startIndex, to: self.index(after: spaceIdx))
+                }
+                return 30
             }
             return nil
         }
         let pos = self.distance(from: self.startIndex, to: self.index(after: lastIndex))
-        return pos > 6 ? pos : nil
+        return pos > 8 ? pos : nil
     }
 }
 
@@ -831,12 +835,6 @@ final class TTSConcurrency {
                 let audioStream = tts.streamSpeech(text: sentence)
                 for try await chunk in audioStream {
                     playback.enqueue(pcmData: chunk)
-                }
-                let last = sentence.last
-                if last == "。" || last == "？" || last == "！" || last == "." || last == "?" || last == "!" {
-                    try? await Task.sleep(nanoseconds: 150_000_000)
-                } else if last == "，" || last == "；" || last == "," || last == ";" {
-                    try? await Task.sleep(nanoseconds: 80_000_000)
                 }
             } catch {
                 // 单句 TTS 失败：重试一次，避免网络抖动导致"说几句就没声音"
