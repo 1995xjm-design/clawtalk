@@ -378,7 +378,10 @@ final class ChatViewModel {
         var sentenceBuf = ""
 
         // Start audio playback engine if voice output is enabled and not muted by hardware switch
-        let hardwareMuted = settings.settings.followMuteSwitch && await MuteSwitchDetector.isMuted()
+        var hardwareMuted = false
+        if settings.settings.followMuteSwitch {
+            hardwareMuted = await MuteSwitchDetector.isMuted()
+        }
         if settings.settings.voiceOutputEnabled, speechService != nil, !hardwareMuted {
             try audioPlayback.start()
             if isConversationMode { audioCapture.pauseListening() }
