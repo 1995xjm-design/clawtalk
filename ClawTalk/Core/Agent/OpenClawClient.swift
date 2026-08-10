@@ -307,9 +307,10 @@ final class OpenClawClient {
     func chat(
         messages: [Message],
         gatewayURL: String,
-        token: String
+        token: String,
+        sessionKey: String? = nil
     ) async throws -> String {
-        var request = try buildRequest(messages: messages, gatewayURL: gatewayURL, token: token, stream: false)
+        var request = try buildRequest(messages: messages, gatewayURL: gatewayURL, token: token, sessionKey: sessionKey, stream: false)
         request.timeoutInterval = 120
 
         let (data, response) = try await session.data(for: request)
