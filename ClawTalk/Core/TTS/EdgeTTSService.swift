@@ -281,7 +281,7 @@ final class EdgeTTSService: SpeechService {
             let validBytes = Int(sliceFrames) * MemoryLayout<Float>.size
             samples.withUnsafeBytes { raw in
                 if let base = raw.baseAddress {
-                    out.append(base, count: validBytes)
+                    out.append(base.assumingMemoryBound(to: UInt8.self), count: validBytes)
                 }
             }
             if sliceFrames < framesPerSlice { break }
