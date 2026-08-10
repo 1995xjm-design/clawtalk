@@ -825,30 +825,64 @@ extension String {
 /// 并发 TTS 管线：句子送入后立即返回，不阻塞 LLM delta 循环。
 /// 内部串行队列保证音频块按顺序到达播放器（避免句子乱序），
 /// 同时允许 LLM 继续接收 delta 并排队下一句。
+/// 按句序号顺序入队的音频缓冲：并发合成，但播放器收到的顺序不乱
+private actor TTSBufferSequencer {
+    private var expected = 0
+    private var pending: [Int: [Data]] = [:]
+
+    func feed(seq: Int, chunk: Data, playback: AudioPlaybackManager) {
+        if seq == expected {
+            playback.enqueue(pcmData: chunk)
+        } else {
+            pending[seq, default: []].append(chunk)
+        }
+    }
+
+    func finish(seq: Int, playback: AudioPlaybackManager) {
+        if seq != expected { return }
+        expected += 1
+        while let chunks = pending.removeValue(forKey: expected) {
+            for chunk in chunks {
+                playback.enqueue(pcmData: chunk)
+            }
+            expected += 1
+        }
+    }
+}
+
 @MainActor
 final class TTSConcurrency {
     private var tasks: [Task<Void, Never>] = []
+    private let sequencer = TTSBufferSequencer()
+    private var seqCounter = 0
 
     func enqueue(sentence: String, tts: any SpeechService, playback: AudioPlaybackManager) {
+        let seq = seqCounter
+        seqCounter += 1
         let task = Task {
             do {
                 let audioStream = tts.streamSpeech(text: sentence)
                 for try await chunk in audioStream {
-                    playback.enqueue(pcmData: chunk)
+                    await sequencer.feed(seq: seq, chunk: chunk, playback: playback)
                 }
+                await sequencer.finish(seq: seq, playback: playback)
             } catch {
-                // 单句 TTS 失败：重试一次，避免网络抖动导致"说几句就没声音"
+                // ?? TTS ????????????????"???????"
                 if !Task.isCancelled {
                     try? await Task.sleep(nanoseconds: 150_000_000)
                     if Task.isCancelled { return }
                     do {
                         let audioStream = tts.streamSpeech(text: sentence)
                         for try await chunk in audioStream {
-                            playback.enqueue(pcmData: chunk)
+                            await sequencer.feed(seq: seq, chunk: chunk, playback: playback)
                         }
+                        await sequencer.finish(seq: seq, playback: playback)
                     } catch {
-                        // 重试仍失败，放弃该句
+                        // ??????????
+                        await sequencer.finish(seq: seq, playback: playback)
                     }
+                } else {
+                    await sequencer.finish(seq: seq, playback: playback)
                 }
             }
         }

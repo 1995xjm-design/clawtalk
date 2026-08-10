@@ -11,6 +11,11 @@ final class AudioPlaybackManager: @unchecked Sendable {
     private var mixerNode: AVAudioMixerNode?
     private var isDucked = false
 
+    // 起始缓冲：先攒约 0.35s 音频再开始播放，平滑服务端/网络合成间隙
+    private var pendingStart = true
+    private var enqueuedSamples = 0
+    private let startThresholdSamples = Int(24000 * 0.35)
+
     func start() throws {
         let session = AVAudioSession.sharedInstance()
         // Preserve .voiceChat if AudioCaptureManager already set it for
@@ -33,7 +38,7 @@ final class AudioPlaybackManager: @unchecked Sendable {
         engine.prepare()
         try engine.start()
 
-        player.play()
+        // 暂不 play：等缓冲足够后由 enqueue 触发
         audioEngine = engine
         playerNode = player
         mixerNode = mixer
@@ -41,6 +46,8 @@ final class AudioPlaybackManager: @unchecked Sendable {
         buffersEnqueued = 0
         buffersCompleted = 0
         streamingDone = false
+        pendingStart = true
+        enqueuedSamples = 0
     }
 
     /// Schedule a chunk of PCM audio (Float32, 24kHz, mono) for playback.
@@ -60,9 +67,14 @@ final class AudioPlaybackManager: @unchecked Sendable {
             }
         }
 
+        enqueuedSamples += sampleCount
         buffersEnqueued += 1
         player.scheduleBuffer(buffer) { [weak self] in
             self?.buffersCompleted += 1
+        }
+        if pendingStart, enqueuedSamples >= startThresholdSamples {
+            player.play()
+            pendingStart = false
         }
     }
 
@@ -98,6 +110,10 @@ final class AudioPlaybackManager: @unchecked Sendable {
     /// Wait until all enqueued audio has finished playing.
     func waitUntilFinished() async {
         guard buffersEnqueued > 0 else { return }
+        if pendingStart, let player = playerNode {
+            pendingStart = false
+            player.play()
+        }
         // Wait until streaming is done and all buffers have completed
         while !streamingDone || buffersCompleted < buffersEnqueued {
             try? await Task.sleep(nanoseconds: 100_000_000)
