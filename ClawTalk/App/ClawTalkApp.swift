@@ -10,6 +10,8 @@ struct ClawTalkApp: App {
     @State private var selectedChannel: Channel?
     @State private var showFileTransferChannel = false
     @State private var chatViewModel: ChatViewModel?
+    @State private var backgroundViewModels: [UUID: ChatViewModel] = [:]
+    @State private var voiceWakeWatchdogTask: Task<Void, Never>?
     @State private var gatewayConnection = GatewayConnection()
     @State private var nodeConnection = NodeConnection()
     @State private var ackSynthesizer: AVSpeechSynthesizer?
@@ -112,6 +114,10 @@ struct ClawTalkApp: App {
                     }
                 }
             }
+            .task {
+                // 语音唤醒看门狗：App 生命周期内常驻，不随 scenePhase 取消
+                await runVoiceWakeWatchdog()
+            }
             .onChange(of: settingsStore.settings.ttsProvider) {
                 reconfigureServices()
             }
@@ -151,16 +157,27 @@ struct ClawTalkApp: App {
             .onReceive(NotificationCenter.default.publisher(for: .clawTalkWakeWordDetected)) { _ in
                 handleWakeWordDetected()
             }
+            .onReceive(NotificationCenter.default.publisher(for: .clawTalkWakeRestartRequested)) { _ in
+                // 录音结束（按住说话/误触取消）后恢复唤醒监听
+                startVoiceWakeIfNeeded()
+            }
         }
     }
 
     private func selectChannel(_ channel: Channel, restartVoiceWake: Bool = true) {
-        let vm = ChatViewModel(
-            settings: settingsStore,
-            channel: channel,
-            channelStore: channelStore,
-            gatewayConnection: gatewayConnection
-        )
+        let vm: ChatViewModel
+        if let existing = backgroundViewModels.removeValue(forKey: channel.id) {
+            // 复用后台继续任务的 VM，避免重建导致任务/消息丢失
+            existing.isVisible = true
+            vm = existing
+        } else {
+            vm = ChatViewModel(
+                settings: settingsStore,
+                channel: channel,
+                channelStore: channelStore,
+                gatewayConnection: gatewayConnection
+            )
+        }
         configureServices(for: vm)
         chatViewModel = vm
         selectedChannel = channel
@@ -203,7 +220,34 @@ struct ClawTalkApp: App {
 
     private func goBack() {
         stopVoiceWake()
-        chatViewModel?.stop()
+        guard let vm = chatViewModel else {
+            selectedChannel = nil
+            nodeConnection.onImagesReceived = nil
+            return
+        }
+
+        // 退出聊天页：不 abort / 不 cancel，任务在后台继续，完成后发本地通知
+        if vm.isConversationMode {
+            vm.exitConversationMode() // 停录音但不取消任务
+        }
+        vm.isVisible = false
+
+        // 进行中任务：保留 VM 到后台，完成后由 onRunFinished 发通知
+        let isInFlight = vm.state != .idle
+            || vm.messages.contains(where: { $0.role == .assistant && $0.isStreaming })
+        if isInFlight {
+            vm.onRunFinished = { finishedVM, success, snippet in
+                guard !finishedVM.isVisible else { return }
+                let title = "ClawTalk · \(finishedVM.channel.name)"
+                let body = success
+                    ? (snippet ?? "回复已完成")
+                    : "回复失败：\(snippet ?? "请查看")"
+                Task {
+                    try? await NotificationCapability.notify(title: title, body: body, sound: nil, priority: "urgent")
+                }
+            }
+            backgroundViewModels[vm.channel.id] = vm
+        }
         chatViewModel = nil
         selectedChannel = nil
         nodeConnection.onImagesReceived = nil
@@ -211,12 +255,16 @@ struct ClawTalkApp: App {
 
     private func deleteCurrentChannel() {
         stopVoiceWake()
-        chatViewModel?.stop()
+        if let vm = chatViewModel {
+            vm.stop() // 真正取消：abort + cancel
+            backgroundViewModels.removeValue(forKey: vm.channel.id)
+        }
         if let channel = selectedChannel {
             channelStore.delete(channel)
         }
         chatViewModel = nil
         selectedChannel = nil
+        nodeConnection.onImagesReceived = nil
     }
 
     // MARK: - 语音唤醒（SIRI 式）
@@ -246,6 +294,28 @@ struct ClawTalkApp: App {
         Task {
             _ = try? await VoiceWakeCapability.shared.setConfig(keywords: [], enabled: false, locale: "zh-CN")
         }
+    }
+
+    /// 语音唤醒看门狗：App 生命周期内每 10 秒自检一次，监听被系统中断后自动自愈。
+    /// 不随 scenePhase 取消；对话模式/按住说话录音期间不误拉。
+    private func runVoiceWakeWatchdog() async {
+        voiceWakeWatchdogTask?.cancel()
+        let task = Task { @MainActor in
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 10_000_000_000)
+                guard !Task.isCancelled else { return }
+                let shouldRestart = settingsStore.settings.voiceWakeEnabled
+                    && settingsStore.settings.voiceInputEnabled
+                    && chatViewModel?.isConversationMode != true
+                    && chatViewModel?.state != .recording
+                    && !VoiceWakeCapability.shared.isListening
+                if shouldRestart {
+                    startVoiceWakeIfNeeded()
+                }
+            }
+        }
+        voiceWakeWatchdogTask = task
+        await task.value
     }
 
     /// 唤醒词命中：停唤醒 -> 自动选/建频道（无聊天页时）-> 进入免提对话 -> 播报「在呢」。

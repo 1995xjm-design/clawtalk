@@ -109,7 +109,7 @@ private var connectionSection: some View {
                 }
             }
 
-            Toggle("WebSocket Mode", isOn: $store.settings.useWebSocket)
+            Toggle("WebSocket 模式", isOn: $store.settings.useWebSocket)
                 .onChange(of: store.settings.useWebSocket) { _, newValue in
                     if newValue {
                         store.settings.showTokenUsage = false
@@ -149,6 +149,13 @@ private var connectionSection: some View {
                 Text("开启后回复实时推送，语音更流畅。首次开启会自动让电脑 OpenClaw 批准设备。")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                TextField(
+                    "WebSocket 路径（默认留空=18789 端口的 /ws）",
+                    text: $store.settings.webSocketPath,
+                    prompt: Text("/ws")
+                )
+                .autocorrectionDisabled()
+                .textInputAutocapitalization(.never)
                 DisclosureGroup {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("1. 首次开启会自动向电脑 OpenClaw 发送批准指令（devices approve --latest）；")
@@ -251,13 +258,13 @@ private var connectionSection: some View {
             Text("OpenClaw 网关")
         } footer: {
             if store.settings.useWebSocket {
-                Text("WebSocket enables real-time streaming. Enter a path (e.g. /ws) for tunneled gateways or a port (e.g. 18789) for local connections.")
+                Text("WebSocket 实时推送：留空默认连接本地 18789 端口的 /ws；填端口数字（如 18789）连本地网关；填路径（如 /ws）用于穿透网关，并保留网关地址自带的端口。")
             } else {
                 switch store.settings.agentAPIMode {
                 case .chatCompletions:
                     Text("标准聊天接口，兼容所有网关。")
                 case .openResponses:
-                    Text("Open Responses API provides token usage data. Requires gateway support (endpoints.responses.enabled).")
+                    Text("Open Responses API 模式提供 Token 用量数据，需网关支持（endpoints.responses.enabled）。")
                 }
             }
         }
@@ -273,15 +280,15 @@ private var connectionSection: some View {
             }
             .pickerStyle(.segmented)
 
-            Toggle("Show Token Usage", isOn: $store.settings.showTokenUsage)
+            Toggle("显示 Token 用量", isOn: $store.settings.showTokenUsage)
                 .disabled(store.settings.useWebSocket)
         } header: {
             Text("显示")
         } footer: {
             if store.settings.useWebSocket {
-                Text("Token usage is not available in WebSocket mode. Disable WebSocket to see token counts.")
+                Text("Token 用量在 WebSocket 模式下不可用，关闭 WebSocket 后可查看。")
             } else {
-                Text("Show input/output token counts under assistant messages. Requires Open Responses API mode.")
+                Text("在助手消息下显示输入/输出 Token 用量，需 Open Responses API 模式。")
             }
         }
     }

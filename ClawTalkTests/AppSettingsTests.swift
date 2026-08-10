@@ -117,7 +117,7 @@ struct AppSettingsTests {
         var settings = AppSettings.defaults
         settings.gatewayURL = "http://192.168.1.5"
         settings.webSocketPath = "18789"
-        #expect(settings.resolvedWebSocketURL == "ws://192.168.1.5:18789")
+        #expect(settings.resolvedWebSocketURL == "ws://192.168.1.5:18789/ws")
     }
 
     @Test("WebSocket URL with colon-prefixed port")
@@ -125,7 +125,7 @@ struct AppSettingsTests {
         var settings = AppSettings.defaults
         settings.gatewayURL = "http://192.168.1.5"
         settings.webSocketPath = ":18789"
-        #expect(settings.resolvedWebSocketURL == "ws://192.168.1.5:18789")
+        #expect(settings.resolvedWebSocketURL == "ws://192.168.1.5:18789/ws")
     }
 
     @Test("WebSocket URL with empty path defaults to port 18789")
@@ -133,7 +133,7 @@ struct AppSettingsTests {
         var settings = AppSettings.defaults
         settings.gatewayURL = "http://192.168.1.5"
         settings.webSocketPath = ""
-        #expect(settings.resolvedWebSocketURL == "ws://192.168.1.5:18789")
+        #expect(settings.resolvedWebSocketURL == "ws://192.168.1.5:18789/ws")
     }
 
     @Test("WebSocket URL uses wss for https gateway")

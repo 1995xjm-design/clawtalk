@@ -41,6 +41,10 @@ final class ChatViewModel {
         }
     }
     var channel: Channel
+    /// 页面是否在前台（退出聊天页后置 false：任务继续在后台跑，完成后由 App 层发通知）。
+    var isVisible = true
+    /// 一次 run 结束后的回调（vm、是否成功、回复摘要 snippet；失败时 snippet 为错误文案）。
+    var onRunFinished: (@MainActor (ChatViewModel, Bool, String?) -> Void)?
     private let openClaw = OpenClawClient()
     private let audioCapture = AudioCaptureManager()
     private let audioPlayback = AudioPlaybackManager()
@@ -78,6 +82,8 @@ final class ChatViewModel {
 
     func startRecording() {
         guard state == .idle else { return }
+        // 按住说话与语音唤醒共用麦克风：录音前先停唤醒监听，避免两个音频引擎抢麦
+        VoiceWakeCapability.shared.stopListening()
         errorMessage = nil
         do {
             try audioCapture.startRecording()
@@ -98,6 +104,8 @@ final class ChatViewModel {
         let duration = Date().timeIntervalSince(recordingStart ?? Date())
         guard duration >= 0.5, samples.count > 8000 else {
             state = .idle
+            // 误触取消：麦克风已释放，恢复唤醒监听
+            NotificationCenter.default.post(name: .clawTalkWakeRestartRequested, object: nil)
             return
         }
 
@@ -117,6 +125,8 @@ final class ChatViewModel {
                 }
                 guard !transcript.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
                     state = .idle
+                    // Mic released without a transcript: restore wake listening
+                    NotificationCenter.default.post(name: .clawTalkWakeRestartRequested, object: nil)
                     return
                 }
 
@@ -125,6 +135,8 @@ final class ChatViewModel {
                 errorMessage = "转写失败：\(AppErrorText.localized(error.localizedDescription))"
                 state = .idle
             }
+            // 录音发送流程结束（成功或失败）：麦克风已释放，恢复唤醒监听
+            NotificationCenter.default.post(name: .clawTalkWakeRestartRequested, object: nil)
         }
     }
 
@@ -219,7 +231,7 @@ final class ChatViewModel {
 
     func exitConversationMode() {
         isConversationMode = false
-        sendTask?.cancel()
+        // 不取消在跑任务：退出免提后让当前回复继续完成（完成后由 App 层决定是否发通知）
         ttsConcurrency.cancelAll()
         (transcriptionService as? DoubaoSTTService)?.cancelStreaming()
         audioCapture.stopContinuousRecording()
@@ -308,6 +320,11 @@ final class ChatViewModel {
         ttsConcurrency.cancelAll()
         state = .thinking
 
+        // 本次 run 的收尾状态：用于判定是否触发「后台完成」通知（有产出或出错才触发）
+        var runFailed = false
+        var runErrorText: String?
+        var runCancelled = false
+
         do {
             guard settings.isConfigured else {
                 throw ChatError.notConfigured("请在设置中配置你的 OpenClaw 网关。")
@@ -352,6 +369,7 @@ final class ChatViewModel {
 
         } catch is CancellationError {
             // Finalize only this task's own message by id, never a newer task's message
+            runCancelled = true
             if let idx = messages.firstIndex(where: { $0.id == assistantID }) {
                 messages[idx].isStreaming = false
             }
@@ -360,6 +378,9 @@ final class ChatViewModel {
         } catch {
             let isCancellation = (error as? URLError)?.code == .cancelled
             let classified = ChatError.classify(error)
+            runCancelled = isCancellation
+            runFailed = !isCancellation
+            runErrorText = isCancellation ? nil : classified.errorDescription
             if let idx = messages.firstIndex(where: { $0.id == assistantID }) {
                 messages[idx].isStreaming = false
                 if messages[idx].content.isEmpty {
@@ -386,6 +407,27 @@ final class ChatViewModel {
                 state = .idle
             }
             conversationStore.save(messages, channelId: channel.id)
+        }
+
+        // 收尾回调：仅当本次 run 有产出（assistant 内容非空）或出错时触发，避免空转触发；
+        // App 层在退出聊天页后据此发「回复完成/失败」本地通知。
+        guard !runCancelled else { return }
+        let hasOutput: Bool
+        if let idx = messages.firstIndex(where: { $0.id == assistantID }) {
+            hasOutput = !messages[idx].content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        } else {
+            hasOutput = false
+        }
+        if hasOutput || runFailed {
+            let snippet: String?
+            if runFailed {
+                snippet = runErrorText ?? "请查看"
+            } else if let idx = messages.firstIndex(where: { $0.id == assistantID }) {
+                snippet = Self.completionSnippet(for: messages[idx].content)
+            } else {
+                snippet = nil
+            }
+            onRunFinished?(self, !runFailed, snippet)
         }
     }
 
@@ -803,6 +845,14 @@ final class ChatViewModel {
     }
 
     // MARK: - Haptics
+
+    /// 把回复内容截成通知摘要（60 字内，过长加省略号；空内容返回 nil）。
+    private static func completionSnippet(for text: String) -> String? {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        let limit = 60
+        return trimmed.count > limit ? String(trimmed.prefix(limit)) + "…" : trimmed
+    }
 
     private func notifySuccess() {
         guard settings.settings.hapticsEnabled else { return }

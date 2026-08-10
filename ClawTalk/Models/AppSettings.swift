@@ -114,12 +114,11 @@ struct AppSettings: Codable {
 
         if normalized.isEmpty {
             components.port = 18789
-            components.path = ""
+            components.path = "/ws"
         } else if let port = Int(normalized) {
             components.port = port
-            components.path = ""
+            components.path = "/ws"
         } else {
-            components.port = nil
             components.path = normalized.hasPrefix("/") ? normalized : "/\(normalized)"
         }
 
