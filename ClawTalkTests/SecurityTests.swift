@@ -14,12 +14,11 @@ struct SecurityTests {
         // No throw = pass
     }
 
-    @Test("HTTP to public host is rejected")
-    func httpPublicRejected() {
+        @Test("HTTP to public host is allowed (self-hosted)")
+    func httpPublicAllowed() throws {
+        // 自用场景：明文 HTTP 放行
         let url = URL(string: "http://public.example.com/v1/chat/completions")!
-        #expect(throws: OpenClawError.self) {
-            try OpenClawClient.validateConnectionSecurity(url)
-        }
+        try OpenClawClient.validateConnectionSecurity(url)
     }
 
     @Test("HTTP to localhost is allowed")
@@ -94,20 +93,16 @@ struct SecurityTests {
         try OpenClawClient.validateConnectionSecurity(url)
     }
 
-    @Test("HTTP to random public domain is rejected")
-    func httpRandomDomainRejected() {
+        @Test("HTTP to random public domain is allowed (self-hosted)")
+    func httpRandomDomainAllowed() throws {
         let url = URL(string: "http://samdavid.net/v1/chat/completions")!
-        #expect(throws: OpenClawError.self) {
-            try OpenClawClient.validateConnectionSecurity(url)
-        }
+        try OpenClawClient.validateConnectionSecurity(url)
     }
 
-    @Test("HTTP to cloud provider is rejected")
-    func httpCloudRejected() {
+        @Test("HTTP to cloud provider is allowed (self-hosted)")
+    func httpCloudAllowed() throws {
         let url = URL(string: "http://my-instance.amazonaws.com/v1/chat/completions")!
-        #expect(throws: OpenClawError.self) {
-            try OpenClawClient.validateConnectionSecurity(url)
-        }
+        try OpenClawClient.validateConnectionSecurity(url)
     }
 
     @Test("FTP scheme is rejected")
