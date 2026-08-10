@@ -3,33 +3,11 @@ import Testing
 
 @Suite("OpenClaw Client")
 struct OpenClawClientTests {
-    @Test("Rejects plain HTTP URLs")
-    func rejectsHTTP() async {
-        let client = OpenClawClient()
-        let messages = [Message(role: .user, content: "test")]
-
-        var receivedError: Error?
-        do {
-            for try await _ in client.streamChat(
-                messages: messages,
-                gatewayURL: "http://insecure.example.com",
-                token: "test"
-            ) {
-                // Should not get here
-            }
-        } catch {
-            receivedError = error
-        }
-
-        #expect(receivedError is OpenClawError)
-        if let err = receivedError as? OpenClawError {
-            switch err {
-            case .insecureConnection:
-                break // expected
-            default:
-                Issue.record("Expected insecureConnection, got \(err)")
-            }
-        }
+        @Test("Allows plain HTTP URLs (self-hosted gateway)")
+    func allowsHTTP() throws {
+        // 自用场景：明文 HTTP 放行（ATS 已放开 + token 鉴权）
+        let url = try #require(URL(string: "http://insecure.example.com"))
+        try OpenClawClient.validateConnectionSecurity(url)
     }
 
     @Test("Rejects empty gateway URL")
@@ -51,32 +29,10 @@ struct OpenClawClientTests {
         #expect(receivedError != nil)
     }
 
-    @Test("Rejects plain HTTP for OpenResponses API")
-    func rejectsHTTPOpenResponses() async {
-        let client = OpenClawClient()
-        let messages = [Message(role: .user, content: "test")]
-
-        var receivedError: Error?
-        do {
-            for try await _ in client.stream(
-                messages: messages,
-                gatewayURL: "http://insecure.example.com",
-                token: "test",
-                apiMode: .openResponses
-            ) {}
-        } catch {
-            receivedError = error
-        }
-
-        #expect(receivedError is OpenClawError)
-        if let err = receivedError as? OpenClawError {
-            switch err {
-            case .insecureConnection:
-                break // expected
-            default:
-                Issue.record("Expected insecureConnection, got \(err)")
-            }
-        }
+        @Test("Allows plain HTTP for OpenResponses API")
+    func allowsHTTPOpenResponses() throws {
+        let url = try #require(URL(string: "http://insecure.example.com"))
+        try OpenClawClient.validateConnectionSecurity(url)
     }
 
     @Test("Error descriptions are user-friendly")
