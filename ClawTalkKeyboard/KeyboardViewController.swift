@@ -254,6 +254,7 @@ extension KeyboardViewController: KeyboardMainViewDelegate {
         if let text = didRequestPaste(), !text.isEmpty {
             keyboardView?.setHelpReplyInputText(text)
         } else {
+            KeyboardLogCollector.record(module: "键盘", "剪贴板为空或未开启完全访问")
             keyboardView?.showCandidateMessage("剪贴板为空或未开启完全访问")
         }
     }
@@ -515,6 +516,7 @@ extension KeyboardViewController: VoiceInputServiceDelegate {
     }
 
     func voiceInputDidFail(_ message: String) {
+        KeyboardLogCollector.record(module: "键盘", message)
         keyboardView?.setVoiceRecording(false)
         keyboardView?.showCandidateMessage(message)
     }

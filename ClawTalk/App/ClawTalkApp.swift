@@ -66,6 +66,10 @@ struct ClawTalkApp: App {
                         resolvedURL: settingsStore.settings.resolvedWebSocketURL,
                         token: settingsStore.gatewayToken
                     )
+                    if gatewayConnection.connectionState == .disconnected,
+                       let lastError = gatewayConnection.lastError {
+                        LogCollector.record(module: "启动", "应用启动网关连接失败：\(AppErrorText.localized(lastError))")
+                    }
                 }
 
                 // Connect node WebSocket
@@ -74,6 +78,10 @@ struct ClawTalkApp: App {
                         resolvedURL: settingsStore.settings.resolvedWebSocketURL,
                         token: settingsStore.gatewayToken
                     )
+                    if nodeConnection.connectionState == .disconnected,
+                       let lastError = nodeConnection.lastError {
+                        LogCollector.record(module: "启动", "应用启动节点连接失败：\(AppErrorText.localized(lastError))")
+                    }
                 }
             }
             .onChange(of: settingsStore.settings.ttsProvider) {
@@ -129,12 +137,20 @@ struct ClawTalkApp: App {
                         resolvedURL: settingsStore.settings.resolvedWebSocketURL,
                         token: settingsStore.gatewayToken
                     )
+                    if gatewayConnection.connectionState == .disconnected,
+                       let lastError = gatewayConnection.lastError {
+                        LogCollector.record(module: "启动", "进入频道网关连接失败：\(AppErrorText.localized(lastError))")
+                    }
                 }
                 if nodeConnection.connectionState == .disconnected {
                     await nodeConnection.connect(
                         resolvedURL: settingsStore.settings.resolvedWebSocketURL,
                         token: settingsStore.gatewayToken
                     )
+                    if nodeConnection.connectionState == .disconnected,
+                       let lastError = nodeConnection.lastError {
+                        LogCollector.record(module: "启动", "进入频道节点连接失败：\(AppErrorText.localized(lastError))")
+                    }
                 }
                 vm.loadServerHistory()
             }

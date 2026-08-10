@@ -91,12 +91,20 @@ final class DoubaoSTTService: TranscriptionService {
                 } catch {
                     if !finalText.isEmpty {
                         resultCont?.yield(finalText)
+                    } else {
+                        LogCollector.record(module: "语音识别", "豆包流式识别连接中断：\(AppErrorText.localized(error.localizedDescription))")
                     }
                     resultCont?.finish()
                     return
                 }
                 guard case .data(let data) = message else { continue }
-                guard let parsed = try? Self.parseResponse(data) else { continue }
+                let parsed: (text: String?, isFinal: Bool)
+                do {
+                    parsed = try Self.parseResponse(data)
+                } catch {
+                    LogCollector.record(module: "语音识别", AppErrorText.localized(error.localizedDescription))
+                    continue
+                }
                 if let text = parsed.text, !text.isEmpty {
                     finalText = text
                 }
@@ -175,6 +183,7 @@ final class DoubaoSTTService: TranscriptionService {
                     continuation.resume(returning: text)
                 } catch {
                     task.cancel(with: .goingAway, reason: nil)
+                    LogCollector.record(module: "语音识别", "豆包语音识别失败：\(AppErrorText.localized(error.localizedDescription))")
                     continuation.resume(throwing: error)
                 }
             }
@@ -247,7 +256,9 @@ final class DoubaoSTTService: TranscriptionService {
                     return finalText
                 }
             case .string(let string):
-                throw DoubaoSTTError.serverMessage(string)
+                let err = DoubaoSTTError.serverMessage(string)
+                LogCollector.record(module: "语音识别", AppErrorText.localized(err.localizedDescription))
+                throw err
             @unknown default:
                 break
             }

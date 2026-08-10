@@ -42,15 +42,19 @@ final class ConversationStore {
             try? FileManager.default.moveItem(at: legacyFileURL, to: url)
         }
 
-        guard FileManager.default.fileExists(atPath: url.path),
-              let data = try? Data(contentsOf: url),
-              let messages = try? decoder.decode([Message].self, from: data) else {
+        guard FileManager.default.fileExists(atPath: url.path) else { return [] }
+
+        do {
+            let data = try Data(contentsOf: url)
+            let messages = try decoder.decode([Message].self, from: data)
+            return messages.map { msg in
+                var m = msg
+                m.isStreaming = false
+                return m
+            }
+        } catch {
+            LogCollector.record(module: "存储", "聊天记录读取失败：\(AppErrorText.localized(error.localizedDescription))")
             return []
-        }
-        return messages.map { msg in
-            var m = msg
-            m.isStreaming = false
-            return m
         }
     }
 
@@ -67,6 +71,7 @@ final class ConversationStore {
         } catch {
             Logger(subsystem: "com.openclaw.clawtalk", category: "storage")
                 .error("Failed to save conversation \(channelId): \(error.localizedDescription)")
+            LogCollector.record(module: "存储", "聊天记录保存失败：\(AppErrorText.localized(error.localizedDescription))")
         }
     }
 

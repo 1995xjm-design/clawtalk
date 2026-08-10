@@ -531,12 +531,21 @@ struct ChatView: View {
     private func loadSelectedPhotos() async {
         var newImages: [Data] = []
         for item in selectedPhotos {
-            if let data = try? await item.loadTransferable(type: Data.self),
-               let uiImage = UIImage(data: data) {
+            do {
+                guard let data = try await item.loadTransferable(type: Data.self) else {
+                    LogCollector.record(module: "图片", "读取所选图片数据失败")
+                    continue
+                }
+                guard let uiImage = UIImage(data: data) else {
+                    LogCollector.record(module: "图片", "图片数据无法解码为图像")
+                    continue
+                }
                 let resized = uiImage.resizedToFit(maxDimension: 512)
                 if let jpeg = resized.jpegData(compressionQuality: 0.4) {
                     newImages.append(jpeg)
                 }
+            } catch {
+                LogCollector.record(module: "图片", "图片加载失败：\(AppErrorText.localized(error.localizedDescription))")
             }
         }
         attachedImages = newImages

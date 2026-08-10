@@ -60,30 +60,35 @@ class APIService {
         _ urlString: String,
         body: [String: Any]
     ) async throws -> T {
-        guard let url = URL(string: urlString) else {
-            throw APIError.invalidURL
-        }
-
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = try JSONSerialization.data(withJSONObject: body)
-        request.timeoutInterval = 30
-
-        let (data, response) = try await URLSession.shared.data(for: request)
-
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw APIError.networkError
-        }
-
-        guard 200...299 ~= httpResponse.statusCode else {
-            throw APIError.serverError(statusCode: httpResponse.statusCode)
-        }
-
         do {
-            return try JSONDecoder().decode(T.self, from: data)
+            guard let url = URL(string: urlString) else {
+                throw APIError.invalidURL
+            }
+
+            var request = URLRequest(url: url)
+            request.httpMethod = "POST"
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.httpBody = try JSONSerialization.data(withJSONObject: body)
+            request.timeoutInterval = 30
+
+            let (data, response) = try await URLSession.shared.data(for: request)
+
+            guard let httpResponse = response as? HTTPURLResponse else {
+                throw APIError.networkError
+            }
+
+            guard 200...299 ~= httpResponse.statusCode else {
+                throw APIError.serverError(statusCode: httpResponse.statusCode)
+            }
+
+            do {
+                return try JSONDecoder().decode(T.self, from: data)
+            } catch {
+                throw APIError.decodingError
+            }
         } catch {
-            throw APIError.decodingError
+            KeyboardLogCollector.record(module: "键盘网络", error.localizedDescription)
+            throw error
         }
     }
 

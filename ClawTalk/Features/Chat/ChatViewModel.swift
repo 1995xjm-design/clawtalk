@@ -160,6 +160,7 @@ final class ChatViewModel {
             try audioCapture.startRecording()
             state = .recording
         } catch {
+            LogCollector.record(module: "语音对话", "语音对话模式启动失败：\(AppErrorText.localized(error.localizedDescription))")
             errorMessage = "麦克风访问失败：\(AppErrorText.localized(error.localizedDescription))"
             return
         }
@@ -168,7 +169,12 @@ final class ChatViewModel {
 
         // 豆包 STT：实时识别（边说边送）；其他提供商保持整段识别
         if let doubao = transcriptionService as? DoubaoSTTService {
-            Task { try? await doubao.startStreaming() }
+            Task {
+                do { try await doubao.startStreaming() }
+                catch {
+                    LogCollector.record(module: "语音对话", "语音对话模式实时识别启动失败：\(AppErrorText.localized(error.localizedDescription))")
+                }
+            }
         }
         audioCapture.enableVAD(
             onUtterance: { [weak self] samples in
@@ -629,6 +635,7 @@ final class ChatViewModel {
                 }
             } catch {
                 // Non-fatal — server may not have history for this session
+                LogCollector.record(module: "历史记录", "会话历史加载失败：\(AppErrorText.localized(error.localizedDescription))")
             }
         }
     }
@@ -914,6 +921,7 @@ final class TTSConcurrency {
                 }
                 await sequencer.finish(seq: seq, playback: playback)
             } catch {
+                LogCollector.record(module: "朗读", "TTS 合成失败（重试前）：\(AppErrorText.localized(error.localizedDescription))")
                 // ?? TTS ????????????????"???????"
                 if !Task.isCancelled {
                     try? await Task.sleep(nanoseconds: 150_000_000)
@@ -925,6 +933,7 @@ final class TTSConcurrency {
                         }
                         await sequencer.finish(seq: seq, playback: playback)
                     } catch {
+                        LogCollector.record(module: "朗读", "TTS 合成失败（重试后仍失败）：\(AppErrorText.localized(error.localizedDescription))")
                         // ??????????
                         await sequencer.finish(seq: seq, playback: playback)
                     }

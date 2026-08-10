@@ -1,6 +1,7 @@
 import SwiftUI
 import UIKit
 import CoreImage
+import Photos
 
 /// 微信扫码绑定页：展示后端下发的二维码，每 3 秒轮询一次绑定状态。
 ///
@@ -363,8 +364,24 @@ struct WechatBindView: View {
     /// 保存二维码图片到相册
     private func saveQRCodeImage() {
         guard let image = qrImage else { return }
-        UIImageWriteToSavedPhotosAlbum(image, nil, nil, nil)
-        showSaveHint = true
+        PHPhotoLibrary.requestAuthorization(for: .addOnly) { status in
+            switch status {
+            case .authorized, .limited:
+                PHPhotoLibrary.shared().performChanges({
+                    PHAssetChangeRequest.creationRequestForAsset(from: image)
+                }) { success, error in
+                    DispatchQueue.main.async {
+                        if success {
+                            self.showSaveHint = true
+                        } else {
+                            LogCollector.record(module: "相册", "保存二维码到相册失败：\(error?.localizedDescription ?? "未知错误")")
+                        }
+                    }
+                }
+            default:
+                LogCollector.record(module: "相册", "保存二维码失败：没有相册写入权限")
+            }
+        }
     }
 
     /// 从 OpenClaw 回复文本中提取一次性登录链接

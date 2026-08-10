@@ -135,6 +135,7 @@ final class AudioCaptureManager {
             try inputNode.setVoiceProcessingEnabled(true)
         } catch {
             log.error("voice processing unavailable: \(error.localizedDescription, privacy: .public)")
+            LogCollector.record(module: "语音对话", "语音处理（回声消除/降噪）不可用：\(AppErrorText.localized(error.localizedDescription))")
         }
         let format = inputNode.outputFormat(forBus: 0)
 

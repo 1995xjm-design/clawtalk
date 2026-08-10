@@ -73,7 +73,12 @@ final class VoiceWakeCapability {
         let resolvedLocale = Self.resolveLocale(locale)
 
         if enabled && !keywords.isEmpty {
-            try await startListening(locale: resolvedLocale)
+            do {
+                try await startListening(locale: resolvedLocale)
+            } catch {
+                LogCollector.record(module: "语音唤醒", AppErrorText.localized(error.localizedDescription))
+                throw error
+            }
         } else {
             stopListening()
         }
@@ -157,6 +162,7 @@ final class VoiceWakeCapability {
 
                 if let error {
                     self.logger.error("voice wake error: \(error.localizedDescription, privacy: .public)")
+                    LogCollector.record(module: "语音唤醒", AppErrorText.localized(error.localizedDescription))
                     self.stopListening()
                 }
             }

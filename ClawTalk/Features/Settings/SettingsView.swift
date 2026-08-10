@@ -594,7 +594,9 @@ private var connectionSection: some View {
                 do {
                     for try await _ in tts.streamSpeech(text: sampleText) {}
                 } catch {
-                    previewErrorMessage = "语音预览失败：\(error.localizedDescription)"
+                    let message = "语音预览失败：\(AppErrorText.localized(error.localizedDescription))"
+                    previewErrorMessage = message
+                    LogCollector.record(module: "语音预览", message)
                 }
             }
             // 保持原有 4 秒自动复位逻辑（Apple TTS 无完成回调）
@@ -618,7 +620,9 @@ private var connectionSection: some View {
                     await playback.waitUntilFinished()
                 } catch {
                     // 预览失败时明确提示用户，不再静默
-                    previewErrorMessage = "语音预览失败：\(error.localizedDescription)"
+                    let message = "语音预览失败：\(AppErrorText.localized(error.localizedDescription))"
+                    previewErrorMessage = message
+                    LogCollector.record(module: "语音预览", message)
                 }
                 playback.stop()
                 isPreviewing = false

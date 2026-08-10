@@ -34,6 +34,7 @@ final class ReplySuggestService {
             guard !suggestions.isEmpty else { return fallbackReplies }
             return count > 0 ? Array(suggestions.prefix(count)) : suggestions
         } catch {
+            KeyboardLogCollector.record(module: "键盘回复", "网关回复失败：\(error.localizedDescription)")
             return fallbackReplies
         }
     }

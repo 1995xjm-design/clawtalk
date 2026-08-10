@@ -225,13 +225,17 @@ actor GatewayWebSocket {
         }
 
         guard case let .res(res) = response else {
-            throw GatewayError.responseError(method: method, code: "UNEXPECTED", message: "意外的帧类型")
+            let err = GatewayError.responseError(method: method, code: "UNEXPECTED", message: "意外的帧类型")
+            LogCollector.record(module: "网关连接", AppErrorText.localized(err.localizedDescription))
+            throw err
         }
 
         if !res.ok {
             let code = res.error?["code"]?.value as? String ?? "GATEWAY_ERROR"
             let msg = res.error?["message"]?.value as? String ?? "网关错误"
-            throw GatewayError.responseError(method: method, code: code, message: msg)
+            let err = GatewayError.responseError(method: method, code: code, message: msg)
+            LogCollector.record(module: "网关连接", AppErrorText.localized(err.localizedDescription))
+            throw err
         }
 
         if let payload = res.payload {
@@ -454,7 +458,10 @@ actor GatewayWebSocket {
     private func handleMessage(_ msg: URLSessionWebSocketTask.Message) async {
         guard let data = decodeMessageData(msg),
               let frame = try? decoder.decode(GatewayFrame.self, from: data)
-        else { return }
+        else {
+            LogCollector.record(module: "网关连接", "网关消息解析失败：无法解码收到的帧")
+            return
+        }
 
         switch frame {
         case .res(let res):
@@ -478,6 +485,7 @@ actor GatewayWebSocket {
 
     private func handleReceiveFailure(_ err: Error) async {
         logger.error("gateway receive failed: \(err.localizedDescription, privacy: .public)")
+        LogCollector.record(module: "网关连接", "网关连接中断：\(AppErrorText.localized(err.localizedDescription))")
         isConnected = false
         keepaliveTask?.cancel(); keepaliveTask = nil
         await stateHandler?(.disconnected)
@@ -524,6 +532,7 @@ actor GatewayWebSocket {
                     let delta = Date().timeIntervalSince(last) * 1000
                     if delta > tolerance {
                         self.logger.error("gateway tick missed; reconnecting")
+                        LogCollector.record(module: "网关连接", "网关心跳超时（tick 丢失），正在重连")
                         await self.markDisconnected()
                         await self.scheduleReconnect()
                         return
@@ -545,6 +554,7 @@ actor GatewayWebSocket {
                     try await self.connect()
                 } catch {
                     self.logger.error("watchdog reconnect failed: \(error.localizedDescription, privacy: .public)")
+                    LogCollector.record(module: "网关连接", "网关看门狗重连失败：\(AppErrorText.localized(error.localizedDescription))")
                 }
             }
         }
@@ -562,6 +572,7 @@ actor GatewayWebSocket {
             try await connect()
         } catch {
             logger.error("reconnect failed: \(error.localizedDescription, privacy: .public)")
+            LogCollector.record(module: "网关连接", "网关自动重连失败：\(AppErrorText.localized(error.localizedDescription))")
             await scheduleReconnect()
         }
     }
