@@ -66,5 +66,7 @@
 		<string>UIInterfaceOrientationPortrait</string>
 		<string>UIInterfaceOrientationPortraitUpsideDown</string>
 	</array>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>用于保存微信连接二维码图片到相册</string>
 </dict>
 </plist>

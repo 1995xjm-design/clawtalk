@@ -4,6 +4,7 @@ struct SettingsView: View {
     @Bindable var store: SettingsStore
     var gatewayConnection: GatewayConnection
     @Environment(\.dismiss) private var dismiss
+    @AppStorage("clawtalk_wechat_connected") private var wechatConnected = false
 
     @State private var connectionTestState: ConnectionTestState = .idle
     @State private var previewService: (any SpeechService)?
@@ -102,6 +103,18 @@ private var connectionSection: some View {
                                     token: store.gatewayToken
                                 )
                             }
+                            // 自动批准设备：发指令让电脑 OpenClaw 批准待连接设备
+                            let gw = store.settings.gatewayURL
+                                .trimmingCharacters(in: .whitespacesAndNewlines)
+                                .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+                            if !gw.isEmpty {
+                                let instruction = "请执行 openclaw devices approve --latest 批准待连接的设备，然后回复「已批准」。"
+                                _ = try? await OpenClawClient().chat(
+                                    messages: [Message(role: .user, content: instruction)],
+                                    gatewayURL: gw,
+                                    token: store.gatewayToken
+                                )
+                            }
                         }
                     } else {
                         // Disconnect when toggled off
@@ -112,22 +125,29 @@ private var connectionSection: some View {
                 }
 
             if store.settings.useWebSocket {
-                HStack {
-                    Text("WS Port or Path")
-                    Spacer()
-                    TextField("/ws", text: $store.settings.webSocketPath)
-                        .keyboardType(.URL)
-                        .autocorrectionDisabled()
-                        .textInputAutocapitalization(.never)
-                        .multilineTextAlignment(.trailing)
-                        .frame(width: 120)
+                Text("开启后回复实时推送，语音更流畅。首次开启会自动让电脑 OpenClaw 批准设备。")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                DisclosureGroup {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("1. 首次开启会自动向电脑 OpenClaw 发送批准指令（devices approve --latest）；")
+                        Text("2. 若提示 device is not approved，请到电脑 OpenClaw 执行 openclaw devices approve --latest，或在电脑 OpenClaw 里说「请批准待连接的设备」；")
+                        Text("3. 若提示 HTTPS，请在网关地址前使用 https；")
+                        Text("4. 仍连不上就关闭此开关，用普通模式（HTTP），功能一样能用。")
+                    }
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                } label: {
+                    Label("连不上？点这里", systemImage: "questionmark.circle")
+                        .font(.subheadline)
+                        .foregroundStyle(.openClawRed)
                 }
             }
 
             if store.settings.useWebSocket {
                 // Live WebSocket connection status
                 HStack {
-                    Text("Connection")
+                    Text("连接状态")
                     Spacer()
                     switch gatewayConnection.connectionState {
                     case .connected:
@@ -135,7 +155,7 @@ private var connectionSection: some View {
                             Circle()
                                 .fill(.green)
                                 .frame(width: 8, height: 8)
-                            Text("Connected")
+                            Text("已连接")
                                 .font(.subheadline)
                                 .foregroundStyle(.green)
                         }
@@ -143,7 +163,7 @@ private var connectionSection: some View {
                         HStack(spacing: 6) {
                             ProgressView()
                                 .scaleEffect(0.7)
-                            Text("Connecting...")
+                            Text("连接中...")
                                 .font(.subheadline)
                                 .foregroundStyle(.secondary)
                         }
@@ -152,7 +172,7 @@ private var connectionSection: some View {
                             Circle()
                                 .fill(.red)
                                 .frame(width: 8, height: 8)
-                            Text("Disconnected")
+                            Text("未连接")
                                 .font(.subheadline)
                                 .foregroundStyle(.red)
                         }
@@ -166,7 +186,7 @@ private var connectionSection: some View {
                             .foregroundStyle(.red)
                     }
 
-                    Button("Reconnect") {
+                    Button("重新连接") {
                         store.save()
                         Task {
                             await gatewayConnection.connect(
@@ -353,7 +373,7 @@ private var connectionSection: some View {
                 HStack {
                     Label("连接微信 Claw Bot", systemImage: "qrcode")
                     Spacer()
-                    if UserDefaults.standard.bool(forKey: "clawtalk_wechat_connected") {
+                    if wechatConnected {
                         HStack(spacing: 4) {
                             Circle().fill(.green).frame(width: 8, height: 8)
                             Text("已连接")

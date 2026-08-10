@@ -15,6 +15,9 @@ struct ChatView: View {
     @State private var selectedPhotos: [PhotosPickerItem] = []
     @State private var attachedImages: [Data] = []
     @FocusState private var isInputFocused: Bool
+    @State private var showSearch = false
+    @State private var scrollTargetID: UUID?
+    @State private var dragOffset: CGFloat = 0
 
     var body: some View {
         VStack(spacing: 0) {
@@ -29,6 +32,7 @@ struct ChatView: View {
             Divider().opacity(0.3)
             inputArea
         }
+        .offset(x: max(0, dragOffset))
         .background(Color(.systemBackground))
         .overlay(alignment: .top) {
             if showConversationHint {
@@ -36,6 +40,11 @@ struct ChatView: View {
                     .padding(.horizontal, 16)
                     .padding(.top, 56)
                     .transition(.move(edge: .top).combined(with: .opacity))
+            }
+        }
+        .sheet(isPresented: $showSearch) {
+            ChatSearchView(messages: viewModel.messages) { messageID in
+                scrollTargetID = messageID
             }
         }
     }
@@ -111,11 +120,14 @@ struct ChatView: View {
                     }
 
                     Menu {
+                        Button(action: { showSearch = true }) {
+                            Label("查找聊天内容", systemImage: "magnifyingglass")
+                        }
                         Button(action: { showClearConfirm = true }) {
-                            Label("Clear Chat", systemImage: "trash")
+                            Label("清空聊天", systemImage: "trash")
                         }
                         Button(role: .destructive, action: { showDeleteConfirm = true }) {
-                            Label("Delete Channel", systemImage: "minus.circle")
+                            Label("删除频道", systemImage: "minus.circle")
                         }
                     } label: {
                         Image(systemName: "ellipsis.circle")
@@ -191,6 +203,13 @@ struct ChatView: View {
             .onChange(of: viewModel.messages.last?.content) {
                 scrollToBottom(using: proxy)
             }
+            // 搜索跳转定位
+            .onChange(of: scrollTargetID) { _, newID in
+                guard let id = newID else { return }
+                withAnimation(.easeOut(duration: 0.3)) {
+                    proxy.scrollTo(id, anchor: .center)
+                }
+            }
         }
     }
 
@@ -208,12 +227,32 @@ struct ChatView: View {
     // 左缘右滑返回手势：从屏幕左缘约 40pt 内开始、横向为主且右移超过 60pt 时触发返回
     private var edgeSwipeBackGesture: some Gesture {
         DragGesture(minimumDistance: 12, coordinateSpace: .global)
+            .onChanged { value in
+                guard value.startLocation.x <= 40 else { return }
+                let dx = value.translation.width
+                let dy = value.translation.height
+                guard dx > 0, abs(dx) > abs(dy) else { return }
+                dragOffset = dx
+            }
             .onEnded { value in
                 guard value.startLocation.x <= 40 else { return }
                 let dx = value.translation.width
                 let dy = value.translation.height
-                guard dx > 60, abs(dx) > abs(dy) else { return }
-                onBack?()
+                guard dx > 0, abs(dx) > abs(dy) else { return }
+                let screenWidth = UIScreen.main.bounds.width
+                if dx > screenWidth / 3 {
+                    withAnimation(.easeOut(duration: 0.25)) {
+                        dragOffset = screenWidth
+                    }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                        onBack?()
+                        dragOffset = 0
+                    }
+                } else {
+                    withAnimation(.easeOut(duration: 0.2)) {
+                        dragOffset = 0
+                    }
+                }
             }
     }
 

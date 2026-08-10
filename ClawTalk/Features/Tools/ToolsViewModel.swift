@@ -20,8 +20,11 @@ final class ToolsViewModel {
 
     // Browser
     var browserScreenshot: UIImage?
+    var desktopScreenshot: UIImage?
     var browserStatusText: String?
     var browserTabsText: String?
+    var browserToolAvailable = true
+    var isInstallingBrowserTool = false
 
     // Models
     var availableModels: [ModelEntry] = []
@@ -359,6 +362,68 @@ final class ToolsViewModel {
         }
 
         isLoading = false
+    }
+
+    // MARK: - Browser Tool 检测 / 安装 / 桌面截图
+
+    func checkBrowserTool() async {
+        do {
+            let data = try await client.invokeTool(
+                tool: "browser",
+                action: "status",
+                gatewayURL: gatewayURL,
+                token: token
+            )
+            let wrapper = try JSONDecoder().decode(ToolResultWrapper<BrowserDetails>.self, from: data)
+            browserToolAvailable = wrapper.content?.first?.text != nil || wrapper.details?.ok == true
+        } catch {
+            browserToolAvailable = false
+        }
+    }
+
+    func installBrowserTool() async {
+        guard !isInstallingBrowserTool else { return }
+        isInstallingBrowserTool = true
+        errorMessage = nil
+        defer { isInstallingBrowserTool = false }
+        let instruction = "请安装浏览器控制工具 chrome-devtools-mcp：1）npm install -g chrome-devtools-mcp；2）配置到 OpenClaw 的 MCP（找到 config/mcporter.json，在 mcpServers 添加 chrome-devtools-mcp，command 用 npx chrome-devtools-mcp）；3）让网关加载新的 MCP 配置；4）完成后回复「安装完成」；如果已经安装请直接回复「已安装」。"
+        do {
+            _ = try await client.chat(
+                messages: [Message(role: .user, content: instruction)],
+                gatewayURL: gatewayURL,
+                token: token
+            )
+            await checkBrowserTool()
+        } catch {
+            errorMessage = "安装指令执行失败：\(error.localizedDescription)"
+        }
+    }
+
+    func takeDesktopScreenshot() async {
+        isLoading = true
+        errorMessage = nil
+        defer { isLoading = false }
+        let instruction = "请用 PowerShell 截取整个桌面屏幕：1）Add-Type -AssemblyName System.Windows.Forms,System.Drawing；2）用 Graphics.CopyFromScreen 截取全屏；3）保存为 JPEG 并压缩到宽约 1200；4）转成 base64；5）回复我完整的 base64 字符串，不要���略、不要解释、不要加任何前缀。"
+        do {
+            let reply = try await client.chat(
+                messages: [Message(role: .user, content: instruction)],
+                gatewayURL: gatewayURL,
+                token: token
+            )
+            if let b64 = Self.extractBase64(from: reply), let decoded = Data(base64Encoded: b64) {
+                desktopScreenshot = UIImage(data: decoded)
+            } else {
+                errorMessage = "未从回复中解析到截图数据"
+            }
+        } catch {
+            errorMessage = "截图指令执行失败：\(error.localizedDescription)"
+        }
+    }
+
+    static func extractBase64(from text: String) -> String? {
+        let pattern = #"[A-Za-z0-9+/=]{1000,}"#
+        guard let range = text.range(of: pattern, options: .regularExpression) else { return nil }
+        return String(text[range])
     }
 
     // MARK: - Models

@@ -42,6 +42,8 @@ struct WechatBindView: View {
     @State private var qrcode: String?
     @State private var qrImage: UIImage?
     @State private var pollTask: Task<Void, Never>?
+    @State private var connected: Bool = UserDefaults.standard.bool(forKey: "clawtalk_wechat_connected")
+    @State private var showSaveHint = false
 
     private struct QRCodeResponse: Decodable {
         let qrcode: String?
@@ -78,22 +80,52 @@ struct WechatBindView: View {
             case .waiting, .scanned, .needVerifyCode:
                 qrImageView
                 statusLabel
-                Text("请使用微信扫描二维码完成绑定，每 3 秒自动检查状态。")
+                Text("请用微信扫描二维码完成连接。\n扫码后在微信上确认，然后回到本页点「绑定成功」。")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 32)
+                HStack(spacing: 16) {
+                    Button {
+                        saveQRCodeImage()
+                    } label: {
+                        Label("保存图片", systemImage: "square.and.arrow.down")
+                            .font(.subheadline)
+                    }
+                    .buttonStyle(.bordered)
+                    .tint(.openClawRed)
+                    Button {
+                        Task { await checkBindingStatus() }
+                    } label: {
+                        Label("绑定成功", systemImage: "checkmark.circle")
+                            .font(.subheadline)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(.openClawRed)
+                }
+                if showSaveHint {
+                    Text("二维码已保存到相册")
+                        .font(.caption)
+                        .foregroundStyle(.green)
+                }
 
             case .success:
                 Image(systemName: "checkmark.circle.fill")
                     .font(.system(size: 64))
                     .foregroundStyle(.green)
-                Text("绑定成功")
+                Text("微信 Claw Bot 已连接")
                     .font(.title2)
                     .fontWeight(.semibold)
                 Text("现在可以通过微信与 Claw Bot 对话了。")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
+                Button("重新生成二维码") {
+                    UserDefaults.standard.set(false, forKey: "clawtalk_wechat_connected")
+                    connected = false
+                    fetchQRCode()
+                }
+                .buttonStyle(.bordered)
+                .tint(.openClawRed)
                 Button("完成") {
                     dismiss()
                 }
@@ -136,7 +168,11 @@ struct WechatBindView: View {
         .navigationTitle("连接微信")
         .navigationBarTitleDisplayMode(.inline)
         .task {
-            fetchQRCode()
+            if connected {
+                state = .success
+            } else {
+                fetchQRCode()
+            }
         }
         .onDisappear {
             stopPolling()
@@ -284,6 +320,13 @@ struct WechatBindView: View {
                 }
             }
         }
+    }
+
+    /// 保存二维码图片到相册
+    private func saveQRCodeImage() {
+        guard let image = qrImage else { return }
+        UIImageWriteToSavedPhotosAlbum(image, nil, nil, nil)
+        showSaveHint = true
     }
 
     /// 从 OpenClaw 回复文本中提取一次性登录链接

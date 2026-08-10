@@ -25,17 +25,24 @@ struct ClawTalkApp: App {
                     OnboardingView(settingsStore: settingsStore) {
                         // Onboarding complete
                     }
-                } else if let vm = chatViewModel, selectedChannel != nil {
-                    ChatView(viewModel: vm, settingsStore: settingsStore, gatewayConnection: gatewayConnection, onBack: goBack, onDeleteChannel: deleteCurrentChannel)
                 } else {
-                    ChannelListView(
-                        channelStore: channelStore,
-                        settingsStore: settingsStore,
-                        gatewayConnection: gatewayConnection,
-                        onSelect: { channel in
-                            selectChannel(channel)
+                    // 底层常驻频道列表，聊天页浮在上面（支持跟手滑出）
+                    ZStack {
+                        ChannelListView(
+                            channelStore: channelStore,
+                            settingsStore: settingsStore,
+                            gatewayConnection: gatewayConnection,
+                            onSelect: { channel in
+                                selectChannel(channel)
+                            }
+                        )
+                        .zIndex(0)
+
+                        if let vm = chatViewModel, selectedChannel != nil {
+                            ChatView(viewModel: vm, settingsStore: settingsStore, gatewayConnection: gatewayConnection, onBack: goBack, onDeleteChannel: deleteCurrentChannel)
+                                .zIndex(1)
                         }
-                    )
+                    }
                 }
             }
             .overlay {
