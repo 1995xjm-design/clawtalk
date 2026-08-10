@@ -44,6 +44,8 @@ struct WechatBindView: View {
     @State private var pollTask: Task<Void, Never>?
     @State private var connected: Bool = UserDefaults.standard.bool(forKey: "clawtalk_wechat_connected")
     @State private var showSaveHint = false
+    @State private var isConfirming = false
+    @State private var confirmMessage: String?
 
     private struct QRCodeResponse: Decodable {
         let qrcode: String?
@@ -95,18 +97,42 @@ struct WechatBindView: View {
                     .buttonStyle(.bordered)
                     .tint(.openClawRed)
                     Button {
-                        Task { await checkBindingStatus() }
+                        confirmMessage = nil
+                        isConfirming = true
+                        Task {
+                            let msg = await checkBindingStatus()
+                            isConfirming = false
+                            if let msg {
+                                confirmMessage = msg
+                            }
+                        }
                     } label: {
-                        Label("绑定成功", systemImage: "checkmark.circle")
+                        if isConfirming {
+                            HStack(spacing: 6) {
+                                ProgressView()
+                                Text("正在确认…")
+                            }
                             .font(.subheadline)
+                        } else {
+                            Label("绑定成功", systemImage: "checkmark.circle")
+                                .font(.subheadline)
+                        }
                     }
                     .buttonStyle(.borderedProminent)
                     .tint(.openClawRed)
+                    .disabled(isConfirming)
                 }
                 if showSaveHint {
                     Text("二维码已保存到相册")
                         .font(.caption)
                         .foregroundStyle(.green)
+                }
+                if let confirmMessage {
+                    Text(confirmMessage)
+                        .font(.caption)
+                        .foregroundStyle(confirmMessage.contains("尚未") || confirmMessage.contains("失败") ? .red : .secondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 32)
                 }
 
             case .success:
@@ -282,8 +308,9 @@ struct WechatBindView: View {
     }
 
     @MainActor
-    private func checkBindingStatus() async {
-        guard !gatewayURL.isEmpty else { return }
+    @discardableResult
+    private func checkBindingStatus() async -> String? {
+        guard !gatewayURL.isEmpty else { return "网关未配置" }
         let instruction = "请查询微信 Claw Bot（openclaw-weixin 渠道）的扫码登录状态，按以下步骤执行：\n1. 查找微信渠道账户目录（如 openclaw-weixin/accounts/），查看账户文件（*.json）是否存在及其内容。\n2. 判断状态：无账户文件或没有有效 token → 返回 wait；有账户文件且渠道已上线 → 返回 login_success；无法判断时运行 openclaw channels list 确认渠道 enabled/online。\n3. 回复格式固定为一行：wait 或 scanned 或 login_success。"
 
         do {
@@ -299,12 +326,16 @@ struct WechatBindView: View {
                 stopPolling()
             } else if lower.contains("scaned") {
                 state = .scanned
+                return nil
             } else {
                 state = .waiting
+                return "尚未检测到绑定成功，请确认已在微信上完成登录后重试。"
             }
         } catch {
             // 单次轮询失败不打断流程，保持当前状态等待下一次
+            return "查询失败：\(error.localizedDescription)"
         }
+        return nil
     }
 
     @MainActor
