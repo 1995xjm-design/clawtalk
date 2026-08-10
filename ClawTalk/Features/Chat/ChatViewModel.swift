@@ -15,11 +15,31 @@ enum ChatState: Equatable {
 @MainActor
 final class ChatViewModel {
     var messages: [Message] = []
-    var state: ChatState = .idle
+    var state: ChatState = .idle {
+        didSet {
+            guard oldValue != state else { return }
+            // 锁屏/灵动岛状态：仅免提对话模式期间存在 Live Activity
+            if isConversationMode {
+                ClawTalkLiveActivity.update(statusText: Self.liveActivityStatus(for: state))
+            }
+        }
+    }
     var errorMessage: String? {
         didSet { if let errorMessage { LogCollector.record(module: "聊天", errorMessage) } }
     }
-    var isConversationMode = false
+    var isConversationMode = false {
+        didSet {
+            guard oldValue != isConversationMode else { return }
+            if isConversationMode {
+                ClawTalkLiveActivity.start(
+                    channelName: channel.name,
+                    initialStatus: Self.liveActivityStatus(for: state)
+                )
+            } else {
+                ClawTalkLiveActivity.endAll()
+            }
+        }
+    }
     var channel: Channel
     private let openClaw = OpenClawClient()
     private let audioCapture = AudioCaptureManager()
@@ -114,6 +134,8 @@ final class ChatViewModel {
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !images.isEmpty else { return }
         // 允许在语音播放/流式回复时发送新消息：先打断当前语音和正在进行的回复
         if state == .speaking || state == .streaming {
+            // 取消上一条正在跑的发送任务，避免新旧发送任务并发导致「发下一句不接话」
+            sendTask?.cancel()
             ttsStopped = true
             ttsConcurrency.cancelAll()
             speechService?.stop()
@@ -155,6 +177,8 @@ final class ChatViewModel {
     func enterConversationMode() {
         guard state == .idle else { return }
         errorMessage = nil
+        // 语音唤醒与免提对话共用麦克风：进对话前先停唤醒监听，避免音频引擎冲突
+        VoiceWakeCapability.shared.stopListening()
 
         do {
             try audioCapture.startRecording()
@@ -274,9 +298,11 @@ final class ChatViewModel {
     private func sendMessage(_ content: String, images: [Data]? = nil) async {
         let userMessage = Message(role: .user, content: content, imageData: images)
         messages.append(userMessage)
+        let userID = userMessage.id
 
         let assistantMessage = Message(role: .assistant, content: "", isStreaming: true)
         messages.append(assistantMessage)
+        let assistantID = assistantMessage.id
 
         ttsStopped = false
         ttsConcurrency.cancelAll()
@@ -296,7 +322,7 @@ final class ChatViewModel {
                 } catch {
                     // WebSocket failed mid-stream — fall back to HTTP
                     // Remove the partial assistant message if empty
-                    if let idx = messages.lastIndex(where: { $0.role == .assistant && $0.isStreaming }) {
+                    if let idx = messages.firstIndex(where: { $0.id == assistantID }) {
                         if messages[idx].content.isEmpty {
                             messages.remove(at: idx)
                         } else {
@@ -305,8 +331,8 @@ final class ChatViewModel {
                             throw error
                         }
                     }
-                    // Retry via HTTP
-                    let retryAssistant = Message(role: .assistant, content: "", isStreaming: true)
+                    // Retry via HTTP (reuse original id so cancellation cleanup still finds it)
+                    let retryAssistant = Message(id: assistantID, role: .assistant, content: "", isStreaming: true)
                     messages.append(retryAssistant)
                     try await sendMessageViaHTTP(images: images)
                 }
@@ -325,26 +351,33 @@ final class ChatViewModel {
             conversationStore.save(messages, channelId: channel.id)
 
         } catch is CancellationError {
-            if let idx = messages.lastIndex(where: { $0.role == .assistant && $0.isStreaming }) {
+            // Finalize only this task's own message by id, never a newer task's message
+            if let idx = messages.firstIndex(where: { $0.id == assistantID }) {
                 messages[idx].isStreaming = false
             }
             audioPlayback.stop()
             conversationStore.save(messages, channelId: channel.id)
         } catch {
+            let isCancellation = (error as? URLError)?.code == .cancelled
             let classified = ChatError.classify(error)
-            if let idx = messages.lastIndex(where: { $0.role == .assistant && $0.isStreaming }) {
+            if let idx = messages.firstIndex(where: { $0.id == assistantID }) {
                 messages[idx].isStreaming = false
                 if messages[idx].content.isEmpty {
                     messages.remove(at: idx)
                 }
             }
-            // Tag the user message with the error for retry
-            if let userIdx = messages.lastIndex(where: { $0.role == .user }) {
-                messages[userIdx].sendError = classified.errorDescription
+            if !isCancellation {
+                // Tag the user message with the error for retry
+                if let userIdx = messages.firstIndex(where: { $0.id == userID }) {
+                    messages[userIdx].sendError = classified.errorDescription
+                }
+                audioPlayback.stop()
+                errorMessage = classified.errorDescription
+                notifyError()
+            } else {
+                // Cancellation surfaced as URLError.cancelled: finalize silently
+                audioPlayback.stop()
             }
-            audioPlayback.stop()
-            errorMessage = classified.errorDescription
-            notifyError()
 
             if isConversationMode {
                 audioCapture.resumeListening()
@@ -690,6 +723,22 @@ final class ChatViewModel {
         if state == .speaking {
             // Keep streaming text, just stop audio
             state = .streaming
+        }
+    }
+
+    /// Live Activity 文案：把当前聊天状态映射为锁屏展示文本。
+    private static func liveActivityStatus(for state: ChatState) -> String {
+        switch state {
+        case .idle, .recording:
+            return "等待你说…"
+        case .transcribing:
+            return "正在转写…"
+        case .thinking:
+            return "正在思考…"
+        case .streaming:
+            return "正在回复…"
+        case .speaking:
+            return "正在朗读…"
         }
     }
 

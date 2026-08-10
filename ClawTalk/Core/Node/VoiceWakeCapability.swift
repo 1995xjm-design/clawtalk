@@ -40,6 +40,8 @@ final class VoiceWakeCapability {
     private(set) var isListening = false
     private(set) var currentKeywords: [String] = []
     var onKeywordDetected: ((String) -> Void)?
+    /// 检测到唤醒词后是否自动重启监听。Node端（智能体）控制时保持 true；App端免提对话会先置 false，避免重启后与对话模式抢麦克风。
+    var autoRestartsAfterDetection = true
 
     private let logger = Logger(subsystem: "com.openclaw.clawtalk", category: "voice-wake")
     private var recognizer: SFSpeechRecognizer?
@@ -151,8 +153,9 @@ final class VoiceWakeCapability {
                         if text.contains(keyword) {
                             self.logger.info("wake keyword detected: \(keyword, privacy: .public)")
                             self.onKeywordDetected?(keyword)
-                            // Restart to clear buffer
+                            // Restart to clear buffer (agent-controlled); app mode stays stopped
                             self.stopListening()
+                            guard self.autoRestartsAfterDetection else { return }
                             try? await Task.sleep(nanoseconds: 500_000_000)
                             try? await self.startListening(locale: locale)
                             return
@@ -194,4 +197,10 @@ struct VoiceWakeSetParams: Decodable {
     let keywords: [String]?
     let enabled: Bool?
     let locale: String?
+}
+
+// MARK: - Wake Word Notification
+
+extension Notification.Name {
+    static let clawTalkWakeWordDetected = Notification.Name("ClawTalkWakeWordDetected")
 }

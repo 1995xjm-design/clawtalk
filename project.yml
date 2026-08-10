@@ -69,6 +69,8 @@ targets:
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
           - UIInterfaceOrientationPortraitUpsideDown
+        UIBackgroundModes:
+          - audio
 
   ClawTalkTests:
     type: bundle.unit-test

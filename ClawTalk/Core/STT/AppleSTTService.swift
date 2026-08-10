@@ -4,13 +4,21 @@ import AVFoundation
 
 /// 使用 iOS 系统自带语音识别（SFSpeechRecognizer）。
 /// - 支持中文（zh-CN），无需下载 Whisper 模型；
-/// - iOS 17+ 支持完全离线识别（on-device）。
+/// - 默认走苹果在线识别（联网更准、无需下载离线包）；
+/// - 可选 allowOnDevice：仅在其启用时才尝试离线识别，失败自动回退在线。
 final class AppleSTTService: TranscriptionService {
     private let recognizer: SFSpeechRecognizer?
     private let language: String?
+    private let allowOnDevice: Bool
 
-    init(language: String? = nil) {
+    /// 识别超时（秒）：整个识别过程的上限，超时自动取消任务并抛「识别超时」。
+    private static let recognitionTimeout: TimeInterval = 20
+    /// 静音检测阈值（RMS）：正常说话 vs 安静环境的合理边界，可调常量。
+    private static let silenceRMSThreshold: Float = 0.01
+
+    init(language: String? = nil, allowOnDevice: Bool = false) {
         self.language = language
+        self.allowOnDevice = allowOnDevice
         // 优先按用户选择语言（如 zh），否则跟随系统语言
         let localeID: String
         if let language, !language.isEmpty, language != "auto" {
@@ -22,6 +30,11 @@ final class AppleSTTService: TranscriptionService {
     }
 
     func transcribe(audioSamples: [Float]) async throws -> String {
+        // 0) 静音检测：转写前先算音量，没声音直接抛错
+        if Self.rmsLevel(of: audioSamples) < Self.silenceRMSThreshold {
+            throw AppleSTTError.noSpeech
+        }
+
         // 1) 权限
         try await ensureAuthorization()
 
@@ -34,15 +47,74 @@ final class AppleSTTService: TranscriptionService {
         let wavURL = try Self.writeWAV(samples: audioSamples)
         defer { try? FileManager.default.removeItem(at: wavURL) }
 
-        // 4) URL 识别请求（离线优先）
-        let request = SFSpeechURLRecognitionRequest(url: wavURL)
-        request.shouldReportPartialResults = false
-        if recognizer.supportsOnDeviceRecognition {
-            request.requiresOnDeviceRecognition = true
-        }
+        // 4) 识别：默认在线；allowOnDevice 时先离线、失败回退在线；全程 20 秒超时兜底
+        let box = RecognitionTaskBox()
+        let text = try await Self.runRecognition(
+            wavURL: wavURL,
+            recognizer: recognizer,
+            allowOnDevice: allowOnDevice,
+            box: box
+        )
+        return TranscriptCleanup.clean(text)
+    }
 
-        let text = try await withCheckedThrowingContinuation { (cont: CheckedContinuation<String, Error>) in
-            recognizer.recognitionTask(with: request) { result, error in
+    // MARK: - 识别（超时 + 离线回退）
+
+    private static func runRecognition(
+        wavURL: URL,
+        recognizer: SFSpeechRecognizer,
+        allowOnDevice: Bool,
+        box: RecognitionTaskBox
+    ) async throws -> String {
+        try await withThrowingTaskGroup(of: String.self) { group -> String in
+            // 识别子任务：可离线 -> 在线回退
+            group.addTask {
+                let request = SFSpeechURLRecognitionRequest(url: wavURL)
+                request.shouldReportPartialResults = false
+
+                guard allowOnDevice, recognizer.supportsOnDeviceRecognition else {
+                    return try await Self.performRequest(request, recognizer: recognizer, box: box)
+                }
+
+                request.requiresOnDeviceRecognition = true
+                do {
+                    let offlineText = try await Self.performRequest(request, recognizer: recognizer, box: box)
+                    if !offlineText.isEmpty {
+                        return offlineText
+                    }
+                } catch {
+                    // 离线识别失败 → 回退在线，不卡死
+                }
+
+                let onlineRequest = SFSpeechURLRecognitionRequest(url: wavURL)
+                onlineRequest.shouldReportPartialResults = false
+                return try await Self.performRequest(onlineRequest, recognizer: recognizer, box: box)
+            }
+
+            // 超时子任务：20 秒倒计时，超时取消识别并抛错
+            group.addTask {
+                try await Task.sleep(for: .seconds(Self.recognitionTimeout))
+                box.task?.cancel()
+                throw AppleSTTError.timeout
+            }
+
+            defer { box.task?.cancel() }
+
+            guard let first = try await group.next() else {
+                throw AppleSTTError.unavailable
+            }
+            group.cancelAll()
+            return first
+        }
+    }
+
+    private static func performRequest(
+        _ request: SFSpeechURLRecognitionRequest,
+        recognizer: SFSpeechRecognizer,
+        box: RecognitionTaskBox
+    ) async throws -> String {
+        try await withCheckedThrowingContinuation { (cont: CheckedContinuation<String, Error>) in
+            box.task = recognizer.recognitionTask(with: request) { result, error in
                 if let result, result.isFinal {
                     cont.resume(returning: result.bestTranscription.formattedString)
                 } else if let error {
@@ -50,7 +122,18 @@ final class AppleSTTService: TranscriptionService {
                 }
             }
         }
-        return TranscriptCleanup.clean(text)
+    }
+
+    // MARK: - 静音检测
+
+    /// 计算音频样本的 RMS（均方根音量），用于判断是否有有效人声。
+    private static func rmsLevel(of samples: [Float]) -> Float {
+        guard !samples.isEmpty else { return 0 }
+        var sum: Double = 0
+        for sample in samples {
+            sum += Double(sample) * Double(sample)
+        }
+        return Float(sqrt(sum / Double(samples.count)))
     }
 
     // MARK: - 权限
@@ -127,16 +210,27 @@ final class AppleSTTService: TranscriptionService {
     }
 }
 
+/// 识别任务引用容器：超时或外部取消时用于取消底层 SFSpeechRecognitionTask。
+private final class RecognitionTaskBox {
+    var task: SFSpeechRecognitionTask?
+}
+
 enum AppleSTTError: LocalizedError {
     case permissionDenied
     case unavailable
+    case timeout
+    case noSpeech
 
     var errorDescription: String? {
         switch self {
         case .permissionDenied:
-            return "请在设置中允许 ClawTalk 使用语音识别权限（设置-隐私与安全性-语音识别）。"
+            return "语音识别权限被拒绝，请在设置中开启"
         case .unavailable:
-            return "系统语音识别当前不可用，请检查网络或稍后重试。"
+            return "语音识别不可用"
+        case .timeout:
+            return "识别超时，请再说一遍试试"
+        case .noSpeech:
+            return "没听到声音，请靠近一点再说"
         }
     }
 }

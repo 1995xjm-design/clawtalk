@@ -1,4 +1,6 @@
 import SwiftUI
+import AVFoundation
+import Combine
 
 @main
 struct ClawTalkApp: App {
@@ -9,6 +11,7 @@ struct ClawTalkApp: App {
     @State private var chatViewModel: ChatViewModel?
     @State private var gatewayConnection = GatewayConnection()
     @State private var nodeConnection = NodeConnection()
+    @State private var ackSynthesizer: AVSpeechSynthesizer?
 
     init() {
         #if DEBUG
@@ -41,6 +44,13 @@ struct ClawTalkApp: App {
                         if let vm = chatViewModel, selectedChannel != nil {
                             ChatView(viewModel: vm, settingsStore: settingsStore, gatewayConnection: gatewayConnection, onBack: goBack, onDeleteChannel: deleteCurrentChannel)
                                 .zIndex(1)
+                                .onChange(of: vm.isConversationMode) { _, isOn in
+                                    if isOn {
+                                        stopVoiceWake()
+                                    } else {
+                                        startVoiceWakeIfNeeded()
+                                    }
+                                }
                         }
                     }
                 }
@@ -57,6 +67,10 @@ struct ClawTalkApp: App {
             .tint(.openClawRed)
             .preferredColorScheme(settingsStore.settings.appearance == .dark ? .dark : .light)
             .task {
+                // 语音唤醒接线：检测到唤醒词 -> 发通知 -> 主界面处理
+                VoiceWakeCapability.shared.onKeywordDetected = { keyword in
+                    NotificationCenter.default.post(name: .clawTalkWakeWordDetected, object: keyword)
+                }
                 guard settingsStore.settings.useWebSocket,
                       settingsStore.isConfigured else { return }
 
@@ -108,7 +122,20 @@ struct ClawTalkApp: App {
             .onChange(of: scenePhase) { _, newPhase in
                 if newPhase == .background || newPhase == .inactive {
                     chatViewModel?.saveCurrentState()
+                    stopVoiceWake()
+                } else if newPhase == .active {
+                    startVoiceWakeIfNeeded()
                 }
+            }
+            .onChange(of: settingsStore.settings.voiceWakeEnabled) { _, enabled in
+                if enabled {
+                    startVoiceWakeIfNeeded()
+                } else {
+                    stopVoiceWake()
+                }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .clawTalkWakeWordDetected)) { _ in
+                handleWakeWordDetected()
             }
         }
     }
@@ -155,9 +182,11 @@ struct ClawTalkApp: App {
                 vm.loadServerHistory()
             }
         }
+        startVoiceWakeIfNeeded()
     }
 
     private func goBack() {
+        stopVoiceWake()
         chatViewModel?.stop()
         chatViewModel = nil
         selectedChannel = nil
@@ -165,12 +194,62 @@ struct ClawTalkApp: App {
     }
 
     private func deleteCurrentChannel() {
+        stopVoiceWake()
         chatViewModel?.stop()
         if let channel = selectedChannel {
             channelStore.delete(channel)
         }
         chatViewModel = nil
         selectedChannel = nil
+    }
+
+    // MARK: - 语音唤醒（SIRI 式）
+
+    /// 前台 + 聊天页 + 已开启 + 未处于对话模式时启动唤醒词监听。
+    private func startVoiceWakeIfNeeded() {
+        guard settingsStore.settings.voiceWakeEnabled else { return }
+        guard settingsStore.settings.voiceInputEnabled else { return }
+        guard let vm = chatViewModel, !vm.isConversationMode else { return }
+        guard scenePhase == .active else { return }
+        let word = settingsStore.settings.voiceWakeWord
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !word.isEmpty else { return }
+        VoiceWakeCapability.shared.autoRestartsAfterDetection = false
+        Task {
+            _ = try? await VoiceWakeCapability.shared.setConfig(keywords: [word], enabled: true, locale: "zh-CN")
+        }
+    }
+
+    /// 停止唤醒词监听（同步停引擎 + 异步同步配置状态）。
+    private func stopVoiceWake() {
+        VoiceWakeCapability.shared.stopListening()
+        Task {
+            _ = try? await VoiceWakeCapability.shared.setConfig(keywords: [], enabled: false, locale: "zh-CN")
+        }
+    }
+
+    /// 唤醒词命中：停唤醒 -> 进入免提对话 -> 播报「在呢」。
+    private func handleWakeWordDetected() {
+        stopVoiceWake()
+        guard let vm = chatViewModel,
+              settingsStore.settings.voiceInputEnabled,
+              !vm.isConversationMode,
+              vm.state == .idle
+        else {
+            startVoiceWakeIfNeeded()
+            return
+        }
+        vm.enterConversationMode()
+        speakAck()
+    }
+
+    /// 播报「在呢」确认（保留 synthesizer 引用，防止提前释放导致不出声）。
+    private func speakAck() {
+        let synthesizer = AVSpeechSynthesizer()
+        let utterance = AVSpeechUtterance(string: "在呢")
+        utterance.voice = AVSpeechSynthesisVoice(language: "zh-CN")
+        synthesizer.speak(utterance)
+        ackSynthesizer = synthesizer
     }
 
     private func reconfigureServices() {
@@ -209,6 +288,8 @@ struct ClawTalkApp: App {
                     return DoubaoTTSService(apiKey: key, voiceID: s.doubaoVoiceID)
                 }
                 return AppleTTSService()
+            case .edge:
+                return EdgeTTSService(voiceID: s.edgeVoiceID)
             }
         }()
 

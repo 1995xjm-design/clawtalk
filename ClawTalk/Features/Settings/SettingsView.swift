@@ -294,10 +294,19 @@ private var connectionSection: some View {
             Toggle("语音输出（文字转语音）", isOn: $store.settings.voiceOutputEnabled)
             Toggle("跟随静音键", isOn: $store.settings.followMuteSwitch)
             Toggle("触感反馈", isOn: $store.settings.hapticsEnabled)
+            Toggle("语音唤醒", isOn: $store.settings.voiceWakeEnabled)
+            if store.settings.voiceWakeEnabled {
+                TextField("唤醒词", text: $store.settings.voiceWakeWord)
+                    .autocorrectionDisabled()
+                    .textInputAutocapitalization(.never)
+                Text("仅在 App 前台且打开聊天页时监听；说「你好小爪」进入免提对话。")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
         } header: {
             Text("语音")
         } footer: {
-            Text("关闭语音输出可纯文字聊天；语音输入使用设备端识别；开启「跟随静音键」后，iPhone 物理静音键开启时朗读自动静音。")
+            Text("关闭语音输出可纯文字聊天；语音输入使用设备端识别；开启「跟随静音键」后，iPhone 物理静音键开启时朗读自动静音。语音唤醒需麦克风与语音识别权限，且仅在 App 前台监听。")
         }
     }
 
@@ -331,6 +340,17 @@ private var connectionSection: some View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 voicePreviewButton
+            case .edge:
+                Picker("音色", selection: $store.settings.edgeVoiceID) {
+                    Text("晓晓（女）").tag("zh-CN-XiaoxiaoNeural")
+                    Text("小艺（女，替代已下线的晓墨）").tag("zh-CN-XiaoyiNeural")
+                    Text("云希（男）").tag("zh-CN-YunxiNeural")
+                    Text("云扬（男）").tag("zh-CN-YunyangNeural")
+                }
+                Text("微软 Edge 免费接口，无需 API Key。晓墨（zh-CN-XiaomoNeural）已被微软移除（实测 Unsupported voice），用同为女声的「小艺」替代。")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                voicePreviewButton
             }
         } header: {
             Text("文字转语音")
@@ -340,6 +360,8 @@ private var connectionSection: some View {
                 Text("使用苹果系统内置语音，免费且支持离线，但自然度一般。")
             case .doubao:
                 Text("豆包语音合成大模型（seed-tts-2.0），流式直连，音质自然。")
+            case .edge:
+                Text("微软 Edge 免费接口（非官方），无需 API Key；24kHz 高音质，需联网。")
             }
         }
     }
@@ -571,6 +593,8 @@ private var connectionSection: some View {
             return store.doubaoAPIKey.isEmpty
         case .apple:
             return false
+        case .edge:
+            return false
         }
     }
     private func startPreview() {
@@ -582,6 +606,8 @@ private var connectionSection: some View {
             tts = DoubaoTTSService(apiKey: store.doubaoAPIKey, voiceID: store.settings.doubaoVoiceID)
         case .apple:
             tts = AppleTTSService()
+        case .edge:
+            tts = EdgeTTSService(voiceID: store.settings.edgeVoiceID)
         }
         previewService = tts
         isPreviewing = true

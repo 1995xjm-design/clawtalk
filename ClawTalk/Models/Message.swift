@@ -18,7 +18,12 @@ struct Message: Identifiable, Codable {
     var sendError: String?
 
     init(role: MessageRole, content: String, isStreaming: Bool = false, imageData: [Data]? = nil) {
-        self.id = UUID()
+        self.init(id: UUID(), role: role, content: content, isStreaming: isStreaming, imageData: imageData)
+    }
+
+    /// Specified-ID init: retries reuse the original id so cancellation cleanup can locate the message.
+    init(id: UUID, role: MessageRole, content: String, isStreaming: Bool = false, imageData: [Data]? = nil) {
+        self.id = id
         self.role = role
         self.content = content
         self.timestamp = Date()

@@ -3,6 +3,7 @@ import Foundation
 enum TTSProvider: String, Codable, CaseIterable, Identifiable {
     case apple = "Apple (Offline)"
     case doubao = "豆包 (Doubao)"
+    case edge = "Edge（晓晓/晓墨/云希/云扬）"
 
     // 兼容旧数据：未知/已删除的 Provider 回退到 Apple
     init(from decoder: Decoder) throws {
@@ -53,6 +54,7 @@ struct AppSettings: Codable {
     var fusionBackendURL: String
     var openclawVoice: String
     var doubaoVoiceID: String
+    var edgeVoiceID: String
     var wechatBridgeURL: String
     /// STT 识别语言（复用旧 whisperLanguage 字段名，兼容旧数据）
     var whisperLanguage: String
@@ -66,6 +68,10 @@ struct AppSettings: Codable {
     var followMuteSwitch: Bool
     var hapticsEnabled: Bool
     var appearance: Appearance
+    /// 语音唤醒开关（SIRI 式，仅前台监听）
+    var voiceWakeEnabled: Bool
+    /// 唤醒词
+    var voiceWakeWord: String
 
     static let defaults = AppSettings(
         gatewayURL: "",
@@ -74,6 +80,7 @@ struct AppSettings: Codable {
         fusionBackendURL: "http://127.0.0.1:18890",
         openclawVoice: "BV700_streaming",
         doubaoVoiceID: "zh_female_jitangmei_uranus_bigtts",
+        edgeVoiceID: "zh-CN-XiaoxiaoNeural",
         wechatBridgeURL: "",
         whisperLanguage: "zh",
         voiceOutputEnabled: true,
@@ -84,7 +91,9 @@ struct AppSettings: Codable {
         webSocketPath: "/ws",
         followMuteSwitch: true,
         hapticsEnabled: true,
-        appearance: .dark
+        appearance: .dark,
+        voiceWakeEnabled: false,
+        voiceWakeWord: "你好小爪"
     )
 
     /// Build the full WebSocket URL from the gateway URL + port/path override.
@@ -119,6 +128,7 @@ struct AppSettings: Codable {
         fusionBackendURL: String = "http://127.0.0.1:18890",
         openclawVoice: String = "BV700_streaming",
         doubaoVoiceID: String = "zh_female_jitangmei_uranus_bigtts",
+        edgeVoiceID: String = "zh-CN-XiaoxiaoNeural",
         wechatBridgeURL: String = "",
         whisperLanguage: String = "zh",
         voiceOutputEnabled: Bool,
@@ -129,7 +139,9 @@ struct AppSettings: Codable {
         webSocketPath: String = "/ws",
         followMuteSwitch: Bool = true,
         hapticsEnabled: Bool = true,
-        appearance: Appearance = .dark
+        appearance: Appearance = .dark,
+        voiceWakeEnabled: Bool = false,
+        voiceWakeWord: String = "你好小爪"
     ) {
         self.gatewayURL = gatewayURL
         self.ttsProvider = ttsProvider
@@ -137,6 +149,7 @@ struct AppSettings: Codable {
         self.fusionBackendURL = fusionBackendURL
         self.openclawVoice = openclawVoice
         self.doubaoVoiceID = doubaoVoiceID
+        self.edgeVoiceID = edgeVoiceID
         self.wechatBridgeURL = wechatBridgeURL
         self.whisperLanguage = whisperLanguage
         self.voiceOutputEnabled = voiceOutputEnabled
@@ -148,6 +161,8 @@ struct AppSettings: Codable {
         self.followMuteSwitch = followMuteSwitch
         self.hapticsEnabled = hapticsEnabled
         self.appearance = appearance
+        self.voiceWakeEnabled = voiceWakeEnabled
+        self.voiceWakeWord = voiceWakeWord
     }
 
     init(from decoder: Decoder) throws {
@@ -158,6 +173,7 @@ struct AppSettings: Codable {
         fusionBackendURL = try container.decodeIfPresent(String.self, forKey: .fusionBackendURL) ?? "http://127.0.0.1:18890"
         openclawVoice = try container.decodeIfPresent(String.self, forKey: .openclawVoice) ?? "BV700_streaming"
         doubaoVoiceID = try container.decodeIfPresent(String.self, forKey: .doubaoVoiceID) ?? "zh_female_jitangmei_uranus_bigtts"
+        edgeVoiceID = try container.decodeIfPresent(String.self, forKey: .edgeVoiceID) ?? "zh-CN-XiaoxiaoNeural"
         wechatBridgeURL = try container.decodeIfPresent(String.self, forKey: .wechatBridgeURL) ?? ""
         whisperLanguage = try container.decodeIfPresent(String.self, forKey: .whisperLanguage) ?? "zh"
         voiceOutputEnabled = try container.decode(Bool.self, forKey: .voiceOutputEnabled)
@@ -168,6 +184,8 @@ struct AppSettings: Codable {
         followMuteSwitch = try container.decodeIfPresent(Bool.self, forKey: .followMuteSwitch) ?? true
         hapticsEnabled = try container.decodeIfPresent(Bool.self, forKey: .hapticsEnabled) ?? true
         appearance = try container.decodeIfPresent(Appearance.self, forKey: .appearance) ?? .dark
+        voiceWakeEnabled = try container.decodeIfPresent(Bool.self, forKey: .voiceWakeEnabled) ?? false
+        voiceWakeWord = try container.decodeIfPresent(String.self, forKey: .voiceWakeWord) ?? "你好小爪"
 
         // Migrate legacy webSocketPort -> webSocketPath
         if let legacyPort = try container.decodeIfPresent(Int.self, forKey: .webSocketPort) {
@@ -178,12 +196,14 @@ struct AppSettings: Codable {
     }
 
     enum CodingKeys: String, CodingKey {
-        case gatewayURL, ttsProvider, sttProvider, fusionBackendURL, openclawVoice, doubaoVoiceID
+        case gatewayURL, ttsProvider, sttProvider, fusionBackendURL, openclawVoice, doubaoVoiceID, edgeVoiceID
         case wechatBridgeURL, whisperLanguage, voiceOutputEnabled, voiceInputEnabled
         case agentAPIMode, showTokenUsage, useWebSocket
         case webSocketPath, webSocketPort, followMuteSwitch // webSocketPort for legacy decode only
         case hapticsEnabled
         case appearance
+        case voiceWakeEnabled
+        case voiceWakeWord
     }
 
     func encode(to encoder: Encoder) throws {
@@ -194,6 +214,7 @@ struct AppSettings: Codable {
         try container.encode(fusionBackendURL, forKey: .fusionBackendURL)
         try container.encode(openclawVoice, forKey: .openclawVoice)
         try container.encode(doubaoVoiceID, forKey: .doubaoVoiceID)
+        try container.encode(edgeVoiceID, forKey: .edgeVoiceID)
         try container.encode(wechatBridgeURL, forKey: .wechatBridgeURL)
         try container.encode(whisperLanguage, forKey: .whisperLanguage)
         try container.encode(voiceOutputEnabled, forKey: .voiceOutputEnabled)
@@ -205,6 +226,8 @@ struct AppSettings: Codable {
         try container.encode(followMuteSwitch, forKey: .followMuteSwitch)
         try container.encode(hapticsEnabled, forKey: .hapticsEnabled)
         try container.encode(appearance, forKey: .appearance)
+        try container.encode(voiceWakeEnabled, forKey: .voiceWakeEnabled)
+        try container.encode(voiceWakeWord, forKey: .voiceWakeWord)
         // webSocketPort intentionally not encoded - legacy only
     }
 }

@@ -56,6 +56,7 @@
 		8369DB413B8A2F96202C4139 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 93351CE74CDF45BFDC168696 /* SettingsView.swift */; };
 		89A1CA25A7C26BC8C5507F9D /* SSEParsingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6CCF5B7DC9F53344C5AE17A6 /* SSEParsingTests.swift */; };
 		8B6DC6F09763C56D942923B1 /* ClawTalkApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B8302C9A6FF1BD165647F6D /* ClawTalkApp.swift */; };
+		CA7E0B12C5D2A3B4E6F7A8B2 /* ClawTalkLiveActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA7E0B12C5D2A3B4E6F7A8B1 /* ClawTalkLiveActivity.swift */; };
 		8CA34931739D521E70A3B9F7 /* EditChannelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EEFC5E6AD2EE4AEAACCE593 /* EditChannelView.swift */; };
 		8D31ADF080E14C0112A49B2C /* ElevenLabsTTSService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2977CD89D9D732C9D10F4508 /* ElevenLabsTTSService.swift */; };
 		8D6A137705D074E969B48DEC /* GatewayProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5444705216F2C3860E1730AE /* GatewayProtocol.swift */; };
@@ -151,6 +152,7 @@
 		6CCF5B7DC9F53344C5AE17A6 /* SSEParsingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SSEParsingTests.swift; sourceTree = "<group>"; };
 		6DFC5EC252EFD110D7388382 /* DeviceAuthStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceAuthStore.swift; sourceTree = "<group>"; };
 		707C4ACFCC95769AFCD1425E /* AudioCaptureManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioCaptureManager.swift; sourceTree = "<group>"; };
+		CA7E0B12C5D2A3B4E6F7A8B1 /* ClawTalkLiveActivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClawTalkLiveActivity.swift; sourceTree = "<group>"; };
 		710E7053E9D61C00E2D11E7D /* TranscriptCleanupTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptCleanupTests.swift; sourceTree = "<group>"; };
 		72D9A2ED0DD13046136A0DAD /* AppSettingsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettingsTests.swift; sourceTree = "<group>"; };
 		75AC426B96A923B5288634C3 /* ClawTalk.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = ClawTalk.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -473,6 +475,7 @@
 			children = (
 				707C4ACFCC95769AFCD1425E /* AudioCaptureManager.swift */,
 				918C147F5BBE98DB4A20961B /* AudioPlaybackManager.swift */,
+				CA7E0B12C5D2A3B4E6F7A8B1 /* ClawTalkLiveActivity.swift */,
 			);
 			path = Audio;
 			sourceTree = "<group>";
@@ -662,6 +665,7 @@
 				FA6CBC95F85BDD29F14CD578 /* ChannelStore.swift in Sources */,
 				08B456E921014E10632BA9C9 /* ChatView.swift in Sources */,
 				E737CEE30F62162070E03A2B /* ChatViewModel.swift in Sources */,
+				CA7E0B12C5D2A3B4E6F7A8B2 /* ClawTalkLiveActivity.swift in Sources */,
 				8B6DC6F09763C56D942923B1 /* ClawTalkApp.swift in Sources */,
 				296AAEEDF4EAD518F8BFF967 /* ContactsCapability.swift in Sources */,
 				A1B2B47EDD8B7C049AE4028B /* ConversationStore.swift in Sources */,
