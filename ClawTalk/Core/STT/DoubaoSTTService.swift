@@ -25,7 +25,7 @@ final class DoubaoSTTService: TranscriptionService {
         init(task: URLSessionWebSocketTask) { self.task = task }
         func feed(pcm: Data) async throws {
             var frame = Data([0x11, 0x21, 0x10, 0x00])
-            let v = seq.bigEndian
+            var v = seq.bigEndian
             frame.append(Data(bytes: &v, count: 4))
             var len = UInt32(pcm.count).bigEndian
             frame.append(Data(bytes: &len, count: 4))
@@ -35,7 +35,7 @@ final class DoubaoSTTService: TranscriptionService {
         }
         func finish() async throws {
             var frame = Data([0x11, 0x23, 0x10, 0x00])
-            let v = (-seq).bigEndian
+            var v = (-seq).bigEndian
             frame.append(Data(bytes: &v, count: 4))
             var len = UInt32(0).bigEndian
             frame.append(Data(bytes: &len, count: 4))
@@ -81,7 +81,7 @@ final class DoubaoSTTService: TranscriptionService {
         try await task.send(.data(frame))
 
         // 接收结果
-        let cont = self.streamResultContinuation
+        let resultCont = self.streamResultContinuation
         Task {
             var finalText = ""
             while true {
@@ -101,8 +101,8 @@ final class DoubaoSTTService: TranscriptionService {
                     finalText = text
                 }
                 if parsed.isFinal {
-                    cont?.yield(finalText)
-                    cont?.finish()
+                    resultCont?.yield(finalText)
+                    resultCont?.finish()
                     return
                 }
             }
