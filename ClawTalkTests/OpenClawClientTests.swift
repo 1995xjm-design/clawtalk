@@ -1,4 +1,6 @@
 import Testing
+import Foundation
+import Foundation
 @testable import ClawTalk
 
 @Suite("OpenClaw Client")
