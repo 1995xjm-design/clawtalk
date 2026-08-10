@@ -15,7 +15,7 @@ struct CanvasView: View {
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .topBarLeading) {
-                        Button("Close") { dismiss() }
+                        Button("关闭") { dismiss() }
                     }
                     ToolbarItem(placement: .topBarTrailing) {
                         if let url = canvas.currentURL {

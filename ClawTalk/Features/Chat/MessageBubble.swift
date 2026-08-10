@@ -35,13 +35,13 @@ struct MessageBubble: View {
                             .font(.caption)
                             .foregroundStyle(.red)
 
-                        Text("Failed to send")
+                        Text("发送失败")
                             .font(.caption2)
                             .foregroundStyle(.red)
 
                         if let onRetry {
                             Button(action: onRetry) {
-                                Text("Retry")
+                                Text("重试")
                                     .font(.caption2)
                                     .fontWeight(.semibold)
                                     .foregroundStyle(.openClawRed)
@@ -61,7 +61,7 @@ struct MessageBubble: View {
                         }
 
                         if !isUser, showTokenUsage, let usage = message.tokenUsage {
-                            Text("· \(usage.inputTokens)→\(usage.outputTokens) tokens")
+                            Text("· \(usage.inputTokens)→\(usage.outputTokens) 令牌")
                                 .font(.caption2)
                                 .foregroundStyle(.tertiary)
                         }
@@ -77,13 +77,13 @@ struct MessageBubble: View {
             Button(action: {
                 UIPasteboard.general.string = message.content
             }) {
-                Label("Copy", systemImage: "doc.on.doc")
+                Label("复制", systemImage: "doc.on.doc")
             }
 
             if let onDelete {
                 Divider()
                 Button(role: .destructive, action: onDelete) {
-                    Label("Delete", systemImage: "trash")
+                    Label("删除", systemImage: "trash")
                 }
             }
         }

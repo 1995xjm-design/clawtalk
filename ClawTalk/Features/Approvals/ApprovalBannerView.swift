@@ -17,12 +17,12 @@ struct ApprovalBannerView: View {
                     .font(.title3)
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Exec Approval Required")
+                    Text("需要执行审批")
                         .font(.subheadline)
                         .fontWeight(.semibold)
 
                     if let agent = approval.agentId {
-                        Text("Agent: \(agent)")
+                        Text("智能体：\(agent)")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -81,7 +81,7 @@ struct ApprovalBannerView: View {
             // Action buttons
             HStack(spacing: 12) {
                 Button(action: { onResolve(approval.id, "deny") }) {
-                    Label("Deny", systemImage: "xmark")
+                    Label("拒绝", systemImage: "xmark")
                         .font(.subheadline)
                         .fontWeight(.medium)
                         .frame(maxWidth: .infinity)
@@ -91,7 +91,7 @@ struct ApprovalBannerView: View {
                 .tint(.red)
 
                 Button(action: { onResolve(approval.id, "allow-once") }) {
-                    Label("Allow Once", systemImage: "checkmark")
+                    Label("允许一次", systemImage: "checkmark")
                         .font(.subheadline)
                         .fontWeight(.medium)
                         .frame(maxWidth: .infinity)
@@ -101,7 +101,7 @@ struct ApprovalBannerView: View {
                 .tint(.green)
 
                 Button(action: { onResolve(approval.id, "allow-always") }) {
-                    Label("Always", systemImage: "checkmark.seal.fill")
+                    Label("始终允许", systemImage: "checkmark.seal.fill")
                         .font(.subheadline)
                         .fontWeight(.medium)
                         .padding(.vertical, 8)

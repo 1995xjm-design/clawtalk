@@ -46,10 +46,10 @@ struct ChannelListView: View {
                     .buttonStyle(.plain)
                     .contextMenu {
                         Button(action: { editingChannel = channel }) {
-                            Label("Edit Channel", systemImage: "pencil")
+                            Label("编辑频道", systemImage: "pencil")
                         }
                         Button(role: .destructive, action: { channelStore.delete(channel) }) {
-                            Label("Delete Channel", systemImage: "trash")
+                            Label("删除频道", systemImage: "trash")
                         }
                     }
                 }
@@ -69,7 +69,7 @@ struct ChannelListView: View {
                             Image(systemName: "plus")
                                 .font(.body)
                                 .fontWeight(.semibold)
-                            Text("New Channel")
+                            Text("新建频道")
                                 .font(.body)
                                 .fontWeight(.semibold)
                             Spacer()
@@ -91,7 +91,7 @@ struct ChannelListView: View {
                             .scaledToFit()
                             .frame(width: 80, height: 80)
                             .opacity(0.6)
-                        Text("No channels yet")
+                        Text("还没有频道")
                             .font(.headline)
                             .foregroundStyle(.secondary)
                     }

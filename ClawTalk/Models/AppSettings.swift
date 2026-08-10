@@ -62,6 +62,8 @@ struct AppSettings: Codable {
     var showTokenUsage: Bool
     var useWebSocket: Bool
     var webSocketPath: String
+    /// 朗读是否跟随 iOS 物理静音键（默认开启）
+    var followMuteSwitch: Bool
     var hapticsEnabled: Bool
     var appearance: Appearance
 
@@ -80,6 +82,7 @@ struct AppSettings: Codable {
         showTokenUsage: false,
         useWebSocket: false,
         webSocketPath: "/ws",
+        followMuteSwitch: true,
         hapticsEnabled: true,
         appearance: .dark
     )
@@ -124,6 +127,7 @@ struct AppSettings: Codable {
         showTokenUsage: Bool = false,
         useWebSocket: Bool = false,
         webSocketPath: String = "/ws",
+        followMuteSwitch: Bool = true,
         hapticsEnabled: Bool = true,
         appearance: Appearance = .dark
     ) {
@@ -141,6 +145,7 @@ struct AppSettings: Codable {
         self.showTokenUsage = showTokenUsage
         self.useWebSocket = useWebSocket
         self.webSocketPath = webSocketPath
+        self.followMuteSwitch = followMuteSwitch
         self.hapticsEnabled = hapticsEnabled
         self.appearance = appearance
     }
@@ -168,6 +173,7 @@ struct AppSettings: Codable {
             webSocketPath = ":\(legacyPort)"
         } else {
             webSocketPath = try container.decodeIfPresent(String.self, forKey: .webSocketPath) ?? "/ws"
+        followMuteSwitch = try container.decodeIfPresent(Bool.self, forKey: .followMuteSwitch) ?? true
         }
     }
 
@@ -175,7 +181,7 @@ struct AppSettings: Codable {
         case gatewayURL, ttsProvider, sttProvider, fusionBackendURL, openclawVoice, doubaoVoiceID
         case wechatBridgeURL, whisperLanguage, voiceOutputEnabled, voiceInputEnabled
         case agentAPIMode, showTokenUsage, useWebSocket
-        case webSocketPath, webSocketPort // webSocketPort for legacy decode only
+        case webSocketPath, webSocketPort, followMuteSwitch // webSocketPort for legacy decode only
         case hapticsEnabled
         case appearance
     }
@@ -196,6 +202,7 @@ struct AppSettings: Codable {
         try container.encode(showTokenUsage, forKey: .showTokenUsage)
         try container.encode(useWebSocket, forKey: .useWebSocket)
         try container.encode(webSocketPath, forKey: .webSocketPath)
+        try container.encode(followMuteSwitch, forKey: .followMuteSwitch)
         try container.encode(hapticsEnabled, forKey: .hapticsEnabled)
         try container.encode(appearance, forKey: .appearance)
         // webSocketPort intentionally not encoded - legacy only

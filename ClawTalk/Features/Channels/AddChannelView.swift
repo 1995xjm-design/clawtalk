@@ -18,9 +18,9 @@ struct AddChannelView: View {
         NavigationStack {
             Form {
                 Section {
-                    TextField("Channel Name", text: $name)
+                    TextField("频道名称", text: $name)
                 } header: {
-                    Text("Name")
+                    Text("名称")
                 }
 
                 if !agents.isEmpty {
@@ -50,7 +50,7 @@ struct AddChannelView: View {
                             }
                         }
                     } header: {
-                        Text("Agent")
+                        Text("智能体")
                     }
                 }
 
@@ -59,13 +59,13 @@ struct AddChannelView: View {
                         HStack {
                             ProgressView()
                                 .scaleEffect(0.8)
-                            Text("Loading agents…")
+                            Text("正在加载智能体…")
                                 .font(.subheadline)
                                 .foregroundStyle(.secondary)
                         }
                     }
 
-                    TextField("Agent ID", text: $customAgentId)
+                    TextField("智能体 ID", text: $customAgentId)
                         .autocorrectionDisabled()
                         .textInputAutocapitalization(.never)
                         .onChange(of: customAgentId) {
@@ -80,19 +80,19 @@ struct AddChannelView: View {
                             .foregroundStyle(.red)
                     }
                 } header: {
-                    Text(agents.isEmpty ? "Agent" : "Or enter manually")
+                    Text(agents.isEmpty ? "智能体" : "或手动输入")
                 } footer: {
-                    Text("Enter an agent ID not shown above, or use \"main\" for the default agent.")
+                    Text("输入上方未显示的智能体 ID，或使用 \"main\" 作为默认智能体。")
                 }
             }
-            .navigationTitle("New Channel")
+            .navigationTitle("新建频道")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
+                    Button("取消") { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Add") {
+                    Button("添加") {
                         let channel = Channel(
                             name: name.trimmingCharacters(in: .whitespacesAndNewlines),
                             agentId: agentId.trimmingCharacters(in: .whitespacesAndNewlines)

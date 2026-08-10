@@ -50,7 +50,7 @@ struct OnboardingView: View {
                 .scaledToFit()
                 .frame(width: 160, height: 160)
 
-            Text("Welcome to ClawTalk")
+            Text("欢迎使用 ClawTalk")
                 .font(.title)
                 .fontWeight(.bold)
 

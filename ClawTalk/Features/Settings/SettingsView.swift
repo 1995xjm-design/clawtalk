@@ -50,11 +50,11 @@ struct SettingsView: View {
             } message: {
                 Text("请选择重置范围：")
             }
-            .navigationTitle("Settings")
+            .navigationTitle("设置")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Done") {
+                    Button("完成") {
                             store.save()
                             dismiss()
                         }
@@ -94,15 +94,15 @@ struct SettingsView: View {
 
 private var connectionSection: some View {
         Section {
-            TextField("Gateway URL", text: $store.settings.gatewayURL)
+            TextField("网关地址", text: $store.settings.gatewayURL)
                 .keyboardType(.URL)
                 .autocorrectionDisabled()
                 .textInputAutocapitalization(.never)
 
-            SecureField("Gateway Token", text: $store.gatewayToken)
+            SecureField("网关令牌", text: $store.gatewayToken)
                 .textContentType(.password)
 
-            Picker("API Mode", selection: $store.settings.agentAPIMode) {
+            Picker("接口方式", selection: $store.settings.agentAPIMode) {
                 ForEach(AgentAPIMode.allCases) { mode in
                     Text(mode.rawValue).tag(mode)
                 }
@@ -221,7 +221,7 @@ private var connectionSection: some View {
                 // HTTP connection test
                 Button(action: { testConnection() }) {
                     HStack {
-                        Text("Test Connection")
+                        Text("测试连接")
                         Spacer()
                         switch connectionTestState {
                         case .idle:
@@ -247,14 +247,14 @@ private var connectionSection: some View {
                 }
             }
         } header: {
-            Text("OpenClaw Gateway")
+            Text("OpenClaw 网关")
         } footer: {
             if store.settings.useWebSocket {
                 Text("WebSocket enables real-time streaming. Enter a path (e.g. /ws) for tunneled gateways or a port (e.g. 18789) for local connections.")
             } else {
                 switch store.settings.agentAPIMode {
                 case .chatCompletions:
-                    Text("Standard Chat Completions API. Works with all gateways.")
+                    Text("标准聊天接口，兼容所有网关。")
                 case .openResponses:
                     Text("Open Responses API provides token usage data. Requires gateway support (endpoints.responses.enabled).")
                 }
@@ -266,16 +266,16 @@ private var connectionSection: some View {
 
     private var displaySection: some View {
         Section {
-            Picker("Appearance", selection: $store.settings.appearance) {
-                Text("Dark").tag(Appearance.dark)
-                Text("Light").tag(Appearance.light)
+            Picker("外观", selection: $store.settings.appearance) {
+                Text("深色").tag(Appearance.dark)
+                Text("浅色").tag(Appearance.light)
             }
             .pickerStyle(.segmented)
 
             Toggle("Show Token Usage", isOn: $store.settings.showTokenUsage)
                 .disabled(store.settings.useWebSocket)
         } header: {
-            Text("Display")
+            Text("显示")
         } footer: {
             if store.settings.useWebSocket {
                 Text("Token usage is not available in WebSocket mode. Disable WebSocket to see token counts.")
@@ -289,13 +289,14 @@ private var connectionSection: some View {
 
     private var voiceSection: some View {
         Section {
-            Toggle("Voice Input (STT)", isOn: $store.settings.voiceInputEnabled)
-            Toggle("Voice Output (TTS)", isOn: $store.settings.voiceOutputEnabled)
-            Toggle("Haptic Feedback", isOn: $store.settings.hapticsEnabled)
+            Toggle("语音输入（语音转文字）", isOn: $store.settings.voiceInputEnabled)
+            Toggle("语音输出（文字转语音）", isOn: $store.settings.voiceOutputEnabled)
+            Toggle("跟随静音键", isOn: $store.settings.followMuteSwitch)
+            Toggle("触感反馈", isOn: $store.settings.hapticsEnabled)
         } header: {
-            Text("Voice")
+            Text("语音")
         } footer: {
-            Text("Disable voice for text-only chat. Voice input uses on-device transcription. Haptics provide tactile feedback on the talk button and message events.")
+            Text("关闭语音输出可纯文字聊天；语音输入使用设备端识别；开启「跟随静音键」后，iPhone 物理静音键开启时朗读自动静音。")
         }
     }
 
@@ -303,7 +304,7 @@ private var connectionSection: some View {
 
     private var ttsSection: some View {
         Section {
-            Picker("Provider", selection: $store.settings.ttsProvider) {
+            Picker("提供商", selection: $store.settings.ttsProvider) {
                 ForEach(TTSProvider.allCases) { provider in
                     Text(provider.rawValue).tag(provider)
                 }
@@ -331,11 +332,11 @@ private var connectionSection: some View {
                 voicePreviewButton
             }
         } header: {
-            Text("Text-to-Speech")
+            Text("文字转语音")
         } footer: {
             switch store.settings.ttsProvider {
             case .apple:
-                Text("Apple's built-in voice. Free and works offline, but less natural.")
+                Text("使用苹果系统内置语音，免费且支持离线，但自然度一般。")
             case .doubao:
                 Text("豆包语音合成大模型（seed-tts-2.0），流式直连，音质自然。")
             }
@@ -345,7 +346,7 @@ private var connectionSection: some View {
 
     private var sttSection: some View {
         Section {
-            Picker("Provider", selection: $store.settings.sttProvider) {
+            Picker("提供商", selection: $store.settings.sttProvider) {
                 ForEach(STTProvider.allCases) { provider in
                     Text(provider.rawValue).tag(provider)
                 }
@@ -368,14 +369,14 @@ private var connectionSection: some View {
                     .foregroundStyle(.secondary)
             }
         } header: {
-            Text("Speech-to-Text")
+            Text("语音转文字")
         } footer: {
             if !store.settings.voiceInputEnabled {
-                Text("Voice Input is off — turn it on above to use speech-to-text.")
+                Text("语音输入已关闭，请在上方开启以使用语音转文字。")
             } else {
                 switch store.settings.sttProvider {
                 case .apple:
-                    Text("Uses iOS system recognition - on-device and offline, no model download.")
+                    Text("使用 iOS 系统识别，设备端离线运行，无需下载模型。")
                 case .doubao:
                     Text("音频发送到豆包语音识别服务（网络识别，支持方言）。")
                 }
@@ -624,7 +625,7 @@ private var connectionSection: some View {
             LabeledContent("Transport", value: store.settings.useWebSocket ? "WSS + HTTPS" : "HTTPS Only")
             LabeledContent("STT Processing", value: "On-Device")
         } header: {
-            Text("Security")
+            Text("安全")
         } footer: {
             Text("API keys and tokens are stored in the iOS Keychain, encrypted at rest. Voice is transcribed on-device — audio never leaves your phone. Agent communication uses HTTPS.")
         }

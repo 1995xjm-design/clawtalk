@@ -54,10 +54,10 @@ struct ChatView: View {
             Image(systemName: "bubble.left.and.bubble.right.fill")
                 .foregroundStyle(.openClawRed)
             VStack(alignment: .leading, spacing: 2) {
-                Text("Hands-free conversation")
+                Text("免提对话")
                     .font(.subheadline)
                     .fontWeight(.semibold)
-                Text("Tap the icon again to stop.")
+                Text("再次点按图标可停止。")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -92,7 +92,7 @@ struct ChatView: View {
                     HStack(spacing: 4) {
                         Image(systemName: "chevron.left")
                             .font(.title3)
-                        Text("Channels")
+                        Text("频道")
                             .font(.body)
                     }
                     .foregroundStyle(.openClawRed)
@@ -142,20 +142,20 @@ struct ChatView: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
         .alert("Clear chat history?", isPresented: $showClearConfirm) {
-            Button("Clear Chat", role: .destructive) {
+            Button("清空聊天", role: .destructive) {
                 viewModel.clearHistory()
             }
-            Button("Cancel", role: .cancel) {}
+            Button("取消", role: .cancel) {}
         } message: {
-            Text("This will delete all messages in this channel. This cannot be undone.")
+            Text("将删除此频道中的所有消息，此操作无法撤销。")
         }
         .alert("Delete this channel?", isPresented: $showDeleteConfirm) {
-            Button("Delete", role: .destructive) {
+            Button("删除", role: .destructive) {
                 onDeleteChannel?()
             }
-            Button("Cancel", role: .cancel) {}
+            Button("取消", role: .cancel) {}
         } message: {
-            Text("This will delete the channel and all its messages. This cannot be undone.")
+            Text("将删除该频道及其所有消息，此操作无法撤销。")
         }
     }
 
@@ -327,7 +327,7 @@ struct ChatView: View {
             HStack(spacing: 10) {
                 attachmentsMenu
 
-                TextField("Message…", text: $textInput, axis: .vertical)
+                TextField("消息…", text: $textInput, axis: .vertical)
                     .textFieldStyle(.plain)
                     .lineLimit(1...5)
                     .focused($isInputFocused)
@@ -347,25 +347,6 @@ struct ChatView: View {
                     // attachments, so users can dictate a message to send
                     // alongside their photos. Hidden entirely if the user has
                     // turned voice input off in Settings.
-                    // 朗读开关：静音 / 恢复朗读（普通聊天快捷控制）
-                    Button {
-                        if settingsStore.settings.hapticsEnabled {
-                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                        }
-                        let wasOn = settingsStore.settings.voiceOutputEnabled
-                        settingsStore.settings.voiceOutputEnabled = !wasOn
-                        settingsStore.save()
-                        if wasOn {
-                            viewModel.stopSpeaking()
-                        }
-                    } label: {
-                        Image(systemName: settingsStore.settings.voiceOutputEnabled ? "speaker.wave.2.fill" : "speaker.slash.fill")
-                            .font(.title3)
-                            .foregroundStyle(settingsStore.settings.voiceOutputEnabled ? Color.openClawRed : Color.secondary)
-                            .frame(width: 36, height: 36)
-                    }
-                    .help(settingsStore.settings.voiceOutputEnabled ? "朗读已开启，点击静音" : "朗读已静音，点击开启")
-
                     if !hasText && settingsStore.settings.voiceInputEnabled {
                         InlineMicButton(
                             state: viewModel.state,
@@ -429,26 +410,26 @@ struct ChatView: View {
                 Circle()
                     .fill(.red)
                     .frame(width: 8, height: 8)
-                Text("Listening...")
+                Text("正在聆听…")
             case .transcribing:
                 ProgressView()
                     .scaleEffect(0.8)
-                Text("Transcribing...")
+                Text("正在转写…")
             case .thinking:
                 ProgressView()
                     .scaleEffect(0.8)
-                Text("Thinking...")
+                Text("正在思考…")
             case .streaming:
                 Circle()
                     .fill(.openClawRed)
                     .frame(width: 8, height: 8)
                     .modifier(PulsingModifier())
-                Text("Responding...")
+                Text("正在回复…")
             case .speaking:
                 Image(systemName: "speaker.wave.2.fill")
                     .foregroundStyle(.openClawRed)
                     .symbolEffect(.variableColor.iterative)
-                Text("Speaking...")
+                Text("正在朗读…")
                 Button(action: { viewModel.stopSpeaking() }) {
                     Image(systemName: "xmark.circle.fill")
                         .foregroundStyle(.secondary)
@@ -483,7 +464,7 @@ struct ChatView: View {
                 .fontWeight(.semibold)
                 .foregroundStyle(.primary)
 
-            Text("Type a message, or tap the\nmic to use voice input.")
+            Text("输入消息，或点按麦克风使用语音输入。")
                 .font(.subheadline)
                 .foregroundStyle(.tertiary)
                 .multilineTextAlignment(.center)
@@ -497,7 +478,7 @@ struct ChatView: View {
             Button {
                 showPhotosPicker = true
             } label: {
-                Label("Photos", systemImage: "photo.on.rectangle")
+                Label("照片", systemImage: "photo.on.rectangle")
             }
             // Future attachment types (files, camera, etc.) hang here.
         } label: {
