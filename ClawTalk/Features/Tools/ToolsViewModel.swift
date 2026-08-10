@@ -223,7 +223,7 @@ final class ToolsViewModel {
         do {
             let data = try await client.invokeTool(
                 tool: "sessions_history",
-                args: ["sessionKey": .string(key), "limit": .int(1)],
+                args: ["sessionKey": .string(key), "limit": .int(20)],
                 gatewayURL: gatewayURL,
                 token: token
             )
