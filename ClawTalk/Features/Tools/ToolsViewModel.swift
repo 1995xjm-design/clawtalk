@@ -36,7 +36,9 @@ final class ToolsViewModel {
 
     // Common
     var isLoading = false
-    var errorMessage: String?
+    var errorMessage: String? {
+        didSet { if let errorMessage { LogCollector.record(module: "工具", errorMessage) } }
+    }
 
     private let client = OpenClawClient()
     private let settings: SettingsStore

@@ -16,7 +16,9 @@ enum ChatState: Equatable {
 final class ChatViewModel {
     var messages: [Message] = []
     var state: ChatState = .idle
-    var errorMessage: String?
+    var errorMessage: String? {
+        didSet { if let errorMessage { LogCollector.record(module: "聊天", errorMessage) } }
+    }
     var isConversationMode = false
     var channel: Channel
     private let openClaw = OpenClawClient()

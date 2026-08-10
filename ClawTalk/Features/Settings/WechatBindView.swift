@@ -280,7 +280,8 @@ struct WechatBindView: View {
         qrImage = nil
 
         guard !gatewayURL.isEmpty else {
-            state = .failed("未配置网关地址，请先在设置中填写网关地址和令牌。")
+            LogCollector.record(module: "微信", "连接失败")
+                    state = .failed("未配置网关地址，请先在设置中填写网关地址和令牌。")
             return
         }
 
@@ -294,6 +295,7 @@ struct WechatBindView: View {
                     token: gatewayToken
                 )
                 guard let link = Self.extractLoginLink(from: reply) else {
+                    LogCollector.record(module: "微信", "连接失败")
                     state = .failed("未从 OpenClaw 回复中提取到二维码链接，请重试。")
                     return
                 }
@@ -302,7 +304,8 @@ struct WechatBindView: View {
                 state = .waiting
                 startPolling()
             } catch {
-                state = .failed("指令执行失败：\(error.localizedDescription)")
+                LogCollector.record(module: "微信", "连接失败")
+                    state = .failed("指令执行失败：\(error.localizedDescription)")
             }
         }
     }

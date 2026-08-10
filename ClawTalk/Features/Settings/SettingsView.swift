@@ -40,6 +40,7 @@ struct SettingsView: View {
                 wechatSection
                 dataSection
                 securitySection
+                diagnosticsSection
                 resetSection
             }
             .confirmationDialog("重置新手引导", isPresented: $showResetConfirm, titleVisibility: .visible) {
@@ -440,6 +441,21 @@ private var connectionSection: some View {
         }
     }
 
+    /// 日志与诊断
+    private var diagnosticsSection: some View {
+        Section {
+            NavigationLink {
+                DiagnosticsView(settings: store)
+            } label: {
+                Label("日志与诊断", systemImage: "doc.text.magnifyingglass")
+            }
+        } header: {
+            Text("诊断")
+        } footer: {
+            Text("查看最近错误日志，并可同步到电脑端 OpenClaw 分析原因。")
+        }
+    }
+
     /// 重置新手引导
     private var resetSection: some View {
         Section {
@@ -503,8 +519,10 @@ private var connectionSection: some View {
                         connectionTestState = .success
                     case 401, 403:
                         connectionTestState = .failed(AppErrorText.httpStatus(http.statusCode))
+                        LogCollector.record(module: "测试连接", AppErrorText.httpStatus(http.statusCode))
                     default:
                         connectionTestState = .failed(AppErrorText.httpStatus(http.statusCode))
+                        LogCollector.record(module: "测试连接", AppErrorText.httpStatus(http.statusCode))
                     }
                 } else {
                     connectionTestState = .failed("Unexpected response")
