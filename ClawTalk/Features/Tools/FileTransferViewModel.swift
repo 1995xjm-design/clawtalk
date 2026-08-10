@@ -360,6 +360,11 @@ final class FileTransferViewModel {
         }
     }
 
+    /// 按文件名查找本地已下载文件（用于聊天卡片标记「已下载」状态）。
+    func localFile(named name: String) -> LocalFile? {
+        downloadedFiles.first { $0.name == name }
+    }
+
     // MARK: - 格式化辅助
 
     static func isImage(ext: String) -> Bool {

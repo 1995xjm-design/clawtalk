@@ -31,7 +31,7 @@ struct ToolsView: View {
                     }
 
                     NavigationLink {
-                        FileTransferView(settings: settings)
+                        FileTransferChannelView(settings: settings, embeddedInNavigation: true)
                     } label: {
                         Label("文件传输助手", systemImage: "paperplane")
                             .foregroundStyle(.openClawRed)

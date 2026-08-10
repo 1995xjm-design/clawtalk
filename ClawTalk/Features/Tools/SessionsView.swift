@@ -24,7 +24,7 @@ struct SessionsView: View {
                 } label: {
                     VStack(alignment: .leading, spacing: 6) {
                         HStack {
-                            Text(viewModel.sessionTitles[session.key] ?? session.displayName ?? session.key)
+                            Text(viewModel.sessionTitles[session.key] ?? "会话 \(session.key.suffix(8))")
                                 .font(.body)
                                 .fontWeight(.medium)
                                 .foregroundStyle(.primary)
@@ -113,7 +113,7 @@ struct SessionsView: View {
     private func addSessionToChannel(_ session: SessionEntry) {
         let agentId = session.key.split(separator: ":").dropFirst().first.map(String.init) ?? "main"
         let title = viewModel.sessionTitles[session.key]
-            ?? session.displayName
+            ?? ToolsViewModel.friendlyTitle(for: session.key)
             ?? "会话 \(session.key.suffix(8))"
         var channel = Channel(name: title, agentId: agentId, systemEmoji: "💬")
         channel.serverSessionKey = session.key
@@ -163,7 +163,7 @@ private struct SessionDetailView: View {
                 HistoryTab(viewModel: viewModel)
             }
         }
-        .navigationTitle(session.displayName ?? session.key)
+        .navigationTitle(viewModel.sessionTitles[session.key] ?? ToolsViewModel.friendlyTitle(for: session.key) ?? "会话 \(session.key.suffix(8))")
         .navigationBarTitleDisplayMode(.inline)
         .task {
             await viewModel.getSessionStatus(sessionKey: session.key)

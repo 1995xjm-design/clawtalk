@@ -72,6 +72,8 @@
 	</array>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>用于保存微信连接二维码图片到相册</string>
+	<key>NSSupportsLiveActivities</key>
+	<true/>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>audio</string>

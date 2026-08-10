@@ -32,6 +32,10 @@ final class ChannelStore {
         }
     }
 
+    func replace(_ channels: [Channel]) {
+        self.channels = channels
+        save()
+    }
     func move(from source: IndexSet, to destination: Int) {
         channels.move(fromOffsets: source, toOffset: destination)
         save()

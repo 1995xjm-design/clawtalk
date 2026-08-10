@@ -8,6 +8,7 @@ struct ClawTalkApp: App {
     @State private var settingsStore: SettingsStore
     @State private var channelStore: ChannelStore
     @State private var selectedChannel: Channel?
+    @State private var showFileTransferChannel = false
     @State private var chatViewModel: ChatViewModel?
     @State private var gatewayConnection = GatewayConnection()
     @State private var nodeConnection = NodeConnection()
@@ -35,6 +36,7 @@ struct ClawTalkApp: App {
                             channelStore: channelStore,
                             settingsStore: settingsStore,
                             gatewayConnection: gatewayConnection,
+                            onSelectFileTransfer: { showFileTransferChannel = true },
                             onSelect: { channel in
                                 selectChannel(channel)
                             }
@@ -51,6 +53,14 @@ struct ClawTalkApp: App {
                                         startVoiceWakeIfNeeded()
                                     }
                                 }
+                        }
+
+                        if showFileTransferChannel {
+                            FileTransferChannelView(
+                                settings: settingsStore,
+                                onBack: { showFileTransferChannel = false }
+                            )
+                            .zIndex(1)
                         }
                     }
                 }
@@ -121,8 +131,8 @@ struct ClawTalkApp: App {
             }
             .onChange(of: scenePhase) { _, newPhase in
                 if newPhase == .background || newPhase == .inactive {
+                    // 仅保存状态，不再停唤醒：退后台后继续监听唤醒词（UIBackgroundModes=audio 已开启）
                     chatViewModel?.saveCurrentState()
-                    stopVoiceWake()
                 } else if newPhase == .active {
                     startVoiceWakeIfNeeded()
                 }
@@ -140,7 +150,7 @@ struct ClawTalkApp: App {
         }
     }
 
-    private func selectChannel(_ channel: Channel) {
+    private func selectChannel(_ channel: Channel, restartVoiceWake: Bool = true) {
         let vm = ChatViewModel(
             settings: settingsStore,
             channel: channel,
@@ -182,7 +192,9 @@ struct ClawTalkApp: App {
                 vm.loadServerHistory()
             }
         }
-        startVoiceWakeIfNeeded()
+        if restartVoiceWake {
+            startVoiceWakeIfNeeded()
+        }
     }
 
     private func goBack() {
@@ -205,34 +217,44 @@ struct ClawTalkApp: App {
 
     // MARK: - 语音唤醒（SIRI 式）
 
-    /// 前台 + 聊天页 + 已开启 + 未处于对话模式时启动唤醒词监听。
+    /// 已开启语音唤醒且未处于免提对话时启动唤醒词监听（前台/后台均可，退后台持续监听）。
     private func startVoiceWakeIfNeeded() {
         guard settingsStore.settings.voiceWakeEnabled else { return }
         guard settingsStore.settings.voiceInputEnabled else { return }
-        guard let vm = chatViewModel, !vm.isConversationMode else { return }
-        guard scenePhase == .active else { return }
+        if let vm = chatViewModel, vm.isConversationMode { return }
         let word = settingsStore.settings.voiceWakeWord
             .trimmingCharacters(in: .whitespacesAndNewlines)
         guard !word.isEmpty else { return }
         VoiceWakeCapability.shared.autoRestartsAfterDetection = false
         Task {
-            _ = try? await VoiceWakeCapability.shared.setConfig(keywords: [word], enabled: true, locale: "zh-CN")
+            let result = try? await VoiceWakeCapability.shared.setConfig(keywords: [word], enabled: true, locale: "zh-CN")
+            if result?.enabled == true {
+                // 监听期间：锁屏/灵动岛显示「随时唤醒」
+                ClawTalkLiveActivity.startWakeListening()
+            }
         }
     }
 
-    /// 停止唤醒词监听（同步停引擎 + 异步同步配置状态）。
+    /// 停止唤醒词监听（同步停引擎 + 异步同步配置状态），并收起「随时唤醒」锁屏状态。
     private func stopVoiceWake() {
         VoiceWakeCapability.shared.stopListening()
+        ClawTalkLiveActivity.endWakeListening()
         Task {
             _ = try? await VoiceWakeCapability.shared.setConfig(keywords: [], enabled: false, locale: "zh-CN")
         }
     }
 
-    /// 唤醒词命中：停唤醒 -> 进入免提对话 -> 播报「在呢」。
+    /// 唤醒词命中：停唤醒 -> 自动选/建频道（无聊天页时）-> 进入免提对话 -> 播报「在呢」。
     private func handleWakeWordDetected() {
         stopVoiceWake()
+        guard settingsStore.settings.voiceInputEnabled else {
+            startVoiceWakeIfNeeded()
+            return
+        }
+        if chatViewModel == nil {
+            ensureDefaultChannel()
+        }
         guard let vm = chatViewModel,
-              settingsStore.settings.voiceInputEnabled,
               !vm.isConversationMode,
               vm.state == .idle
         else {
@@ -241,6 +263,20 @@ struct ClawTalkApp: App {
         }
         vm.enterConversationMode()
         speakAck()
+    }
+
+    /// 后台命中唤醒词且当前没有打开的聊天页时，自动选中现有第一个频道（没有则创建默认频道），
+    /// 不重启唤醒（免提对话即将接管麦克风）。
+    private func ensureDefaultChannel() {
+        guard chatViewModel == nil else { return }
+        let channel: Channel
+        if let first = channelStore.channels.first {
+            channel = first
+        } else {
+            channel = .default
+            channelStore.add(channel)
+        }
+        selectChannel(channel, restartVoiceWake: false)
     }
 
     /// 播报「在呢」确认（保留 synthesizer 引用，防止提前释放导致不出声）。

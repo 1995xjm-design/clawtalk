@@ -5,16 +5,58 @@ struct ChannelListView: View {
     var settingsStore: SettingsStore
     var gatewayConnection: GatewayConnection
     var onSelect: (Channel) -> Void
+    var onSelectFileTransfer: (() -> Void)?
 
     @State private var showAddChannel = false
     @State private var showSettings = false
     @State private var showTools = false
     @State private var editingChannel: Channel?
 
+    /// 可见频道：隐藏自动创建的「文件传输」聊天频道（文件页由系统频道入口展示，避免重复入口）。
+    private var visibleChannels: [Channel] {
+        channelStore.channels.filter { $0.serverSessionKey != InstructionChannels.fileTransfer }
+    }
+
+    private var hiddenChannels: [Channel] {
+        channelStore.channels.filter { $0.serverSessionKey == InstructionChannels.fileTransfer }
+    }
+
     var body: some View {
         NavigationStack {
             List {
-                ForEach(channelStore.channels) { channel in
+                Section {
+                    Button(action: { onSelectFileTransfer?() }) {
+                        HStack(spacing: 12) {
+                            Text("📁")
+                                .font(.title2)
+                                .frame(width: 40, height: 40)
+                                .background(Color(.systemGray5))
+                                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("文件传输助手")
+                                    .font(.body)
+                                    .fontWeight(.medium)
+                                    .foregroundStyle(.primary)
+                                Text("电脑端文件收发")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+
+                            Spacer()
+
+                            Image(systemName: "chevron.right")
+                                .font(.caption)
+                                .foregroundStyle(.tertiary)
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                } header: {
+                    Text("系统频道")
+                }
+
+                ForEach(visibleChannels) { channel in
                     Button(action: { onSelect(channel) }) {
                         HStack(spacing: 12) {
                             Text(channel.name.prefix(1).uppercased())
@@ -55,11 +97,17 @@ struct ChannelListView: View {
                 }
                 .onDelete { indexSet in
                     for idx in indexSet {
-                        channelStore.delete(channelStore.channels[idx])
+                        channelStore.delete(visibleChannels[idx])
                     }
                 }
                 .onMove { source, destination in
-                    channelStore.move(from: source, to: destination)
+                    if hiddenChannels.isEmpty {
+                        channelStore.move(from: source, to: destination)
+                    } else {
+                        var reordered = visibleChannels
+                        reordered.move(fromOffsets: source, toOffset: destination)
+                        channelStore.replace(reordered + hiddenChannels)
+                    }
                 }
 
                 Section {
@@ -84,7 +132,7 @@ struct ChannelListView: View {
                 .listSectionSpacing(.compact)
             }
             .overlay {
-                if channelStore.channels.isEmpty {
+                if visibleChannels.isEmpty {
                     VStack(spacing: 16) {
                         Image("LogoRed")
                             .resizable()

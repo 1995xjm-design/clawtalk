@@ -1,10 +1,16 @@
 import QuickLook
 import SwiftUI
 
-/// 文件传输助手：电脑端 OpenClaw 成果文件（media/outbound）的列表、下载与本地管理。
-/// 未启动文件服务时提供「一键启动」（发指令到「文件传输」频道）和「手动说明」引导。
-struct FileTransferView: View {
+/// 文件传输助手（频道版）：电脑端 OpenClaw 成果文件（media/outbound）以「聊天卡片」形式逐条展示。
+/// 复用 FileTransferViewModel 的服务检测、一键启动、下载、存相册、QuickLook、分享、删除逻辑。
+/// - embeddedInNavigation = true：从「工具」页进入，使用系统导航栏；
+/// - embeddedInNavigation = false：从频道列表进入，使用与聊天页一致的「返回频道」自定义导航栏。
+struct FileTransferChannelView: View {
     @State private var viewModel: FileTransferViewModel
+
+    let settings: SettingsStore
+    var embeddedInNavigation = false
+    var onBack: (() -> Void)?
 
     @State private var showManualInstructions = false
     @State private var showImageActionSheet = false
@@ -12,24 +18,86 @@ struct FileTransferView: View {
     @State private var previewItem: PreviewItem?
     @State private var activeAlert: ActiveAlert?
 
-    init(settings: SettingsStore) {
+    init(settings: SettingsStore, embeddedInNavigation: Bool = false, onBack: (() -> Void)? = nil) {
+        self.settings = settings
+        self.embeddedInNavigation = embeddedInNavigation
+        self.onBack = onBack
         _viewModel = State(initialValue: FileTransferViewModel(settings: settings))
     }
 
     var body: some View {
+        Group {
+            if embeddedInNavigation {
+                content
+            } else {
+                VStack(spacing: 0) {
+                    navBar
+                    Divider().opacity(0.3)
+                    content
+                }
+            }
+        }
+        .background(Color(.systemBackground))
+        .navigationTitle("文件传输助手")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    // MARK: - 自定义导航栏（频道模式）
+
+    private var navBar: some View {
+        ZStack {
+            HStack(spacing: 6) {
+                Text("文件传输助手")
+                    .font(.headline)
+                    .fontWeight(.semibold)
+            }
+
+            HStack {
+                Button(action: { onBack?() }) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "chevron.left")
+                            .font(.title3)
+                        Text("频道")
+                            .font(.body)
+                    }
+                    .foregroundStyle(.openClawRed)
+                    .contentShape(Rectangle())
+                    .padding(.vertical, 6)
+                    .padding(.trailing, 4)
+                }
+
+                Spacer()
+
+                Button {
+                    Task { await viewModel.refresh() }
+                } label: {
+                    Image(systemName: "arrow.clockwise")
+                        .font(.title)
+                        .foregroundStyle(.openClawRed)
+                        .contentShape(Rectangle())
+                        .frame(width: 44, height: 44)
+                }
+                .accessibilityLabel("刷新")
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+    }
+
+    // MARK: - 内容区（检测 / 引导 / 聊天文件列表）
+
+    private var content: some View {
         Group {
             switch viewModel.serverState {
             case .checking:
                 ProgressView("正在检测电脑端文件服务…")
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             case .unreachable:
-                unreachableView
+                guideView
             case .reachable:
-                fileList
+                chatFileList
             }
         }
-        .navigationTitle("文件传输助手")
-        .navigationBarTitleDisplayMode(.inline)
         .task {
             viewModel.reloadDownloadedFiles()
             await viewModel.checkServer()
@@ -52,11 +120,29 @@ struct FileTransferView: View {
         .sheet(item: $previewItem) { item in
             QuickLookPreview(url: item.url)
         }
+        .confirmationDialog(
+            "文件已下载，选择保存方式",
+            isPresented: $showImageActionSheet,
+            titleVisibility: .visible
+        ) {
+            Button("保存到相册") {
+                guard let url = pendingImageURL else { return }
+                Task {
+                    if await viewModel.saveImageToPhotoLibrary(url: url) {
+                        showHint("已保存到相册。")
+                    }
+                }
+            }
+            Button("保存到文件") {
+                showHint("文件已保存在 App 内，可在「已下载」或「文件」App 中查看。")
+            }
+            Button("取消", role: .cancel) {}
+        }
     }
 
     // MARK: - 服务未启动引导
 
-    private var unreachableView: some View {
+    private var guideView: some View {
         ScrollView {
             VStack(spacing: 20) {
                 Image(systemName: "wifi.exclamationmark")
@@ -140,59 +226,59 @@ struct FileTransferView: View {
             .padding(24)
         }
     }
+    // MARK: - 聊天式文件列表
 
-    // MARK: - 文件列表
+    private var chatFileList: some View {
+        ScrollView {
+            LazyVStack(spacing: 10) {
+                Text("电脑端 OpenClaw 成果文件（media/outbound）")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(Color(.systemGray5))
+                    .clipShape(Capsule())
+                    .padding(.top, 8)
 
-    private var fileList: some View {
-        List {
-            Section {
                 if viewModel.remoteFiles.isEmpty {
                     if viewModel.isLoadingFiles {
                         ProgressView("正在加载文件列表…")
-                            .frame(maxWidth: .infinity, alignment: .center)
+                            .frame(maxWidth: .infinity)
+                            .padding(.top, 60)
                     } else {
-                        Text("电脑端暂无文件")
-                            .foregroundStyle(.secondary)
+                        VStack(spacing: 10) {
+                            Image(systemName: "tray")
+                                .font(.system(size: 44))
+                                .foregroundStyle(.tertiary)
+                            Text("电脑端暂无文件")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                            Text("下拉刷新，或点右上角刷新按钮")
+                                .font(.caption)
+                                .foregroundStyle(.tertiary)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.top, 60)
                     }
                 } else {
                     ForEach(viewModel.remoteFiles) { file in
-                        Button {
-                            startDownload(file)
-                        } label: {
-                            remoteFileRow(file)
-                        }
-                        .disabled(viewModel.downloadingFileName != nil)
+                        remoteFileCard(file)
                     }
-                }
-            } header: {
-                Text("电脑端文件")
-            } footer: {
-                Text("点击文件即可下载到 iPhone。图片下载后可选择保存到相册。")
-            }
 
-            Section {
-                if viewModel.downloadedFiles.isEmpty {
-                    Text("还没有下载过文件")
-                        .foregroundStyle(.secondary)
-                } else {
-                    ForEach(viewModel.downloadedFiles) { file in
-                        downloadedFileRow(file)
-                            .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                                Button(role: .destructive) {
-                                    viewModel.deleteDownloadedFile(file)
-                                } label: {
-                                    Label("删除", systemImage: "trash")
-                                }
-                            }
+                    if !orphanLocalFiles.isEmpty {
+                        Text("已下载（电脑端已删除）")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .padding(.top, 8)
+                        ForEach(orphanLocalFiles) { file in
+                            localFileCard(file)
+                        }
                     }
                 }
-            } header: {
-                Text("已下载")
-            } footer: {
-                Text("已下载文件保存在 App 的 files 文件夹，可在「文件」App 中查看。")
             }
+            .padding(.horizontal, 12)
+            .padding(.bottom, 16)
         }
-        .listStyle(.insetGrouped)
         .overlay {
             if let name = viewModel.downloadingFileName {
                 VStack(spacing: 10) {
@@ -205,84 +291,164 @@ struct FileTransferView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 12))
             }
         }
-        .confirmationDialog(
-            "文件已下载，选择保存方式",
-            isPresented: $showImageActionSheet,
-            titleVisibility: .visible
-        ) {
-            Button("保存到相册") {
-                guard let url = pendingImageURL else { return }
-                Task {
-                    if await viewModel.saveImageToPhotoLibrary(url: url) {
-                        showHint("已保存到相册。")
-                    }
-                }
-            }
-            Button("保存到文件") {
-                showHint("文件已保存在 App 内，可在「已下载」或「文件」App 中查看。")
-            }
-            Button("取消", role: .cancel) {}
-        }
     }
 
-    private func remoteFileRow(_ file: FileTransferViewModel.RemoteFile) -> some View {
-        HStack(spacing: 12) {
-            Image(systemName: iconName(forExtension: file.ext))
-                .font(.title2)
-                .foregroundStyle(.openClawRed)
-                .frame(width: 36, height: 36)
-                .background(Color(.secondarySystemBackground))
-                .cornerRadius(8)
-
-            VStack(alignment: .leading, spacing: 3) {
-                Text(file.name)
-                    .font(.body)
-                    .lineLimit(1)
-                Text("\(FileTransferViewModel.formatBytes(file.size)) · \(FileTransferViewModel.formatTime(millis: file.mtime))")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            Spacer()
-
-            Image(systemName: "arrow.down.circle")
-                .foregroundStyle(.openClawRed)
-        }
+    /// 本地已下载、但电脑端列表里已不存在的文件（补在聊天列表末尾，仍可打开/分享/删除）。
+    private var orphanLocalFiles: [FileTransferViewModel.LocalFile] {
+        let remoteNames = Set(viewModel.remoteFiles.map(\.name))
+        return viewModel.downloadedFiles.filter { !remoteNames.contains($0.name) }
     }
 
-    private func downloadedFileRow(_ file: FileTransferViewModel.LocalFile) -> some View {
-        HStack(spacing: 12) {
-            Image(systemName: iconName(forExtension: file.url.pathExtension))
-                .font(.title2)
-                .foregroundStyle(.openClawRed)
-                .frame(width: 36, height: 36)
-                .background(Color(.secondarySystemBackground))
-                .cornerRadius(8)
+    // MARK: - 聊天卡片
 
-            Button {
-                previewItem = PreviewItem(url: file.url)
-            } label: {
+    private func remoteFileCard(_ file: FileTransferViewModel.RemoteFile) -> some View {
+        let local = viewModel.localFile(named: file.name)
+        return Button {
+            handleFileTap(file)
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: iconName(forExtension: file.ext))
+                    .font(.title2)
+                    .foregroundStyle(.openClawRed)
+                    .frame(width: 40, height: 40)
+                    .background(Color(.systemGray5))
+                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+
                 VStack(alignment: .leading, spacing: 3) {
                     Text(file.name)
                         .font(.body)
-                        .lineLimit(1)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.leading)
+                        .foregroundStyle(.primary)
+                    Text("\(FileTransferViewModel.formatBytes(file.size)) · \(FileTransferViewModel.formatTime(millis: file.mtime))")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    if local != nil {
+                        Label("已下载", systemImage: "checkmark.circle.fill")
+                            .font(.caption2)
+                            .foregroundStyle(.green)
+                    }
+                }
+
+                Spacer(minLength: 8)
+
+                if viewModel.downloadingFileName == file.name {
+                    ProgressView()
+                } else if local != nil {
+                    Image(systemName: "arrow.up.forward.circle")
+                        .font(.title3)
+                        .foregroundStyle(.green)
+                } else {
+                    Image(systemName: "arrow.down.circle")
+                        .font(.title3)
+                        .foregroundStyle(.openClawRed)
+                }
+            }
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color(.secondarySystemBackground))
+            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .disabled(viewModel.downloadingFileName != nil && viewModel.downloadingFileName != file.name)
+        .contextMenu {
+            if let local = local {
+                Button {
+                    previewItem = PreviewItem(url: local.url)
+                } label: {
+                    Label("打开", systemImage: "doc")
+                }
+                if FileTransferViewModel.isImage(ext: file.ext) {
+                    Button {
+                        Task {
+                            if await viewModel.saveImageToPhotoLibrary(url: local.url) {
+                                showHint("已保存到相册。")
+                            }
+                        }
+                    } label: {
+                        Label("保存到相册", systemImage: "photo")
+                    }
+                }
+                ShareLink(item: local.url) {
+                    Label("分享", systemImage: "square.and.arrow.up")
+                }
+                Button(role: .destructive) {
+                    viewModel.deleteDownloadedFile(local)
+                } label: {
+                    Label("删除", systemImage: "trash")
+                }
+            }
+        }
+    }
+
+    private func localFileCard(_ file: FileTransferViewModel.LocalFile) -> some View {
+        Button {
+            previewItem = PreviewItem(url: file.url)
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: iconName(forExtension: file.url.pathExtension))
+                    .font(.title2)
+                    .foregroundStyle(.openClawRed)
+                    .frame(width: 40, height: 40)
+                    .background(Color(.systemGray5))
+                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(file.name)
+                        .font(.body)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.leading)
+                        .foregroundStyle(.primary)
                     Text("\(FileTransferViewModel.formatBytes(file.size)) · \(FileTransferViewModel.formatDate(file.modifiedAt))")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
+
+                Spacer(minLength: 8)
+
+                Image(systemName: "arrow.up.forward.circle")
+                    .font(.title3)
+                    .foregroundStyle(.green)
             }
-            .buttonStyle(.plain)
-
-            Spacer()
-
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color(.secondarySystemBackground))
+            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .contextMenu {
+            if FileTransferViewModel.isImage(ext: file.url.pathExtension) {
+                Button {
+                    Task {
+                        if await viewModel.saveImageToPhotoLibrary(url: file.url) {
+                            showHint("已保存到相册。")
+                        }
+                    }
+                } label: {
+                    Label("保存到相册", systemImage: "photo")
+                }
+            }
             ShareLink(item: file.url) {
-                Image(systemName: "square.and.arrow.up")
+                Label("分享", systemImage: "square.and.arrow.up")
             }
-            .buttonStyle(.borderless)
+            Button(role: .destructive) {
+                viewModel.deleteDownloadedFile(file)
+            } label: {
+                Label("删除", systemImage: "trash")
+            }
         }
     }
 
     // MARK: - 交互
+
+    /// 点击卡片：已下载则打开预览，未下载则开始下载；图片下载后询问保存到相册。
+    private func handleFileTap(_ file: FileTransferViewModel.RemoteFile) {
+        if let local = viewModel.localFile(named: file.name) {
+            previewItem = PreviewItem(url: local.url)
+        } else {
+            startDownload(file)
+        }
+    }
 
     private func startDownload(_ file: FileTransferViewModel.RemoteFile) {
         Task {

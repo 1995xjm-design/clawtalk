@@ -299,14 +299,14 @@ private var connectionSection: some View {
                 TextField("唤醒词", text: $store.settings.voiceWakeWord)
                     .autocorrectionDisabled()
                     .textInputAutocapitalization(.never)
-                Text("仅在 App 前台且打开聊天页时监听；说「你好小爪」进入免提对话。")
+                Text("前台/后台均可唤醒；说「你好小爪」进入免提对话。")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
         } header: {
             Text("语音")
         } footer: {
-            Text("关闭语音输出可纯文字聊天；语音输入使用设备端识别；开启「跟随静音键」后，iPhone 物理静音键开启时朗读自动静音。语音唤醒需麦克风与语音识别权限，且仅在 App 前台监听。")
+            Text("关闭语音输出可纯文字聊天；语音输入使用设备端识别；开启「跟随静音键」后，iPhone 物理静音键开启时朗读自动静音。语音唤醒需麦克风与语音识别权限；开启后前台/后台均可唤醒。")
         }
     }
 

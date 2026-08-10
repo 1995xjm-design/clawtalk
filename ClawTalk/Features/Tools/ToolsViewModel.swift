@@ -203,6 +203,8 @@ final class ToolsViewModel {
             for session in sessions.prefix(20) {
                 if let title = await fetchSessionTitle(session.key) {
                     sessionTitles[session.key] = title
+                } else if let title = Self.friendlyTitle(for: session.key) {
+                    sessionTitles[session.key] = title
                 }
             }
         } catch {
@@ -218,18 +220,44 @@ final class ToolsViewModel {
         return markers.contains { key.contains($0) }
     }
 
+    /// 从会话 key 生成友好中文标题；无法识别时返回 nil
+    static func friendlyTitle(for key: String) -> String? {
+        let prefix = "agent:main:"
+        guard key.hasPrefix(prefix) else { return nil }
+        let rest = String(key.dropFirst(prefix.count))
+        switch rest {
+        case "clawtalk-user:wechat-bind":
+            return "微信绑定"
+        case "clawtalk-user:diag":
+            return "日志诊断"
+        case "clawtalk-user:file-transfer":
+            return "文件传输助手"
+        case let r where r.hasPrefix("clawtalk-user:"):
+            return "智能体会话"
+        case let r where r.hasPrefix("openai-user:"):
+            let hash = r.dropFirst("openai-user:".count)
+            return "OpenAI 会话 \(hash.prefix(6))"
+        default:
+            return nil
+        }
+    }
+
     /// 取会话的第一条用户文本消息作为标题（最多 20 字）
     private func fetchSessionTitle(_ key: String) async -> String? {
         do {
             let data = try await client.invokeTool(
                 tool: "sessions_history",
-                args: ["sessionKey": .string(key), "limit": .int(20)],
+                args: ["sessionKey": .string(key), "limit": .int(200)],
                 gatewayURL: gatewayURL,
                 token: token
             )
             let wrapper = try JSONDecoder().decode(ToolResultWrapper<SessionHistoryResult>.self, from: data)
             guard let history = wrapper.details else { return nil }
-            for message in history.messages where message.role == "user" {
+            // 按时间升序的 messages 中，取最早一条用户文本消息即可；若顺序不确定，先按 timestamp 排序
+            let sortedMessages = history.messages.sorted {
+                ($0.timestamp ?? 0) < ($1.timestamp ?? 0)
+            }
+            for message in sortedMessages where message.role == "user" {
                 for content in message.content where content.type == "text" {
                     if let text = content.text {
                         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -405,7 +433,7 @@ final class ToolsViewModel {
         isLoading = true
         errorMessage = nil
         defer { isLoading = false }
-        let instruction = "请用 PowerShell 截取整个桌面屏幕：1）Add-Type -AssemblyName System.Windows.Forms,System.Drawing；2）用 Graphics.CopyFromScreen 截取全屏；3）保存为 JPEG 并压缩到宽约 1200；4）转成 base64；5）回复我完整的 base64 字符串，不要���略、不要解释、不要加任何前缀。"
+        let instruction = "请用 PowerShell 截取整个桌面屏幕：1）Add-Type -AssemblyName System.Windows.Forms,System.Drawing；2）用 Graphics.CopyFromScreen 截取全屏；3）保存为 JPEG 并压缩到宽约 1200；4）转成 base64；5）回复我完整的 base64 字符串，不要省略、不要解释、不要加任何前缀。"
         do {
             let reply = try await client.chat(
                 messages: [Message(role: .user, content: instruction)],

@@ -126,6 +126,11 @@ final class VoiceWakeCapability {
         recognizer = speechRecognizer
         speechRecognizer.supportsOnDeviceRecognition = true
 
+        // 显式配置音频会话：playAndRecord 保证退后台后音频引擎持续运行（Info.plist 已开 UIBackgroundModes=audio）
+        let audioSession = AVAudioSession.sharedInstance()
+        try? audioSession.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker, .allowBluetooth])
+        try? audioSession.setActive(true)
+
         let engine = AVAudioEngine()
         let request = SFSpeechAudioBufferRecognitionRequest()
         request.shouldReportPartialResults = true
@@ -167,6 +172,10 @@ final class VoiceWakeCapability {
                     self.logger.error("voice wake error: \(error.localizedDescription, privacy: .public)")
                     LogCollector.record(module: "语音唤醒", AppErrorText.localized(error.localizedDescription))
                     self.stopListening()
+                    // 监听被系统中断（如来电/其他 App 占用音频）后按配置自动重启，保证后台持续监听
+                    guard self.autoRestartsAfterDetection else { return }
+                    try? await Task.sleep(nanoseconds: 500_000_000)
+                    try? await self.startListening(locale: locale)
                 }
             }
         }
