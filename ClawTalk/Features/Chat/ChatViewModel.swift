@@ -113,6 +113,7 @@ final class ChatViewModel {
         // 允许在语音播放/流式回复时发送新消息：先打断当前语音和正在进行的回复
         if state == .speaking || state == .streaming {
             ttsStopped = true
+            ttsConcurrency.cancelAll()
             speechService?.stop()
             audioPlayback.stop()
             abortCurrentRun()
@@ -270,6 +271,7 @@ final class ChatViewModel {
         messages.append(assistantMessage)
 
         ttsStopped = false
+        ttsConcurrency.cancelAll()
         state = .thinking
 
         do {
@@ -669,6 +671,7 @@ final class ChatViewModel {
 
     func stopSpeaking() {
         ttsStopped = true
+        ttsConcurrency.cancelAll()
         speechService?.stop()
         audioPlayback.stop()
         if state == .speaking {
