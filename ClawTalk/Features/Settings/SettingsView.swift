@@ -109,11 +109,13 @@ private var connectionSection: some View {
                                 .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
                             if !gw.isEmpty {
                                 let instruction = "请执行 openclaw devices approve --latest 批准待连接的设备，然后回复「已批准」。"
-                                _ = try? await OpenClawClient().chat(
-                                    messages: [Message(role: .user, content: instruction)],
-                                    gatewayURL: gw,
-                                    token: store.gatewayToken
-                                )
+                                Task {
+                                    _ = try? await OpenClawClient().chat(
+                                        messages: [Message(role: .user, content: instruction)],
+                                        gatewayURL: gw,
+                                        token: store.gatewayToken
+                                    )
+                                }
                             }
                         }
                     } else {
