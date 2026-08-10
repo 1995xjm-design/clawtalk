@@ -308,6 +308,25 @@ struct ChatView: View {
                     // attachments, so users can dictate a message to send
                     // alongside their photos. Hidden entirely if the user has
                     // turned voice input off in Settings.
+                    // 朗读开关：静音 / 恢复朗读（普通聊天快捷控制）
+                    Button {
+                        if settingsStore.settings.hapticsEnabled {
+                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                        }
+                        let wasOn = settingsStore.settings.voiceOutputEnabled
+                        settingsStore.settings.voiceOutputEnabled = !wasOn
+                        settingsStore.save()
+                        if wasOn {
+                            viewModel.stopSpeaking()
+                        }
+                    } label: {
+                        Image(systemName: settingsStore.settings.voiceOutputEnabled ? "speaker.wave.2.fill" : "speaker.slash.fill")
+                            .font(.title3)
+                            .foregroundStyle(settingsStore.settings.voiceOutputEnabled ? Color.openClawRed : Color.secondary)
+                            .frame(width: 36, height: 36)
+                    }
+                    .help(settingsStore.settings.voiceOutputEnabled ? "朗读已开启，点击静音" : "朗读已静音，点击开启")
+
                     if !hasText && settingsStore.settings.voiceInputEnabled {
                         InlineMicButton(
                             state: viewModel.state,
