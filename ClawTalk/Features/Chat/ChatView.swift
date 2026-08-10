@@ -350,7 +350,7 @@ struct ChatView: View {
                                 .font(.title)
                                 .foregroundStyle(.openClawRed)
                         }
-                        .disabled(viewModel.state != .idle)
+                        .disabled(!(viewModel.state == .idle || viewModel.state == .speaking || viewModel.state == .streaming))
                     }
                 }
             }
