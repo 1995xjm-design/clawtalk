@@ -1,6 +1,7 @@
 import AVFoundation
 
 final class AudioPlaybackManager: @unchecked Sendable {
+    private let lock = NSLock()
     private var audioEngine: AVAudioEngine?
     private var playerNode: AVAudioPlayerNode?
     private let playbackFormat = AVAudioFormat(standardFormatWithSampleRate: 24000, channels: 1)!
@@ -35,6 +36,7 @@ final class AudioPlaybackManager: @unchecked Sendable {
         engine.prepare()
         try engine.start()
 
+        lock.lock()
         audioEngine = engine
         playerNode = player
         mixerNode = mixer
@@ -43,6 +45,7 @@ final class AudioPlaybackManager: @unchecked Sendable {
         buffersCompleted = 0
         streamingDone = false
         started = false
+        lock.unlock()
     }
 
     /// Schedule a chunk of PCM audio (Float32, 24kHz, mono) for playback.
@@ -62,30 +65,45 @@ final class AudioPlaybackManager: @unchecked Sendable {
             }
         }
 
+        lock.lock()
         buffersEnqueued += 1
+        let shouldStart = !started
+        if shouldStart { started = true }
+        lock.unlock()
+
         player.scheduleBuffer(buffer) { [weak self] in
-            self?.buffersCompleted += 1
+            guard let self else { return }
+            self.lock.lock()
+            self.buffersCompleted += 1
+            self.lock.unlock()
         }
         // 首个 buffer 到达即播放（首音快）；后续靠服务端稳定帧流保证连续
-        if !started {
-            started = true
+        if shouldStart {
             player.play()
         }
     }
 
     /// Signal that no more buffers will be enqueued.
     func markStreamingDone() {
+        lock.lock()
         streamingDone = true
+        lock.unlock()
     }
 
     func stop() {
         playerNode?.stop()
         audioEngine?.stop()
+        lock.lock()
         audioEngine = nil
         playerNode = nil
         mixerNode = nil
         isPlaying = false
         isDucked = false
+        buffersEnqueued = 0
+        buffersCompleted = 0
+        streamingDone = false
+        started = false
+        lock.unlock()
     }
 
     // MARK: - Ducking
@@ -104,9 +122,11 @@ final class AudioPlaybackManager: @unchecked Sendable {
 
     /// Wait until all enqueued audio has finished playing.
     func waitUntilFinished() async {
-        guard buffersEnqueued > 0 else { return }
-        // Wait until streaming is done and all buffers have completed
-        while !streamingDone || buffersCompleted < buffersEnqueued {
+        while true {
+            lock.lock()
+            let done = streamingDone && buffersEnqueued > 0 && buffersCompleted >= buffersEnqueued
+            lock.unlock()
+            if done { break }
             try? await Task.sleep(nanoseconds: 100_000_000)
         }
         // Small grace period for audio output to flush
