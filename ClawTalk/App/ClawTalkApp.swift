@@ -49,6 +49,9 @@ struct ClawTalkApp: App {
         startVoiceWakeIfNeeded()
         }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .clawTalkWakeRestartRequested)) { _ in
+        startVoiceWakeIfNeeded()
+        }
         }
                 if showFileTransferChannel {
         FileTransferChannelView(
@@ -87,6 +90,8 @@ struct ClawTalkApp: App {
                 VoiceWakeCapability.shared.onKeywordDetected = { keyword in
                     NotificationCenter.default.post(name: .clawTalkWakeWordDetected, object: keyword)
                 }
+                // 语音唤醒看门狗：App 生命周期内常驻，每 10 秒自检自愈
+                Task { await runVoiceWakeWatchdog() }
                 guard settingsStore.settings.useWebSocket,
                       settingsStore.isConfigured else { return }
 
@@ -113,10 +118,6 @@ struct ClawTalkApp: App {
                         LogCollector.record(module: "启动", "应用启动节点连接失败：\(AppErrorText.localized(lastError))")
                     }
                 }
-            }
-            .task {
-                // 语音唤醒看门狗：App 生命周期内常驻，不随 scenePhase 取消
-                await runVoiceWakeWatchdog()
             }
             .onChange(of: settingsStore.settings.ttsProvider) {
                 reconfigureServices()
@@ -156,10 +157,6 @@ struct ClawTalkApp: App {
             }
             .onReceive(NotificationCenter.default.publisher(for: .clawTalkWakeWordDetected)) { _ in
                 handleWakeWordDetected()
-            }
-            .onReceive(NotificationCenter.default.publisher(for: .clawTalkWakeRestartRequested)) { _ in
-                // 录音结束（按住说话/误触取消）后恢复唤醒监听
-                startVoiceWakeIfNeeded()
             }
         }
     }
