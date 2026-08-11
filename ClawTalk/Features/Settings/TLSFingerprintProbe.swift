@@ -61,7 +61,7 @@ final class TLSFingerprintProbe {
         let tlsOptions = NWProtocolTLS.Options()
         // 允许任意证书完成握手（仅用于抓取指纹，不影响 App 真实连接策略）
         sec_protocol_options_set_verify_block(tlsOptions.securityProtocolOptions) { _, secTrust, complete in
-            if let trust = sec_trust_copy_ref(secTrust) {
+            if let trust = sec_trust_copy_ref(secTrust)?.takeRetainedValue() {
                 capture.set(Self.extract(from: trust, host: host))
             }
             complete(true)
@@ -148,19 +148,11 @@ final class TLSFingerprintProbe {
         )
     }
 
+    /// iOS 上无法直接读证书有效期字段（SecCertificateCopyValues 为 macOS-only），
+    /// 此处诚实返回 nil；有效期展示区域会随之隐藏。
     nonisolated static func validity(of certificate: SecCertificate) -> (from: Date?, to: Date?) {
-        guard let values = SecCertificateCopyValues(
-            certificate,
-            [kSecOIDX509V1ValidityNotBefore, kSecOIDX509V1ValidityNotAfter] as CFArray,
-            nil
-        ) as? [CFString: Any] else {
-            return (nil, nil)
-        }
-        func date(for key: CFString) -> Date? {
-            guard let dict = values[key] as? [CFString: Any] else { return nil }
-            return dict[kSecPropertyKeyValue] as? Date
-        }
-        return (date(for: kSecOIDX509V1ValidityNotBefore), date(for: kSecOIDX509V1ValidityNotAfter))
+        _ = certificate
+        return (nil, nil)
     }
 }
 

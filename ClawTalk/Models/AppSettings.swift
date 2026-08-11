@@ -61,7 +61,15 @@ enum LiveActivityStyle: String, Codable, CaseIterable, Identifiable {
     init(from decoder: Decoder) throws {
         let raw = try decoder.singleValueContainer().decode(String.self)
         self = LiveActivityStyle(rawValue: raw) ?? .standard
+    
+    var displayName: String {
+        switch self {
+        case .minimal: return "简约"
+        case .standard: return "标准"
+        case .detailed: return "详细"
+        }
     }
+}
 
     var id: String { rawValue }
 }
