@@ -240,15 +240,15 @@ struct TLSFingerprintProbeView: View {
                     }
                 }
 
-                Section("信任状态") {
-                    LabeledContent("状态") {
+                Section {
+                    LabeledContent("状态", content: {
                         HStack(spacing: 6) {
                             Image(systemName: result.isTrusted ? "checkmark.shield.fill" : "shield.slash")
                                 .foregroundStyle(result.isTrusted ? .green : .orange)
                             Text(result.isTrusted ? "已信任" : "未信任")
                                 .foregroundStyle(result.isTrusted ? .green : .orange)
                         }
-                    }
+                    })
 
                     if result.isTrusted {
                         Button("取消信任此主机", role: .destructive) {
@@ -261,6 +261,8 @@ struct TLSFingerprintProbeView: View {
                             startProbe()
                         }
                     }
+                } header: {
+                    Text("信任状态")
                 } footer: {
                     Text("加入信任名单后，网关连接（GatewayWebSocket）会放行该主机的自签证书，与 App 实际连接策略一致。")
                 }
