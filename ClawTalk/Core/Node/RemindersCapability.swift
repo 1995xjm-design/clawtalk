@@ -46,7 +46,11 @@ enum RemindersCapability {
         try await requestAccess()
 
         let predicate = store.predicateForReminders(in: nil)
-        let reminders = try await store.reminders(matching: predicate)
+        let reminders: [EKReminder] = try await withCheckedThrowingContinuation { continuation in
+            store.fetchReminders(matching: predicate) { fetched in
+                continuation.resume(returning: fetched ?? [])
+            }
+        }
 
         let filtered = reminders.filter { reminder in
             if let completed { return reminder.isCompleted == completed }

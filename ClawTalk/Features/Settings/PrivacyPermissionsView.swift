@@ -75,7 +75,7 @@ struct PrivacyPermissionsView: View {
         photoStatus = Self.photosStatusText()
         cameraStatus = Self.avStatusText(AVCaptureDevice.authorizationStatus(for: .video))
         micStatus = Self.micStatusText()
-        contactsStatus = Self.avStatusText(CNContactStore.authorizationStatus(for: .contacts))
+        contactsStatus = Self.contactsStatusText(CNContactStore.authorizationStatus(for: .contacts))
         calendarStatus = Self.eventStatusText(EKEventStore.authorizationStatus(for: .event))
         remindersStatus = Self.eventStatusText(EKEventStore.authorizationStatus(for: .reminder))
         UNUserNotificationCenter.current().getNotificationSettings { settings in
