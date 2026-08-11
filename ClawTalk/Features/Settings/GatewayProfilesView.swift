@@ -2,6 +2,7 @@ import SwiftUI
 
 /// 网关管理（任务 D）：多网关档案的列表/切换/增删。
 /// 档案独立存储（GatewayProfileStore），切换时写入 SettingsStore 供全局使用。
+@MainActor
 struct GatewayProfilesView: View {
     @Bindable var store: SettingsStore
     @State private var profileStore: GatewayProfileStore
