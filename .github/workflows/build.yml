@@ -50,6 +50,7 @@ jobs:
             -project ClawTalk.xcodeproj \
             -scheme ClawTalk \
             -destination 'generic/platform=iOS Simulator' \
+            ARCHS=arm64 \
             CODE_SIGNING_ALLOWED=NO | tee build-app.log
 
       - name: Build ClawTalkKeyboard extension (standalone)
@@ -59,6 +60,7 @@ jobs:
             -project ClawTalk.xcodeproj \
             -scheme ClawTalkKeyboard \
             -destination 'generic/platform=iOS Simulator' \
+            ARCHS=arm64 \
             CODE_SIGNING_ALLOWED=NO | tee build-keyboard.log
 
       - name: Build ClawTalkWidget extension (standalone)
@@ -68,6 +70,7 @@ jobs:
             -project ClawTalk.xcodeproj \
             -scheme ClawTalkWidget \
             -destination 'generic/platform=iOS Simulator' \
+            ARCHS=arm64 \
             CODE_SIGNING_ALLOWED=NO | tee build-widget.log
 
       - name: Build ClawTalkShareExtension (standalone)
@@ -77,6 +80,7 @@ jobs:
             -project ClawTalk.xcodeproj \
             -scheme ClawTalkShareExtension \
             -destination 'generic/platform=iOS Simulator' \
+            ARCHS=arm64 \
             CODE_SIGNING_ALLOWED=NO | tee build-share.log
 
       - name: Run unit tests
@@ -86,6 +90,7 @@ jobs:
             -project ClawTalk.xcodeproj \
             -scheme ClawTalk \
             -destination 'platform=iOS Simulator,name=iPhone 16' \
+            ARCHS=arm64 \
             CODE_SIGNING_ALLOWED=NO | tee test.log
 
       - name: Build device .app (unsigned, for sideloading)
