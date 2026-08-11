@@ -243,9 +243,13 @@ final class GatewayAutoDiscovery {
             if family == sa_family_t(AF_INET), let addressPointer = current.pointee.ifa_addr {
                 var address = addressPointer.withMemoryRebound(to: sockaddr_in.self, capacity: 1).pointee
                 var buffer = [CChar](repeating: 0, count: Int(INET_ADDRSTRLEN))
-                inet_ntop(AF_INET, &address.sin_addr, &buffer, socklen_t(INET_ADDRSTRLEN))
-                let ip = String(cString: buffer)
-                if !ip.hasPrefix("127.") {
+                var ip = ""
+                buffer.withUnsafeMutableBufferPointer { ptr in
+                    if let base = ptr.baseAddress, inet_ntop(AF_INET, &address.sin_addr, base, socklen_t(INET_ADDRSTRLEN)) != nil {
+                        ip = String(cString: base)
+                    }
+                }
+                if !ip.isEmpty && !ip.hasPrefix("127.") {
                     addresses.append(ip)
                 }
             }

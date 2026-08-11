@@ -399,8 +399,14 @@ struct ConnectionDiagnostics {
         if let addr = result.pointee.ai_addr {
             var address = addr.withMemoryRebound(to: sockaddr_in.self, capacity: 1).pointee
             var buffer = [CChar](repeating: 0, count: Int(INET_ADDRSTRLEN))
-            if inet_ntop(AF_INET, &address.sin_addr, &buffer, socklen_t(INET_ADDRSTRLEN)) != nil {
-                resolved = String(cString: buffer)
+            var resolvedAddress = ""
+            buffer.withUnsafeMutableBufferPointer { ptr in
+                if let base = ptr.baseAddress, inet_ntop(AF_INET, &address.sin_addr, base, socklen_t(INET_ADDRSTRLEN)) != nil {
+                    resolvedAddress = String(cString: base)
+                }
+            }
+            if !resolvedAddress.isEmpty {
+                resolved = resolvedAddress
             }
         }
         return step(.dns, success: true, since: start, detail: "\(target.host) → \(resolved)")
