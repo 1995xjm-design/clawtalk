@@ -29,8 +29,8 @@ final class AppleTTSService: NSObject, SpeechService, AVSpeechSynthesizerDelegat
     func streamSpeech(text: String) -> AsyncThrowingStream<Data, Error> {
         AsyncThrowingStream { continuation in
             let utterance = AVSpeechUtterance(string: text)
-            utterance.rate = min(max(0.5 + Double(speed) / 100.0, 0.1), 1.0)
-            utterance.pitchMultiplier = min(max(1.0 + Double(pitch) / 10.0, 0.5), 2.0)
+            utterance.rate = Float(min(max(0.5 + Double(speed) / 100.0, 0.1), 1.0))
+            utterance.pitchMultiplier = Float(min(max(1.0 + Double(pitch) / 10.0, 0.5), 2.0))
 
             let itemID = UUID()
             continuation.onTermination = { [weak self] _ in
