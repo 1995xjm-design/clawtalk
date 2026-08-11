@@ -35,6 +35,8 @@ targets:
       - package: KeychainAccess
       - package: MarkdownUI
       - target: ClawTalkKeyboard
+      - target: ClawTalkWidget
+      - target: ClawTalkShareExtension
     settings:
       base:
         INFOPLIST_FILE: ClawTalk/Resources/Info.plist
@@ -76,6 +78,15 @@ targets:
           - UIInterfaceOrientationPortraitUpsideDown
         UIBackgroundModes:
           - audio
+          - remote-notification
+          - fetch
+        BGTaskSchedulerPermittedIdentifiers:
+          - com.openclaw.clawtalk.bgrefresh
+        NSHealthShareUsageDescription: ClawTalk reads health data (steps) when your AI agent needs it.
+        CFBundleURLTypes:
+          - CFBundleURLName: com.openclaw.clawtalk
+            CFBundleURLSchemes:
+              - clawtalk
 
   ClawTalkTests:
     type: bundle.unit-test
@@ -116,9 +127,35 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: app.lgm.7517.widget
         SWIFT_VERSION: "5.10"
         TARGETED_DEVICE_FAMILY: "1,2"
+        CODE_SIGN_ENTITLEMENTS: ClawTalkWidget/ClawTalkWidget.entitlements
     info:
       path: ClawTalkWidget/Info.plist
       properties:
         CFBundleDisplayName: ClawTalk Widget
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
+  ClawTalkShareExtension:
+    type: app-extension
+    platform: iOS
+    sources:
+      - ClawTalkShareExtension
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.lgm.7517.share
+        SWIFT_VERSION: "5.10"
+        TARGETED_DEVICE_FAMILY: "1,2"
+        CODE_SIGN_ENTITLEMENTS: ClawTalkShareExtension/ClawTalkShareExtension.entitlements
+    info:
+      path: ClawTalkShareExtension/Info.plist
+      properties:
+        CFBundleDisplayName: ClawTalk
+        NSExtension:
+          NSExtensionAttributes:
+            NSExtensionActivationRule:
+              NSExtensionActivationSupportsText: true
+              NSExtensionActivationSupportsWebURLWithMaxCount: 1
+              NSExtensionActivationSupportsImageWithMaxCount: 10
+              NSExtensionActivationSupportsMovieWithMaxCount: 1
+              NSExtensionActivationSupportsFileWithMaxCount: 10
+          NSExtensionPointIdentifier: com.apple.share-services
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).ShareViewController

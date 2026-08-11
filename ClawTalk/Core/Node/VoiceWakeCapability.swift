@@ -186,6 +186,16 @@ final class VoiceWakeCapability {
         logger.info("voice wake started, keywords: \(self.currentKeywords)")
     }
 
+    // MARK: - Keyword Helpers
+
+    /// 规范化唤醒词列表：去空白、去空词、按大小写去重，保证给识别引擎的 keywords 干净有效。
+    static func normalizedKeywords(_ words: [String]) -> [String] {
+        var seen = Set<String>()
+        return words.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .filter { seen.insert($0.lowercased()).inserted }
+    }
+
     func stopListening() {
         audioEngine?.stop()
         audioEngine?.inputNode.removeTap(onBus: 0)

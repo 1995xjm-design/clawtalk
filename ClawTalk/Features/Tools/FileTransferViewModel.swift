@@ -48,6 +48,9 @@ final class FileTransferViewModel {
 
     private static let imageExtSet: Set<String> = ["png", "jpg", "jpeg", "gif", "webp", "heic", "heif"]
 
+    /// 单文件上传大小上限（与电脑端服务端一致）：50MB。
+    static let maxUploadBytes: Int64 = 50 * 1024 * 1024
+
     // 状态
     var serverState: ServerState = .checking
     var remoteFiles: [RemoteFile] = []
@@ -56,6 +59,8 @@ final class FileTransferViewModel {
     var isSendingStartCommand = false
     var waitingForServer = false
     var downloadingFileName: String?
+    var isUploading = false
+    var uploadProgress: Double?
     var errorMessage: String? {
         didSet { if let errorMessage { LogCollector.record(module: "文件传输", errorMessage) } }
     }
@@ -365,6 +370,82 @@ final class FileTransferViewModel {
         downloadedFiles.first { $0.name == name }
     }
 
+    // MARK: - 上传（手机 → 电脑）
+
+    /// 上传本地文件到电脑端 inbound 目录（POST /upload，multipart/form-data）。
+    /// - Parameters:
+    ///   - fileURL: 本地文件 URL（App 沙盒 / 临时目录内）
+    ///   - suggestedName: 服务端保存的文件名（默认取 fileURL 文件名）
+    @discardableResult
+    func uploadFile(fileURL: URL, suggestedName: String? = nil) async -> Bool {
+        guard let uploadURL = URL(string: serverBaseURL + "/upload") else {
+            errorMessage = "上传地址无效，请先配置网关地址。"
+            return false
+        }
+
+        let name = suggestedName ?? fileURL.lastPathComponent
+        let boundary = "----ClawTalkBoundary" + UUID().uuidString
+        guard let body = Self.makeMultipartBody(fileURL: fileURL, fileName: name, boundary: boundary) else {
+            errorMessage = "无法读取文件内容，请重试。"
+            return false
+        }
+        guard body.count <= Self.maxUploadBytes else {
+            errorMessage = "文件超过 50MB 上限，无法上传。"
+            return false
+        }
+
+        var request = URLRequest(url: uploadURL)
+        request.httpMethod = "POST"
+        request.timeoutInterval = 300
+        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+
+        isUploading = true
+        uploadProgress = 0
+        errorMessage = nil
+        defer {
+            isUploading = false
+            uploadProgress = nil
+        }
+
+        let delegate = UploadTaskDelegate()
+        let session = URLSession(configuration: .default, delegate: delegate, delegateQueue: nil)
+        delegate.progressHandler = { [weak self] progress in
+            self?.uploadProgress = progress
+        }
+
+        do {
+            let (_, response): (Data, HTTPURLResponse) = try await withCheckedThrowingContinuation { continuation in
+                delegate.prepare(continuation)
+                let task = session.uploadTask(with: request, from: body)
+                task.resume()
+            }
+            session.finishTasksAndInvalidate()
+            guard (200...299).contains(response.statusCode) else {
+                errorMessage = "上传失败：服务端返回 \(response.statusCode)。"
+                return false
+            }
+            return true
+        } catch {
+            session.invalidateAndCancel()
+            errorMessage = "上传失败：\(AppErrorText.localized(error.localizedDescription))"
+            return false
+        }
+    }
+
+    private static func makeMultipartBody(fileURL: URL, fileName: String, boundary: String) -> Data? {
+        guard let fileData = try? Data(contentsOf: fileURL) else { return nil }
+        var body = Data()
+        func append(_ string: String) {
+            body.append(Data(string.utf8))
+        }
+        append("--\(boundary)\r\n")
+        append("Content-Disposition: form-data; name=\"file\"; filename=\"\(fileName)\"\r\n")
+        append("Content-Type: application/octet-stream\r\n\r\n")
+        body.append(fileData)
+        append("\r\n--\(boundary)--\r\n")
+        return body
+    }
+
     // MARK: - 格式化辅助
 
     static func isImage(ext: String) -> Bool {
@@ -388,4 +469,50 @@ final class FileTransferViewModel {
         formatter.dateFormat = "yyyy-MM-dd HH:mm"
         return formatter
     }()
+}
+
+// MARK: - 上传进度代理
+
+/// URLSession 上传代理：报告上传进度，并把完成结果桥接回 async/await。
+private final class UploadTaskDelegate: NSObject, URLSessionTaskDelegate, URLSessionDataDelegate {
+    var progressHandler: ((Double) -> Void)?
+    private var continuation: CheckedContinuation<(Data, HTTPURLResponse), Error>?
+    private var receivedData = Data()
+
+    func prepare(_ continuation: CheckedContinuation<(Data, HTTPURLResponse), Error>) {
+        self.continuation = continuation
+    }
+
+    func urlSession(
+        _ session: URLSession,
+        task: URLSessionTask,
+        didSendBodyData bytesSent: Int64,
+        totalBytesSent: Int64,
+        totalBytesExpectedToSend: Int64
+    ) {
+        guard totalBytesExpectedToSend > 0 else { return }
+        let progress = min(1, Double(totalBytesSent) / Double(totalBytesExpectedToSend))
+        let handler = progressHandler
+        Task { @MainActor in
+            handler?(progress)
+        }
+    }
+
+    func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
+        receivedData.append(data)
+    }
+
+    func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
+        guard let continuation else { return }
+        self.continuation = nil
+        if let error {
+            continuation.resume(throwing: error)
+            return
+        }
+        guard let response = task.response as? HTTPURLResponse else {
+            continuation.resume(throwing: URLError(.badServerResponse))
+            return
+        }
+        continuation.resume(returning: (receivedData, response))
+    }
 }

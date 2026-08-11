@@ -349,6 +349,7 @@ final class OpenClawClient {
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         if let sessionKey { request.setValue(sessionKey, forHTTPHeaderField: "x-openclaw-session-key") }
         if let messageChannel { request.setValue(messageChannel, forHTTPHeaderField: "x-openclaw-message-channel") }
+        applyGatewayCustomHeaders(to: &request)
 
         let lastUserIndex = messages.lastIndex(where: { $0.role == .user })
 
@@ -416,6 +417,7 @@ final class OpenClawClient {
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         if let sessionKey { request.setValue(sessionKey, forHTTPHeaderField: "x-openclaw-session-key") }
         if let messageChannel { request.setValue(messageChannel, forHTTPHeaderField: "x-openclaw-message-channel") }
+        applyGatewayCustomHeaders(to: &request)
 
         // Only include image data for the most recent user message to avoid huge payloads
         let lastUserIndex = messages.lastIndex(where: { $0.role == .user })
@@ -454,6 +456,26 @@ final class OpenClawClient {
             logger.info("Request body size: \(size) bytes (\(size / 1024)KB)")
         }
         return request
+    }
+
+    // MARK: - Custom Gateway Headers
+
+    /// 读取 AppSettings 中保存的网关自定义头（仅附加到 OpenClaw 网关请求）。
+    private func gatewayCustomHeaders() -> [String: String] {
+        guard let data = UserDefaults.standard.data(forKey: "app_settings"),
+              let settings = try? JSONDecoder().decode(AppSettings.self, from: data) else {
+            return [:]
+        }
+        return settings.customHeaders
+    }
+
+    /// 将自定义头附加到请求（名称去空白后为空则跳过）。
+    private func applyGatewayCustomHeaders(to request: inout URLRequest) {
+        for (name, value) in gatewayCustomHeaders() {
+            let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else { continue }
+            request.setValue(value, forHTTPHeaderField: trimmed)
+        }
     }
 
     // MARK: - Tool Invocation

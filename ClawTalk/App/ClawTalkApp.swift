@@ -1,9 +1,13 @@
 import SwiftUI
 import AVFoundation
 import Combine
+import UIKit
+import UserNotifications
+import WidgetKit
 
 @main
 struct ClawTalkApp: App {
+    @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @Environment(\.scenePhase) private var scenePhase
     @State private var settingsStore: SettingsStore
     @State private var channelStore: ChannelStore
@@ -17,6 +21,10 @@ struct ClawTalkApp: App {
     @State private var gatewayConnection = GatewayConnection()
     @State private var nodeConnection = NodeConnection()
     @State private var ackSynthesizer: AVSpeechSynthesizer?
+    @State private var showGatewaySessions = false
+    @State private var gatewaySessionsViewModel: ToolsViewModel?
+    @State private var widgetSnapshot: WidgetSnapshot?
+    @State private var syncedChannelsSignature: String?
 
     init() {
         #if DEBUG
@@ -35,10 +43,12 @@ struct ClawTalkApp: App {
         channelStore: channelStore,
         settingsStore: settingsStore,
         gatewayConnection: gatewayConnection,
+        nodeConnection: nodeConnection,
         onSelect: { channel in
         selectChannel(channel)
         },
-        onSelectFileTransfer: { showFileTransferChannel = true }
+        onSelectFileTransfer: { showFileTransferChannel = true },
+        onOpenGatewaySessions: { openGatewaySessionsList() }
         )
         .zIndex(0)
                 if let vm = chatViewModel, selectedChannel != nil {
@@ -56,7 +66,7 @@ struct ClawTalkApp: App {
         }
         }
                 if let syncVM = syncChatViewModel, selectedSyncChannel != nil {
-        SyncChatView(viewModel: syncVM, onBack: goBack)
+        SyncChatView(viewModel: syncVM, onBack: goBack, onDeleteChannel: deleteCurrentChannel)
         .zIndex(1)
         }
                 if showFileTransferChannel {
@@ -80,6 +90,9 @@ struct ClawTalkApp: App {
                     mainZStack
                 }
             }
+            .onOpenURL { url in
+                handleDeepLink(url)
+            }
             .overlay {
                 ApprovalOverlayView(gatewayConnection: gatewayConnection)
             }
@@ -89,9 +102,25 @@ struct ClawTalkApp: App {
             )) {
                 CanvasView(canvas: CanvasCapability.shared)
             }
+            .sheet(isPresented: $showGatewaySessions) {
+                if let viewModel = gatewaySessionsViewModel {
+                    NavigationStack {
+                        SessionsView(viewModel: viewModel, onSelectSession: { session in
+                            showGatewaySessions = false
+                            openGatewaySession(session)
+                        })
+                    }
+                }
+            }
             .tint(.openClawRed)
             .preferredColorScheme(settingsStore.settings.appearance == .dark ? .dark : .light)
             .task {
+                // 推送与后台刷新接线：首次申请通知权限、注册 APNs、注册 BGAppRefreshTask
+                await PushManager.shared.requestNotificationPermissionIfNeeded()
+                await ensureRemoteNotificationsRegistered()
+                BGAppRefreshManager.shared.register()
+                // 分享扩展轮询：App Group 有待发标记则读取并发送
+                await checkPendingShareIfNeeded()
                 // 语音唤醒接线：检测到唤醒词 -> 发通知 -> 主界面处理
                 VoiceWakeCapability.shared.onKeywordDetected = { keyword in
                     NotificationCenter.default.post(name: .clawTalkWakeWordDetected, object: keyword)
@@ -125,6 +154,10 @@ struct ClawTalkApp: App {
                     }
                 }
             }
+            .task {
+                // 小组件数据 + 分享频道列表同步：App 生命周期内常驻，每 3 秒自检（仅变化时写入）
+                await runWidgetAndShareSyncLoop()
+            }
             .onChange(of: settingsStore.settings.ttsProvider) {
                 reconfigureServices()
             }
@@ -150,8 +183,16 @@ struct ClawTalkApp: App {
                 if newPhase == .background || newPhase == .inactive {
                     // 仅保存状态，不再停唤醒：退后台后继续监听唤醒词（UIBackgroundModes=audio 已开启）
                     chatViewModel?.saveCurrentState()
+                    if newPhase == .background {
+                        // 后台刷新接线：请求下一次 BGAppRefreshTask
+                        BGAppRefreshManager.shared.scheduleRefresh()
+                    }
                 } else if newPhase == .active {
                     startVoiceWakeIfNeeded()
+                    Task {
+                        await checkPendingShareIfNeeded()
+                        updateWidgetIfNeeded()
+                    }
                 }
             }
             .onChange(of: settingsStore.settings.voiceWakeEnabled) { _, enabled in
@@ -163,6 +204,9 @@ struct ClawTalkApp: App {
             }
             .onReceive(NotificationCenter.default.publisher(for: .clawTalkWakeWordDetected)) { _ in
                 handleWakeWordDetected()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .clawTalkDeviceTokenDidChange)) { _ in
+                Task { await PushManager.shared.reportIfConfigured(settings: settingsStore) }
             }
         }
     }
@@ -236,6 +280,33 @@ struct ClawTalkApp: App {
         }
     }
 
+    /// 网关会话入口：懒加载会话列表 ViewModel 并弹出全部会话列表
+    private func openGatewaySessionsList() {
+        if gatewaySessionsViewModel == nil {
+            gatewaySessionsViewModel = ToolsViewModel(
+                settings: settingsStore,
+                gatewayConnection: gatewayConnection
+            )
+        }
+        showGatewaySessions = true
+    }
+
+    /// 点选网关会话：复用 serverSessionKey 逻辑进入聊天（频道 agentId 从会话 key 提取）
+    private func openGatewaySession(_ session: SessionEntry) {
+        let agentId = session.key.split(separator: ":").dropFirst().first.map(String.init) ?? "main"
+        let title = session.displayName ?? session.label
+            ?? ToolsViewModel.friendlyTitle(for: session.key)
+            ?? "会话 \(session.key.suffix(8))"
+        var channel: Channel
+        if let existing = channelStore.channels.first(where: { $0.serverSessionKey == session.key }) {
+            channel = existing
+        } else {
+            channel = Channel(name: title, agentId: agentId, systemEmoji: "💬")
+            channel.serverSessionKey = session.key
+        }
+        selectChannel(channel)
+    }
+
     private func goBack() {
         stopVoiceWake()
         if syncChatViewModel != nil || selectedSyncChannel != nil {
@@ -305,12 +376,13 @@ struct ClawTalkApp: App {
         guard settingsStore.settings.voiceWakeEnabled else { return }
         guard settingsStore.settings.voiceInputEnabled else { return }
         if let vm = chatViewModel, vm.isConversationMode { return }
-        let word = settingsStore.settings.voiceWakeWord
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !word.isEmpty else { return }
+        let words = settingsStore.settings.voiceWakeWords
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        guard !words.isEmpty else { return }
         VoiceWakeCapability.shared.autoRestartsAfterDetection = false
         Task {
-            let result = try? await VoiceWakeCapability.shared.setConfig(keywords: [word], enabled: true, locale: "zh-CN")
+            let result = try? await VoiceWakeCapability.shared.setConfig(keywords: words, enabled: true, locale: "zh-CN")
             if result?.enabled == true {
                 // 监听期间：锁屏/灵动岛显示「随时唤醒」
                 ClawTalkLiveActivity.startWakeListening()
@@ -439,5 +511,229 @@ struct ClawTalkApp: App {
         }()
 
         vm.configure(transcription: stt, speech: tts)
+    }
+    // MARK: - 深链接（clawtalk://）
+
+    /// 深链接接线：pair/connect 写入网关配置；open 按频道名选中进入。
+    private func handleDeepLink(_ url: URL) {
+        guard DeepLinkHandler.handle(url, settings: settingsStore),
+              let payload = DeepLinkHandler.parse(url),
+              payload.action == .open,
+              let name = payload.channelName
+        else { return }
+        if let channel = channelStore.channels.first(where: { $0.name == name }) {
+            selectChannel(channel)
+        }
+    }
+
+    // MARK: - 远程推送
+
+    /// 通知权限已授权/临时授权时向系统注册 APNs（拿到 deviceToken 后由 onReceive 上报网关）。
+    private func ensureRemoteNotificationsRegistered() async {
+        let center = UNUserNotificationCenter.current()
+        let settings = await center.notificationSettings()
+        switch settings.authorizationStatus {
+        case .authorized, .provisional, .ephemeral:
+            PushManager.shared.registerForRemoteNotifications()
+        default:
+            break
+        }
+    }
+
+    // MARK: - 分享扩展轮询（App Group: group.7518554）
+
+    private static let shareSuiteName = "group.7518554"
+    private static let pendingShareFlagKey = "pending_share_flag"
+    private static let pendingShareMessageKey = "pending_share_message"
+    private static let shareChannelsKey = "channels_list"
+
+    /// 分享扩展写入的待发消息契约（与 ClawTalkShareExtension/ShareConstants.swift 保持一致）。
+    private struct PendingShareMessage: Codable {
+        var channelId: String
+        var channelName: String
+        var text: String
+        var attachments: [PendingShareAttachment]
+        var createdAt: TimeInterval
+    }
+
+    private struct PendingShareAttachment: Codable {
+        var fileName: String
+        var containerPath: String
+        var mimeType: String
+    }
+
+    private struct ShareChannelEntry: Codable {
+        let id: String
+        var name: String
+        var agentId: String?
+    }
+
+    /// 启动/进前台轮询：pending_share_flag=true 时读取消息与附件，通过目标频道发送，成功后清标记。
+    private func checkPendingShareIfNeeded() async {
+        guard settingsStore.isConfigured,
+              let groupDefaults = UserDefaults(suiteName: Self.shareSuiteName),
+              groupDefaults.bool(forKey: Self.pendingShareFlagKey)
+        else { return }
+
+        guard let data = groupDefaults.data(forKey: Self.pendingShareMessageKey),
+              let pending = try? JSONDecoder().decode(PendingShareMessage.self, from: data)
+        else {
+            // 消息数据缺失/损坏：清标记，避免反复轮询
+            groupDefaults.set(false, forKey: Self.pendingShareFlagKey)
+            return
+        }
+
+        let channel: Channel
+        if let existing = channelStore.channels.first(where: { $0.id.uuidString == pending.channelId }) {
+            channel = existing
+        } else if let matched = channelStore.channels.first(where: { $0.name == pending.channelName }) {
+            channel = matched
+        } else {
+            channel = Channel(
+                name: pending.channelName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                    ? "分享"
+                    : pending.channelName,
+                agentId: "main"
+            )
+            channelStore.add(channel)
+        }
+
+        var images: [Data] = []
+        var text = pending.text
+        for attachment in pending.attachments {
+            guard let data = try? Data(contentsOf: URL(fileURLWithPath: attachment.containerPath)) else {
+                text += "\n[附件读取失败：\(attachment.fileName)]"
+                continue
+            }
+            if attachment.mimeType.lowercased().hasPrefix("image/") {
+                images.append(data)
+            } else {
+                text += "\n[附件：\(attachment.fileName)（\(attachment.mimeType)）]"
+            }
+        }
+
+        if await sendShareMessage(text: text, images: images, channel: channel) {
+            groupDefaults.set(false, forKey: Self.pendingShareFlagKey)
+            groupDefaults.synchronize()
+            LogCollector.record(module: "分享", "已把分享内容发送到频道「\(channel.name)」")
+        } else {
+            LogCollector.record(module: "分享", "分享内容发送失败，保留待发标记，下次进前台重试")
+        }
+    }
+
+    /// 通过频道发送分享内容：聊天页开着该频道走 ViewModel；否则走网关 WebSocket（不等待完整回复）。
+    @discardableResult
+    private func sendShareMessage(text: String, images: [Data], channel: Channel) async -> Bool {
+        if let vm = chatViewModel, vm.channel.id == channel.id, vm.isVisible {
+            vm.sendText(text, images: images)
+            return true
+        }
+        guard settingsStore.settings.useWebSocket else { return false }
+        if gatewayConnection.connectionState == .disconnected {
+            await gatewayConnection.connect(
+                resolvedURL: settingsStore.settings.resolvedWebSocketURL,
+                token: settingsStore.gatewayToken
+            )
+        }
+        guard gatewayConnection.connectionState == .connected else { return false }
+        do {
+            _ = try await gatewayConnection.chatSend(
+                sessionKey: shareSessionKey(for: channel),
+                message: text,
+                images: images.isEmpty ? nil : images
+            )
+            return true
+        } catch {
+            LogCollector.record(module: "分享", "WebSocket 发送失败：\(AppErrorText.localized(error.localizedDescription))")
+            return false
+        }
+    }
+
+    /// 与 ChatViewModel.sessionKey 保持一致的会话 key 计算（外部会话优先，否则按频道 ID 派生）。
+    private func shareSessionKey(for channel: Channel) -> String {
+        if let external = channel.serverSessionKey, !external.isEmpty { return external }
+        let deviceID = OpenClawClient().deviceID
+        let base = "agent:\(channel.agentId):clawtalk-user:\(deviceID):\(channel.id.uuidString.prefix(8).lowercased())"
+        return channel.sessionVersion > 0 ? "\(base)-v\(channel.sessionVersion)" : base
+    }
+
+    /// 主 App 写入频道列表（JSON 数组），供分享扩展的频道选择器读取。
+    private func syncChannelsToShare() {
+        guard let groupDefaults = UserDefaults(suiteName: Self.shareSuiteName) else { return }
+        let signature = channelStore.channels
+            .map { "\($0.id.uuidString)|\($0.name)|\($0.agentId)" }
+            .joined(separator: "\n")
+        guard signature != syncedChannelsSignature else { return }
+        syncedChannelsSignature = signature
+        let entries = channelStore.channels.map {
+            ShareChannelEntry(id: $0.id.uuidString, name: $0.name, agentId: $0.agentId)
+        }
+        if let data = try? JSONEncoder().encode(entries) {
+            groupDefaults.set(data, forKey: Self.shareChannelsKey)
+            groupDefaults.synchronize()
+        }
+    }
+
+    // MARK: - 主屏小组件数据写入（App Group: group.7518554）
+
+    private static let widgetSuiteName = "group.7518554"
+    private static let widgetChannelNameKey = "widget_channel_name"
+    private static let widgetGatewayStatusKey = "widget_gateway_status"
+    private static let widgetRecentSessionKey = "widget_recent_session"
+    private static let widgetUpdatedAtKey = "widget_updated_at"
+
+    private struct WidgetSnapshot: Equatable {
+        var channelName: String
+        var gatewayStatus: String
+        var recentSession: String
+    }
+
+    private func currentWidgetSnapshot() -> WidgetSnapshot {
+        let status: String
+        switch gatewayConnection.connectionState {
+        case .connected: status = "已连接"
+        case .connecting: status = "连接中"
+        case .disconnected: status = "未连接"
+        }
+        let channelName = selectedChannel?.name
+            ?? chatViewModel?.channel.name
+            ?? channelStore.channels.first?.name
+            ?? ""
+        var recentSession = ""
+        if let vm = chatViewModel,
+           let last = vm.messages.reversed().first(where: { !$0.isStreaming && !$0.content.isEmpty }) {
+            recentSession = String(last.content.prefix(60))
+        }
+        return WidgetSnapshot(
+            channelName: channelName,
+            gatewayStatus: status,
+            recentSession: recentSession
+        )
+    }
+
+    /// 连接状态/最近会话变化时写入小组件键（仅变化时写），并刷新小组件时间线。
+    private func updateWidgetIfNeeded() {
+        guard let groupDefaults = UserDefaults(suiteName: Self.widgetSuiteName) else { return }
+        let snapshot = currentWidgetSnapshot()
+        guard snapshot != widgetSnapshot else { return }
+        widgetSnapshot = snapshot
+        groupDefaults.set(snapshot.channelName, forKey: Self.widgetChannelNameKey)
+        groupDefaults.set(snapshot.gatewayStatus, forKey: Self.widgetGatewayStatusKey)
+        groupDefaults.set(snapshot.recentSession, forKey: Self.widgetRecentSessionKey)
+        groupDefaults.set(Date().timeIntervalSince1970, forKey: Self.widgetUpdatedAtKey)
+        groupDefaults.synchronize()
+        WidgetCenter.shared.reloadAllTimelines()
+    }
+
+    /// 小组件 + 分享频道列表同步循环：App 生命周期内常驻，每 3 秒自检（仅在变化时写入）。
+    private func runWidgetAndShareSyncLoop() async {
+        syncChannelsToShare()
+        updateWidgetIfNeeded()
+        while !Task.isCancelled {
+            try? await Task.sleep(nanoseconds: 3_000_000_000)
+            guard !Task.isCancelled else { return }
+            syncChannelsToShare()
+            updateWidgetIfNeeded()
+        }
     }
 }

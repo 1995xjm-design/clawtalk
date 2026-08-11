@@ -4,11 +4,18 @@ import MarkdownUI
 /// 三端同步聊天页：手机 / 电脑 AutoClaw / 桌面 AI 统一对话历史。
 /// 数据源为桥的 GET /sync（codex 18991 / claude 18992），每 3 秒轮询增量刷新；
 /// 底部输入框发送走网关 chat（model=openclaw:<agentId>），回复由桥写入 /sync 后轮询带回。
+/// 右上角菜单：查找聊天内容（本地过滤）/ 清空聊天 / 删除频道；删除单条只影响本机显示。
 struct SyncChatView: View {
     @Bindable var viewModel: SyncChatViewModel
     var onBack: (() -> Void)?
+    var onDeleteChannel: (() -> Void)?
 
     @State private var textInput = ""
+    @State private var showSearch = false
+    @State private var searchText = ""
+    @State private var showClearConfirm = false
+    @State private var showDeleteConfirm = false
+    @State private var scrollTargetID: UUID?
     @FocusState private var isInputFocused: Bool
 
     var body: some View {
@@ -22,6 +29,28 @@ struct SyncChatView: View {
         .background(Color(.systemBackground))
         .onAppear { viewModel.startPolling() }
         .onDisappear { viewModel.stopPolling() }
+        .alert("清空聊天记录？", isPresented: $showClearConfirm) {
+            Button("清空聊天", role: .destructive) {
+                viewModel.clearHistory()
+            }
+            Button("取消", role: .cancel) {}
+        } message: {
+            Text("只清除本机显示：记录清空时间点，之后只显示新消息，不影响电脑端历史。")
+        }
+        .alert("删除频道？", isPresented: $showDeleteConfirm) {
+            Button("删除", role: .destructive) {
+                onDeleteChannel?()
+            }
+            Button("取消", role: .cancel) {}
+        } message: {
+            Text("将删除该频道及其本机显示记录，此操作无法撤销。")
+        }
+        .sheet(isPresented: $showSearch) {
+            SyncSearchView(messages: viewModel.messages, searchText: $searchText) { message in
+                scrollTargetID = message.id
+                showSearch = false
+            }
+        }
     }
 
     // MARK: - 导航栏
@@ -53,16 +82,37 @@ struct SyncChatView: View {
 
                 Spacer()
 
-                Button {
-                    Task { await viewModel.refresh() }
-                } label: {
-                    Image(systemName: "arrow.clockwise")
-                        .font(.title)
-                        .foregroundStyle(.openClawRed)
-                        .contentShape(Rectangle())
-                        .frame(width: 44, height: 44)
+                HStack(spacing: 18) {
+                    Button {
+                        Task { await viewModel.refresh() }
+                    } label: {
+                        Image(systemName: "arrow.clockwise")
+                            .font(.title)
+                            .foregroundStyle(.openClawRed)
+                            .contentShape(Rectangle())
+                            .frame(width: 44, height: 44)
+                    }
+                    .accessibilityLabel("刷新")
+
+                    Menu {
+                        Button(action: { showSearch = true }) {
+                            Label("查找聊天内容", systemImage: "magnifyingglass")
+                        }
+                        Button(action: { showClearConfirm = true }) {
+                            Label("清空聊天", systemImage: "trash")
+                        }
+                        Button(role: .destructive, action: { showDeleteConfirm = true }) {
+                            Label("删除频道", systemImage: "minus.circle")
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis.circle")
+                            .font(.title)
+                            .foregroundStyle(.openClawRed)
+                            .contentShape(Rectangle())
+                            .frame(width: 44, height: 44)
+                    }
+                    .accessibilityLabel("更多操作")
                 }
-                .accessibilityLabel("刷新")
             }
         }
         .padding(.horizontal, 16)
@@ -80,7 +130,8 @@ struct SyncChatView: View {
                             message: message,
                             onRetry: message.hasSendError
                                 ? { viewModel.retryFailedMessage(content: message.content) }
-                                : nil
+                                : nil,
+                            onDelete: { viewModel.deleteMessage(message) }
                         )
                         .id(message.id)
                     }
@@ -106,6 +157,13 @@ struct SyncChatView: View {
             }
             .onChange(of: viewModel.messages.last?.content) {
                 scrollToBottom(using: proxy)
+            }
+            // 查找聊天内容：点结果后滚动定位到对应消息
+            .onChange(of: scrollTargetID) { _, targetID in
+                guard let targetID else { return }
+                withAnimation(.easeOut(duration: 0.25)) {
+                    proxy.scrollTo(targetID, anchor: .center)
+                }
             }
         }
     }
@@ -226,10 +284,66 @@ struct SyncChatView: View {
     }
 }
 
+/// 查找聊天内容：基于已加载消息本地过滤，点结果滚动定位
+private struct SyncSearchView: View {
+    @Environment(\.dismiss) private var dismiss
+    let messages: [SyncMessage]
+    @Binding var searchText: String
+    let onSelect: (SyncMessage) -> Void
+
+    private var results: [SyncMessage] {
+        let keyword = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !keyword.isEmpty else { return [] }
+        return messages.filter { $0.content.localizedCaseInsensitiveContains(keyword) }
+    }
+
+    var body: some View {
+        NavigationStack {
+            List {
+                if results.isEmpty && !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    Text("未找到匹配消息")
+                        .foregroundStyle(.secondary)
+                }
+                ForEach(results) { message in
+                    Button {
+                        onSelect(message)
+                    } label: {
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack(spacing: 6) {
+                                Image(systemName: message.role == .user ? "person.fill" : "cpu")
+                                    .font(.caption)
+                                    .foregroundStyle(message.role == .user ? .blue : Color.openClawRed)
+                                Text(message.timestamp, style: .time)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Text(message.content)
+                                .font(.subheadline)
+                                .lineLimit(3)
+                                .multilineTextAlignment(.leading)
+                                .foregroundStyle(.primary)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .navigationTitle("查找聊天内容")
+            .navigationBarTitleDisplayMode(.inline)
+            .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .always), prompt: "搜索已加载消息…")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("取消") { dismiss() }
+                }
+            }
+        }
+    }
+}
+
 /// 聊天气泡：样式对齐现有 ChatView（用户右侧红底白字，AI 左侧灰底 Markdown）
 private struct SyncBubble: View {
     let message: SyncMessage
     var onRetry: (() -> Void)?
+    var onDelete: (() -> Void)?
 
     private var isUser: Bool { message.role == .user }
 
@@ -283,6 +397,9 @@ private struct SyncBubble: View {
                 UIPasteboard.general.string = message.content
             }) {
                 Label("复制", systemImage: "doc.on.doc")
+            }
+            Button(role: .destructive, action: { onDelete?() }) {
+                Label("删除", systemImage: "trash")
             }
         }
     }

@@ -7,6 +7,9 @@ struct DiagnosticsView: View {
     @State private var isSyncing = false
     @State private var resultText: String?
     @State private var syncError: String?
+    @State private var isSendingToFiles = false
+    @State private var filesMessage: String?
+    @State private var filesError: String?
 
     private var logText: String {
         LogCollector.load()
@@ -32,6 +35,20 @@ struct DiagnosticsView: View {
                 }
                 .disabled(isSyncing || settings.settings.gatewayURL.isEmpty)
 
+                Button {
+                    sendLogsToFileTransfer()
+                } label: {
+                    if isSendingToFiles {
+                        HStack(spacing: 6) {
+                            ProgressView()
+                            Text("正在发送…")
+                        }
+                    } else {
+                        Label("发送到文件传输助手", systemImage: "paperplane")
+                    }
+                }
+                .disabled(isSendingToFiles || settings.settings.gatewayURL.isEmpty)
+
                 Button("复制全部") {
                     UIPasteboard.general.string = logText
                 }
@@ -51,6 +68,20 @@ struct DiagnosticsView: View {
             if let syncError {
                 Section {
                     Text(syncError)
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                }
+            }
+            if let filesMessage {
+                Section("发送结果") {
+                    Text(filesMessage)
+                        .font(.callout)
+                        .textSelection(.enabled)
+                }
+            }
+            if let filesError {
+                Section {
+                    Text(filesError)
                         .font(.caption)
                         .foregroundStyle(.red)
                 }
@@ -117,6 +148,42 @@ struct DiagnosticsView: View {
             } catch {
                 isSyncing = false
                 syncError = "同步失败：\(AppErrorText.localized(error.localizedDescription))"
+            }
+        }
+    }
+
+    /// 导出日志为带时间戳的 txt，复用文件传输助手上传接口（POST /upload）发送到电脑端 inbound。
+    private func sendLogsToFileTransfer() {
+        guard !settings.settings.gatewayURL.isEmpty else {
+            filesError = "请先配置网关地址和令牌。"
+            return
+        }
+        isSendingToFiles = true
+        filesMessage = nil
+        filesError = nil
+
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyyMMdd-HHmmss"
+        let name = "clawtalk-logs-\(formatter.string(from: Date())).txt"
+        let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(name)
+        let text = logText.isEmpty ? "（暂无日志）" : logText
+        do {
+            try text.write(to: tempURL, atomically: true, encoding: .utf8)
+        } catch {
+            isSendingToFiles = false
+            filesError = "日志导出失败：\(AppErrorText.localized(error.localizedDescription))"
+            return
+        }
+
+        let transfer = FileTransferViewModel(settings: settings)
+        Task {
+            let ok = await transfer.uploadFile(fileURL: tempURL, suggestedName: name)
+            isSendingToFiles = false
+            try? FileManager.default.removeItem(at: tempURL)
+            if ok {
+                filesMessage = "已发送到电脑 inbound（\(name)）"
+            } else {
+                filesError = transfer.errorMessage ?? "发送失败，请确认电脑端文件服务已启动。"
             }
         }
     }

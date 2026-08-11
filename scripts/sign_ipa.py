@@ -1,13 +1,21 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""Sign an unsigned ClawTalk ipa with a third-party P12 + two provisioning
-profiles (main app + keyboard extension). Runs on macOS (codesign + security).
+"""Sign an unsigned ClawTalk ipa with a third-party P12 + provisioning
+profiles (main app + keyboard/widget/share extensions). Runs on macOS
+(codesign + security).
 
 Usage:
   python3 sign_ipa.py \
     --ipa unsigned.zip --p12 sign.p12 --password 1 \
     --main-profile main.mobileprovision --ext-profile ext.mobileprovision \
+    [--widget-profile widget.mobileprovision] \
+    [--share-profile share.mobileprovision] \
     --out signed.ipa
+
+Profile selection per extension:
+  * widget extension -> --widget-profile (falls back to --ext-profile)
+  * share extension  -> --share-profile (falls back to --ext-profile)
+  * other extensions -> --ext-profile
 """
 import argparse
 import os
@@ -41,6 +49,16 @@ def find_distribution_identity():
     return None
 
 
+def pick_profile(ext_name, widget_profile, share_profile, ext_profile):
+    """Choose the provisioning profile for an extension by its name."""
+    lower = ext_name.lower()
+    if "widget" in lower and widget_profile:
+        return widget_profile
+    if "share" in lower and share_profile:
+        return share_profile
+    return ext_profile
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--ipa", required=True, help="path to unsigned ipa or artifact zip")
@@ -48,6 +66,10 @@ def main():
     ap.add_argument("--password", required=True)
     ap.add_argument("--main-profile", required=True)
     ap.add_argument("--ext-profile", required=True)
+    ap.add_argument("--widget-profile", default=None,
+                    help="widget extension profile; falls back to --ext-profile")
+    ap.add_argument("--share-profile", default=None,
+                    help="share extension profile; falls back to --ext-profile")
     ap.add_argument("--out", required=True)
     args = ap.parse_args()
 
@@ -96,23 +118,29 @@ def main():
 
         # --- entitlements ---
         main_ent = extract_entitlements(args.main_profile)
-        ext_ent = extract_entitlements(args.ext_profile)
         main_ent_path = os.path.join(tmp, "main_ent.plist")
-        ext_ent_path = os.path.join(tmp, "ext_ent.plist")
         with open(main_ent_path, "wb") as f:
             plistlib.dump(main_ent, f)
-        with open(ext_ent_path, "wb") as f:
-            plistlib.dump(ext_ent, f)
+
+        def write_entitlements(profile_path, tag):
+            ent = extract_entitlements(profile_path)
+            path = os.path.join(tmp, "%s_ent.plist" % tag)
+            with open(path, "wb") as f:
+                plistlib.dump(ent, f)
+            return path
 
         # --- embed profiles + sign extensions first, then the app ---
         shutil.copy(args.main_profile, os.path.join(app_path, "embedded.mobileprovision"))
         for ext in exts:
             ext_path = os.path.join(plug_ins, ext)
-            shutil.copy(args.ext_profile, os.path.join(ext_path, "embedded.mobileprovision"))
+            profile = pick_profile(ext, args.widget_profile, args.share_profile, args.ext_profile)
+            tag = re.sub(r"[^A-Za-z0-9]", "_", ext)
+            ent_path = write_entitlements(profile, tag)
+            shutil.copy(profile, os.path.join(ext_path, "embedded.mobileprovision"))
             subprocess.run(["codesign", "--force", "--sign", identity,
-                            "--entitlements", ext_ent_path,
+                            "--entitlements", ent_path,
                             "--timestamp=none", ext_path], check=True)
-            print("signed extension:", ext)
+            print("signed extension: %s | profile: %s" % (ext, os.path.basename(profile)))
         subprocess.run(["codesign", "--force", "--sign", identity,
                         "--entitlements", main_ent_path,
                         "--timestamp=none", app_path], check=True)

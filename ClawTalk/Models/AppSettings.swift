@@ -3,12 +3,16 @@ import Foundation
 enum TTSProvider: String, Codable, CaseIterable, Identifiable {
     case apple = "Apple (Offline)"
     case doubao = "豆包 (Doubao)"
-    case edge = "Edge（晓晓/晓墨/云希/云扬）"
+    case edge = "Edge(Microsoft)"
 
-    // 兼容旧数据：未知/已删除的 Provider 回退到 Apple
+    // 兼容旧数据：未知/已删除的 Provider 回退到 Apple；旧版本 Edge 的 rawValue 是中文描述
     init(from decoder: Decoder) throws {
         let raw = try decoder.singleValueContainer().decode(String.self)
-        self = TTSProvider(rawValue: raw) ?? .apple
+        if raw == "Edge（晓晓/晓墨/云希/云扬）" {
+            self = .edge
+        } else {
+            self = TTSProvider(rawValue: raw) ?? .apple
+        }
     }
 
     var id: String { rawValue }
@@ -49,6 +53,10 @@ enum Appearance: String, Codable, CaseIterable, Identifiable {
 
 struct AppSettings: Codable {
     var gatewayURL: String
+    /// 一次性配对令牌（来自 `openclaw qr` 配对码）。首次连接且尚无已配对 deviceToken 时，
+    /// 握手走 bootstrap 配对路径（auth.bootstrapToken）；配对成功后网关下发长期 deviceToken。
+    /// 内部使用，不在设置页展示。
+    var bootstrapToken: String?
     var ttsProvider: TTSProvider
     var sttProvider: STTProvider
     var fusionBackendURL: String
@@ -72,12 +80,25 @@ struct AppSettings: Codable {
     var appearance: Appearance
     /// 语音唤醒开关（SIRI 式，仅前台监听）
     var voiceWakeEnabled: Bool
-    /// 唤醒词
-    var voiceWakeWord: String
+    /// 唤醒词列表（支持多词，任一命中即唤醒）
+    var voiceWakeWords: [String]
+    /// 兼容旧字段：读/写第一个唤醒词（旧代码与旧数据使用；新 UI 用 voiceWakeWords）
+    var voiceWakeWord: String {
+        get { voiceWakeWords.first ?? "" }
+        set {
+            if voiceWakeWords.isEmpty {
+                voiceWakeWords = [newValue]
+            } else {
+                voiceWakeWords[0] = newValue
+            }
+        }
+    }
     /// 语音唤醒命中后进入的频道 ID（UUID 字符串，nil=跟随默认/第一个频道）
     var voiceWakeChannelID: String?
     /// 文件传输助手服务地址（留空则从网关地址自动推断：同主机、端口 8899）
     var fileServerURL: String
+    /// 网关自定义请求头（仅附加到 OpenClaw 网关请求）
+    var customHeaders: [String: String]
 
     static let defaults = AppSettings(
         gatewayURL: "",
@@ -100,8 +121,9 @@ struct AppSettings: Codable {
         hapticsEnabled: true,
         appearance: .dark,
         voiceWakeEnabled: false,
-        voiceWakeWord: "你好小爪",
-        fileServerURL: ""
+        voiceWakeWords: ["你好小爪"],
+        fileServerURL: "",
+        customHeaders: [:]
     )
 
     /// Build the full WebSocket URL from the gateway URL + port/path override.
@@ -130,6 +152,7 @@ struct AppSettings: Codable {
 
     init(
         gatewayURL: String,
+        bootstrapToken: String? = nil,
         ttsProvider: TTSProvider,
         sttProvider: STTProvider = .apple,
         fusionBackendURL: String = "http://127.0.0.1:18890",
@@ -150,10 +173,13 @@ struct AppSettings: Codable {
         appearance: Appearance = .dark,
         voiceWakeEnabled: Bool = false,
         voiceWakeWord: String = "你好小爪",
+        voiceWakeWords: [String]? = nil,
         voiceWakeChannelID: String? = nil,
-        fileServerURL: String = ""
+        fileServerURL: String = "",
+        customHeaders: [String: String] = [:]
     ) {
         self.gatewayURL = gatewayURL
+        self.bootstrapToken = bootstrapToken
         self.ttsProvider = ttsProvider
         self.sttProvider = sttProvider
         self.fusionBackendURL = fusionBackendURL
@@ -173,14 +199,21 @@ struct AppSettings: Codable {
         self.hapticsEnabled = hapticsEnabled
         self.appearance = appearance
         self.voiceWakeEnabled = voiceWakeEnabled
-        self.voiceWakeWord = voiceWakeWord
+        self.voiceWakeWords = voiceWakeWords ?? [voiceWakeWord]
         self.voiceWakeChannelID = voiceWakeChannelID
         self.fileServerURL = fileServerURL
+        self.customHeaders = customHeaders
     }
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         gatewayURL = try container.decode(String.self, forKey: .gatewayURL)
+        if let raw = try container.decodeIfPresent(String.self, forKey: .bootstrapToken)?
+            .trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty {
+            bootstrapToken = raw
+        } else {
+            bootstrapToken = nil
+        }
         ttsProvider = (try? container.decode(TTSProvider.self, forKey: .ttsProvider)) ?? .apple
         sttProvider = (try? container.decodeIfPresent(STTProvider.self, forKey: .sttProvider)) ?? .apple
         fusionBackendURL = try container.decodeIfPresent(String.self, forKey: .fusionBackendURL) ?? "http://127.0.0.1:18890"
@@ -199,9 +232,16 @@ struct AppSettings: Codable {
         hapticsEnabled = try container.decodeIfPresent(Bool.self, forKey: .hapticsEnabled) ?? true
         appearance = try container.decodeIfPresent(Appearance.self, forKey: .appearance) ?? .dark
         voiceWakeEnabled = try container.decodeIfPresent(Bool.self, forKey: .voiceWakeEnabled) ?? false
-        voiceWakeWord = try container.decodeIfPresent(String.self, forKey: .voiceWakeWord) ?? "你好小爪"
+        if let words = try container.decodeIfPresent([String].self, forKey: .voiceWakeWords), !words.isEmpty {
+            voiceWakeWords = words
+        } else if let legacyWord = try container.decodeIfPresent(String.self, forKey: .voiceWakeWord), !legacyWord.isEmpty {
+            voiceWakeWords = [legacyWord]
+        } else {
+            voiceWakeWords = ["你好小爪"]
+        }
         voiceWakeChannelID = try container.decodeIfPresent(String.self, forKey: .voiceWakeChannelID)
         fileServerURL = try container.decodeIfPresent(String.self, forKey: .fileServerURL) ?? ""
+        customHeaders = try container.decodeIfPresent([String: String].self, forKey: .customHeaders) ?? [:]
 
         // Migrate legacy webSocketPort -> webSocketPath
         if let legacyPort = try container.decodeIfPresent(Int.self, forKey: .webSocketPort) {
@@ -212,7 +252,8 @@ struct AppSettings: Codable {
     }
 
     enum CodingKeys: String, CodingKey {
-        case gatewayURL, ttsProvider, sttProvider, fusionBackendURL, openclawVoice, doubaoVoiceID, edgeVoiceID
+        case gatewayURL, bootstrapToken
+        case ttsProvider, sttProvider, fusionBackendURL, openclawVoice, doubaoVoiceID, edgeVoiceID
         case ttsSpeed, ttsPitch
         case wechatBridgeURL, whisperLanguage, voiceOutputEnabled, voiceInputEnabled
         case agentAPIMode, showTokenUsage, useWebSocket
@@ -220,14 +261,17 @@ struct AppSettings: Codable {
         case hapticsEnabled
         case appearance
         case voiceWakeEnabled
-        case voiceWakeWord
+        case voiceWakeWord // legacy decode/encode key
+        case voiceWakeWords
         case voiceWakeChannelID
         case fileServerURL
+        case customHeaders
     }
 
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(gatewayURL, forKey: .gatewayURL)
+        try container.encodeIfPresent(bootstrapToken, forKey: .bootstrapToken)
         try container.encode(ttsProvider, forKey: .ttsProvider)
         try container.encode(sttProvider, forKey: .sttProvider)
         try container.encode(fusionBackendURL, forKey: .fusionBackendURL)
@@ -247,9 +291,11 @@ struct AppSettings: Codable {
         try container.encode(hapticsEnabled, forKey: .hapticsEnabled)
         try container.encode(appearance, forKey: .appearance)
         try container.encode(voiceWakeEnabled, forKey: .voiceWakeEnabled)
-        try container.encode(voiceWakeWord, forKey: .voiceWakeWord)
+        try container.encode(voiceWakeWords, forKey: .voiceWakeWords)
+        try container.encode(voiceWakeWord, forKey: .voiceWakeWord) // 兼容旧读取方：写入第一个词
         try container.encodeIfPresent(voiceWakeChannelID, forKey: .voiceWakeChannelID)
         try container.encode(fileServerURL, forKey: .fileServerURL)
+        try container.encode(customHeaders, forKey: .customHeaders)
         // webSocketPort intentionally not encoded - legacy only
     }
 }

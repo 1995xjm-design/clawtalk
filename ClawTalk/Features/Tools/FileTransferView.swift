@@ -1,5 +1,7 @@
+import PhotosUI
 import QuickLook
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// 文件传输助手（频道版）：电脑端 OpenClaw 成果文件（media/outbound）以「聊天卡片」形式逐条展示。
 /// 复用 FileTransferViewModel 的服务检测、一键启动、下载、存相册、QuickLook、分享、删除逻辑。
@@ -17,6 +19,12 @@ struct FileTransferChannelView: View {
     @State private var pendingImageURL: URL?
     @State private var previewItem: PreviewItem?
     @State private var activeAlert: ActiveAlert?
+    @State private var showDownloadConfirm = false
+    @State private var pendingDownloadFile: FileTransferViewModel.RemoteFile?
+    @State private var showFileSourceDialog = false
+    @State private var showPhotoPicker = false
+    @State private var showFileImporter = false
+    @State private var photoItem: PhotosPickerItem?
 
     init(settings: SettingsStore, embeddedInNavigation: Bool = false, onBack: (() -> Void)? = nil) {
         self.settings = settings
@@ -138,6 +146,58 @@ struct FileTransferChannelView: View {
             }
             Button("取消", role: .cancel) {}
         }
+        .confirmationDialog(
+            "是否下载？",
+            isPresented: $showDownloadConfirm,
+            titleVisibility: .visible,
+            presenting: pendingDownloadFile
+        ) { file in
+            Button("下载") { startDownload(file) }
+            Button("取消", role: .cancel) {}
+        }
+        .confirmationDialog(
+            "发送文件到电脑",
+            isPresented: $showFileSourceDialog,
+            titleVisibility: .visible
+        ) {
+            Button("从相册选择") { showPhotoPicker = true }
+            Button("从文件选择") { showFileImporter = true }
+            Button("取消", role: .cancel) {}
+        }
+        .photosPicker(isPresented: $showPhotoPicker, selection: $photoItem, matching: .any(of: [.images, .videos]))
+        .fileImporter(isPresented: $showFileImporter, allowedContentTypes: [.item]) { result in
+            switch result {
+            case .success(let url):
+                Task { await uploadPickedFile(url: url, suggestedName: url.lastPathComponent) }
+            case .failure(let error):
+                showHint("选择文件失败：\(error.localizedDescription)")
+            }
+        }
+        .onChange(of: photoItem) { _, newItem in
+            guard let newItem else { return }
+            Task {
+                defer { photoItem = nil }
+                guard let data = try? await newItem.loadTransferable(type: Data.self) else {
+                    if let fileURL = try? await newItem.loadTransferable(type: URL.self) {
+                        await uploadPickedFile(url: fileURL, suggestedName: fileURL.lastPathComponent)
+                    } else {
+                        showHint("读取所选文件失败。")
+                    }
+                    return
+                }
+                let ext = newItem.supportedContentTypes.first?.preferredFilenameExtension ?? "bin"
+                let name = "photo-\(UUID().uuidString.prefix(8)).\(ext)"
+                let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(name)
+                do {
+                    try data.write(to: tempURL)
+                } catch {
+                    showHint("读取所选文件失败。")
+                    return
+                }
+                await uploadPickedFile(url: tempURL, suggestedName: name)
+                try? FileManager.default.removeItem(at: tempURL)
+            }
+        }
     }
 
     // MARK: - 服务未启动引导
@@ -228,9 +288,38 @@ struct FileTransferChannelView: View {
     }
     // MARK: - 聊天式文件列表
 
+    /// 发送文件到电脑（相册 / 文件选择，带上传进度）。
+    private var uploadBar: some View {
+        VStack(spacing: 8) {
+            Button {
+                showFileSourceDialog = true
+            } label: {
+                Label(viewModel.isUploading ? "正在上传…" : "发送文件到电脑", systemImage: "square.and.arrow.up")
+                    .font(.subheadline.weight(.medium))
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(.openClawRed)
+            .disabled(viewModel.isUploading)
+
+            if let progress = viewModel.uploadProgress {
+                VStack(spacing: 4) {
+                    ProgressView(value: progress)
+                    Text("已上传 \(Int(progress * 100))%")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+        .padding(.top, 6)
+        .padding(.bottom, 2)
+    }
+
     private var chatFileList: some View {
         ScrollView {
             LazyVStack(spacing: 10) {
+                uploadBar
+
                 Text("电脑端 OpenClaw 成果文件（media/outbound）")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
@@ -303,54 +392,68 @@ struct FileTransferChannelView: View {
 
     private func remoteFileCard(_ file: FileTransferViewModel.RemoteFile) -> some View {
         let local = viewModel.localFile(named: file.name)
-        return Button {
-            handleFileTap(file)
-        } label: {
-            HStack(spacing: 12) {
-                Image(systemName: iconName(forExtension: file.ext))
-                    .font(.title2)
-                    .foregroundStyle(.openClawRed)
-                    .frame(width: 40, height: 40)
-                    .background(Color(.systemGray5))
-                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        return HStack(spacing: 12) {
+            // 卡片主体：未下载 → 弹「是否下载？」确认框；已下载 → 打开预览
+            Button {
+                handleFileTap(file)
+            } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: iconName(forExtension: file.ext))
+                        .font(.title2)
+                        .foregroundStyle(.openClawRed)
+                        .frame(width: 40, height: 40)
+                        .background(Color(.systemGray5))
+                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
 
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(file.name)
-                        .font(.body)
-                        .lineLimit(2)
-                        .multilineTextAlignment(.leading)
-                        .foregroundStyle(.primary)
-                    Text("\(FileTransferViewModel.formatBytes(file.size)) · \(FileTransferViewModel.formatTime(millis: file.mtime))")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    if local != nil {
-                        Label("已下载", systemImage: "checkmark.circle.fill")
-                            .font(.caption2)
-                            .foregroundStyle(.green)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(file.name)
+                            .font(.body)
+                            .lineLimit(2)
+                            .multilineTextAlignment(.leading)
+                            .foregroundStyle(.primary)
+                        Text("\(FileTransferViewModel.formatBytes(file.size)) · \(FileTransferViewModel.formatTime(millis: file.mtime))")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        if local != nil {
+                            Label("已下载", systemImage: "checkmark.circle.fill")
+                                .font(.caption2)
+                                .foregroundStyle(.green)
+                        }
                     }
+
+                    Spacer(minLength: 0)
                 }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .disabled(viewModel.downloadingFileName != nil && viewModel.downloadingFileName != file.name)
 
-                Spacer(minLength: 8)
-
-                if viewModel.downloadingFileName == file.name {
-                    ProgressView()
-                } else if local != nil {
+            // 右侧按钮：未下载 → 直接下载；已下载 → 分享
+            if viewModel.downloadingFileName == file.name {
+                ProgressView()
+            } else if local != nil {
+                ShareLink(item: local.url) {
                     Image(systemName: "arrow.up.forward.circle")
                         .font(.title3)
                         .foregroundStyle(.green)
-                } else {
+                }
+                .buttonStyle(.plain)
+            } else {
+                Button {
+                    startDownload(file)
+                } label: {
                     Image(systemName: "arrow.down.circle")
                         .font(.title3)
                         .foregroundStyle(.openClawRed)
                 }
+                .buttonStyle(.plain)
+                .disabled(viewModel.downloadingFileName != nil)
             }
-            .padding(12)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color(.secondarySystemBackground))
-            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         }
-        .buttonStyle(.plain)
-        .disabled(viewModel.downloadingFileName != nil && viewModel.downloadingFileName != file.name)
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color(.secondarySystemBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         .contextMenu {
             if let local = local {
                 Button {
@@ -441,12 +544,27 @@ struct FileTransferChannelView: View {
 
     // MARK: - 交互
 
-    /// 点击卡片：已下载则打开预览，未下载则开始下载；图片下载后询问保存到相册。
+    /// 点击卡片：已下载则打开预览，未下载则弹出「是否下载？」确认框；图片下载后询问保存到相册。
     private func handleFileTap(_ file: FileTransferViewModel.RemoteFile) {
         if let local = viewModel.localFile(named: file.name) {
             previewItem = PreviewItem(url: local.url)
         } else {
-            startDownload(file)
+            pendingDownloadFile = file
+            showDownloadConfirm = true
+        }
+    }
+
+    /// 上传用户选择的文件到电脑端 inbound（成功后提示）。
+    private func uploadPickedFile(url: URL, suggestedName: String) async {
+        let accessing = url.startAccessingSecurityScopedResource()
+        defer {
+            if accessing {
+                url.stopAccessingSecurityScopedResource()
+            }
+        }
+        let ok = await viewModel.uploadFile(fileURL: url, suggestedName: suggestedName)
+        if ok {
+            showHint("已发送到电脑 inbound（\(suggestedName)）")
         }
     }
 

@@ -29,7 +29,12 @@ final class SettingsStore {
     }
 
     var isConfigured: Bool {
-        !settings.gatewayURL.isEmpty && !gatewayToken.isEmpty
+        guard !settings.gatewayURL.isEmpty else { return false }
+        let hasGatewayToken = !gatewayToken.isEmpty
+        let hasBootstrapToken = settings.bootstrapToken?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .isEmpty == false
+        return hasGatewayToken || hasBootstrapToken
     }
 
     var hasCompletedOnboarding: Bool = false {

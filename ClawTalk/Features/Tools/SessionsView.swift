@@ -5,6 +5,8 @@ struct SessionsView: View {
     @State private var selectedSession: SessionEntry?
     @State private var showAddedAlert = false
     @State private var addedChannelName = ""
+    /// 网关会话入口模式：非 nil 时点击会话直接回调（进入聊天），不再进入会话详情
+    var onSelectSession: ((SessionEntry) -> Void)?
 
     var body: some View {
         List {
@@ -38,79 +40,19 @@ struct SessionsView: View {
             }
 
             ForEach(viewModel.sessions) { session in
-                NavigationLink {
-                    SessionDetailView(viewModel: viewModel, session: session)
-                } label: {
-                    VStack(alignment: .leading, spacing: 6) {
-                        HStack {
-                            Text(viewModel.sessionTitles[session.key] ?? "会话 \(session.key.suffix(8))")
-                                .font(.body)
-                                .fontWeight(.medium)
-                                .foregroundStyle(.primary)
-
-                            Spacer()
-
-                            if let kind = session.kind {
-                                Text(kind)
-                                    .font(.caption2)
-                                    .fontWeight(.semibold)
-                                    .foregroundStyle(.white)
-                                    .padding(.horizontal, 6)
-                                    .padding(.vertical, 2)
-                                    .background(Capsule().fill(kindColor(kind)))
-                            }
+                sessionRow(session)
+                    .swipeActions(edge: .trailing) {
+                        Button {
+                            addSessionToChannel(session)
+                        } label: {
+                            Label("添加到频道", systemImage: "plus")
                         }
-
-                        HStack(spacing: 12) {
-                            if let channel = session.channel {
-                                Label(channel, systemImage: "number")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-
-                            if let model = session.model {
-                                Label(model, systemImage: "cpu")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-
-                        HStack(spacing: 12) {
-                            if let tokens = session.contextTokens {
-                                Text("\(tokens) 上下文令牌")
-                                    .font(.caption2)
-                                    .foregroundStyle(.tertiary)
-                            }
-
-                            if let total = session.totalTokens {
-                                Text("\(total) 总计")
-                                    .font(.caption2)
-                                    .foregroundStyle(.tertiary)
-                            }
-
-                            Spacer()
-
-                            if let updatedAt = session.updatedAt {
-                                Text(relativeTime(updatedAt))
-                                    .font(.caption2)
-                                    .foregroundStyle(.tertiary)
-                            }
-                        }
+                        .tint(.openClawRed)
                     }
-                    .padding(.vertical, 4)
-                }
-                .swipeActions(edge: .trailing) {
-                    Button {
-                        addSessionToChannel(session)
-                    } label: {
-                        Label("添加到频道", systemImage: "plus")
-                    }
-                    .tint(.openClawRed)
-                }
             }
         }
         .listStyle(.plain)
-        .navigationTitle("会话")
+        .navigationTitle(onSelectSession == nil ? "会话" : "网关会话")
         .refreshable {
             await viewModel.listSessions()
         }
@@ -127,6 +69,84 @@ struct SessionsView: View {
                 ProgressView()
             }
         }
+    }
+
+    @ViewBuilder
+    private func sessionRow(_ session: SessionEntry) -> some View {
+        if let onSelectSession {
+            Button {
+                onSelectSession(session)
+            } label: {
+                sessionRowContent(session)
+            }
+            .buttonStyle(.plain)
+        } else {
+            NavigationLink {
+                SessionDetailView(viewModel: viewModel, session: session)
+            } label: {
+                sessionRowContent(session)
+            }
+        }
+    }
+
+    private func sessionRowContent(_ session: SessionEntry) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text(viewModel.sessionTitles[session.key] ?? "会话 \(session.key.suffix(8))")
+                    .font(.body)
+                    .fontWeight(.medium)
+                    .foregroundStyle(.primary)
+
+                Spacer()
+
+                if let kind = session.kind {
+                    Text(kind)
+                        .font(.caption2)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Capsule().fill(kindColor(kind)))
+                }
+            }
+
+            HStack(spacing: 12) {
+                if let channel = session.channel {
+                    Label(channel, systemImage: "number")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                if let model = session.model {
+                    Label(model, systemImage: "cpu")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            HStack(spacing: 12) {
+                if let tokens = session.contextTokens {
+                    Text("\(tokens) 上下文令牌")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
+
+                if let total = session.totalTokens {
+                    Text("\(total) 总计")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
+
+                Spacer()
+
+                if let updatedAt = session.updatedAt {
+                    Text(relativeTime(updatedAt))
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
+            }
+        }
+        .padding(.vertical, 4)
     }
 
     private func addSessionToChannel(_ session: SessionEntry) {

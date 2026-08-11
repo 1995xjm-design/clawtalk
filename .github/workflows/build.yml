@@ -1,4 +1,4 @@
-name: Build & Test (ClawTalk + Keyboard)
+name: Build & Test (ClawTalk + Keyboard + Widget + Share)
 
 on:
   push:
@@ -52,6 +52,15 @@ jobs:
             -destination 'generic/platform=iOS Simulator' \
             CODE_SIGNING_ALLOWED=NO | tee build-widget.log
 
+      - name: Build ClawTalkShareExtension (standalone)
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -project ClawTalk.xcodeproj \
+            -scheme ClawTalkShareExtension \
+            -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO | tee build-share.log
+
       - name: Run unit tests
         run: |
           set -o pipefail
@@ -101,9 +110,11 @@ jobs:
             build-app.log
             build-keyboard.log
             build-widget.log
+            build-share.log
             test.log
-  # 真签名打包：直接对 unsigned ipa 用 codesign 签名（p12 + 主/扩展两张描述文件）
+  # 真签名打包：直接对 unsigned ipa 用 codesign 签名（p12 + 主/扩展描述文件）
   # Secrets 必填：P12_BASE64 / P12_PASSWORD / PROFILE_MAIN_B64 / PROFILE_EXT_B64
+  # Secrets 可选：PROFILE_WIDGET_B64 / PROFILE_SHARE_B64（缺省回退 ext profile）
   sign:
     needs: build
     if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
@@ -138,27 +149,45 @@ jobs:
           P12_B64: ${{ secrets.P12_BASE64 }}
           MAIN_PROFILE_B64: ${{ secrets.PROFILE_MAIN_B64 }}
           EXT_PROFILE_B64: ${{ secrets.PROFILE_EXT_B64 }}
+          WIDGET_PROFILE_B64: ${{ secrets.PROFILE_WIDGET_B64 }}
+          SHARE_PROFILE_B64: ${{ secrets.PROFILE_SHARE_B64 }}
         run: |
           set -e
           mkdir -p profiles
           echo "$P12_B64" | base64 --decode > sign.p12
           echo "$MAIN_PROFILE_B64" | base64 --decode > profiles/main.mobileprovision
           echo "$EXT_PROFILE_B64" | base64 --decode > profiles/ext.mobileprovision
+          if [ -n "$WIDGET_PROFILE_B64" ]; then
+            echo "$WIDGET_PROFILE_B64" | base64 --decode > profiles/widget.mobileprovision
+          fi
+          if [ -n "$SHARE_PROFILE_B64" ]; then
+            echo "$SHARE_PROFILE_B64" | base64 --decode > profiles/share.mobileprovision
+          fi
           ls -la sign.p12 profiles/
 
-      - name: Sign ipa (app + keyboard extension)
+      - name: Sign ipa (app + keyboard/widget/share extensions)
         if: steps.check.outputs.skip != 'true'
         env:
           P12_PASSWORD: ${{ secrets.P12_PASSWORD }}
         run: |
           set -o pipefail
           mkdir -p build
+          WIDGET_ARGS=""
+          SHARE_ARGS=""
+          if [ -f profiles/widget.mobileprovision ]; then
+            WIDGET_ARGS="--widget-profile profiles/widget.mobileprovision"
+          fi
+          if [ -f profiles/share.mobileprovision ]; then
+            SHARE_ARGS="--share-profile profiles/share.mobileprovision"
+          fi
           python3 scripts/sign_ipa.py \
             --ipa unsigned-art/ClawTalk-unsigned.ipa \
             --p12 sign.p12 \
             --password "$P12_PASSWORD" \
             --main-profile profiles/main.mobileprovision \
             --ext-profile profiles/ext.mobileprovision \
+            $WIDGET_ARGS \
+            $SHARE_ARGS \
             --out build/ClawTalk-signed.ipa | tee sign.log
           ls -lh build/ClawTalk-signed.ipa
 

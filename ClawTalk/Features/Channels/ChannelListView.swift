@@ -4,8 +4,11 @@ struct ChannelListView: View {
     @Bindable var channelStore: ChannelStore
     var settingsStore: SettingsStore
     var gatewayConnection: GatewayConnection
+    var nodeConnection: NodeConnection?
     var onSelect: (Channel) -> Void
     var onSelectFileTransfer: (() -> Void)?
+    /// 网关会话入口：点开全部会话列表（复用 SessionsView），选会话后进入聊天
+    var onOpenGatewaySessions: (() -> Void)?
 
     @State private var showAddChannel = false
     @State private var showSettings = false
@@ -23,131 +26,168 @@ struct ChannelListView: View {
 
     var body: some View {
         NavigationStack {
-            List {
-                Section {
-                    Button(action: { onSelectFileTransfer?() }) {
-                        HStack(spacing: 12) {
-                            Image(systemName: "tray.and.arrow.down")
-                                .font(.title2)
-                                .fontWeight(.bold)
-                                .foregroundStyle(.openClawRed)
-                                .frame(width: 40, height: 40)
-                                .background(Color(.systemGray5))
-                                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            VStack(spacing: 0) {
+                AgentStatusIndicator(gatewayConnection: gatewayConnection, settings: settingsStore)
+                    .padding(.horizontal, 16)
+                    .padding(.top, 8)
+                    .padding(.bottom, 4)
 
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("文件传输助手")
-                                    .font(.body)
-                                    .fontWeight(.medium)
-                                    .foregroundStyle(.primary)
-                                Text("电脑端文件收发")
+                List {
+                    Section {
+                        Button(action: { onSelectFileTransfer?() }) {
+                            HStack(spacing: 12) {
+                                Image(systemName: "tray.and.arrow.down")
+                                    .font(.title2)
+                                    .fontWeight(.bold)
+                                    .foregroundStyle(.openClawRed)
+                                    .frame(width: 40, height: 40)
+                                    .background(Color(.systemGray5))
+                                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("文件传输助手")
+                                        .font(.body)
+                                        .fontWeight(.medium)
+                                        .foregroundStyle(.primary)
+                                    Text("电脑端文件收发")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+
+                                Spacer()
+
+                                Image(systemName: "chevron.right")
                                     .font(.caption)
-                                    .foregroundStyle(.secondary)
+                                    .foregroundStyle(.tertiary)
                             }
-
-                            Spacer()
-
-                            Image(systemName: "chevron.right")
-                                .font(.caption)
-                                .foregroundStyle(.tertiary)
+                            .contentShape(Rectangle())
                         }
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                } header: {
-                    Text("系统频道")
-                }
+                        .buttonStyle(.plain)
 
-                ForEach(visibleChannels) { channel in
-                    Button(action: { onSelect(channel) }) {
-                        HStack(spacing: 12) {
-                            Text(channel.name.prefix(1).uppercased())
-                                .font(.title2)
-                                .fontWeight(.bold)
-                                .foregroundStyle(.openClawRed)
-                                .frame(width: 40, height: 40)
-                                .background(Color(.systemGray5))
-                                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                        Button(action: { onOpenGatewaySessions?() }) {
+                            HStack(spacing: 12) {
+                                Image(systemName: "globe.americas")
+                                    .font(.title2)
+                                    .fontWeight(.bold)
+                                    .foregroundStyle(.openClawRed)
+                                    .frame(width: 40, height: 40)
+                                    .background(Color(.systemGray5))
+                                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
 
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(channel.name)
-                                    .font(.body)
-                                    .fontWeight(.medium)
-                                    .foregroundStyle(.primary)
-                                Text("openclaw:\(channel.agentId)")
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("网关会话")
+                                        .font(.body)
+                                        .fontWeight(.medium)
+                                        .foregroundStyle(.primary)
+                                    Text("电脑端全部会话 · 点会话接着聊")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+
+                                Spacer()
+
+                                Image(systemName: "chevron.right")
                                     .font(.caption)
-                                    .foregroundStyle(.secondary)
+                                    .foregroundStyle(.tertiary)
                             }
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                    } header: {
+                        Text("系统频道")
+                    }
 
-                            Spacer()
+                    ForEach(visibleChannels) { channel in
+                        Button(action: { onSelect(channel) }) {
+                            HStack(spacing: 12) {
+                                Text(channel.name.prefix(1).uppercased())
+                                    .font(.title2)
+                                    .fontWeight(.bold)
+                                    .foregroundStyle(.openClawRed)
+                                    .frame(width: 40, height: 40)
+                                    .background(Color(.systemGray5))
+                                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
 
-                            Image(systemName: "chevron.right")
-                                .font(.caption)
-                                .foregroundStyle(.tertiary)
-                        }
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .contextMenu {
-                        Button(action: { editingChannel = channel }) {
-                            Label("编辑频道", systemImage: "pencil")
-                        }
-                        Button(role: .destructive, action: { channelStore.delete(channel) }) {
-                            Label("删除频道", systemImage: "trash")
-                        }
-                    }
-                }
-                .onDelete { indexSet in
-                    for idx in indexSet {
-                        channelStore.delete(visibleChannels[idx])
-                    }
-                }
-                .onMove { source, destination in
-                    if hiddenChannels.isEmpty {
-                        channelStore.move(from: source, to: destination)
-                    } else {
-                        var reordered = visibleChannels
-                        reordered.move(fromOffsets: source, toOffset: destination)
-                        channelStore.replace(reordered + hiddenChannels)
-                    }
-                }
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(channel.name)
+                                        .font(.body)
+                                        .fontWeight(.medium)
+                                        .foregroundStyle(.primary)
+                                    Text("openclaw:\(channel.agentId)")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
 
-                Section {
-                    Button(action: { showAddChannel = true }) {
-                        HStack {
-                            Spacer()
-                            Image(systemName: "plus")
-                                .font(.body)
-                                .fontWeight(.semibold)
-                            Text("新建频道")
-                                .font(.body)
-                                .fontWeight(.semibold)
-                            Spacer()
+                                Spacer()
+
+                                Image(systemName: "chevron.right")
+                                    .font(.caption)
+                                    .foregroundStyle(.tertiary)
+                            }
+                            .contentShape(Rectangle())
                         }
-                        .foregroundStyle(.white)
-                        .padding(.vertical, 16)
-                        .background(Color.openClawRed)
-                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .buttonStyle(.plain)
+                        .contextMenu {
+                            Button(action: { editingChannel = channel }) {
+                                Label("编辑频道", systemImage: "pencil")
+                            }
+                            Button(role: .destructive, action: { channelStore.delete(channel) }) {
+                                Label("删除频道", systemImage: "trash")
+                            }
+                        }
                     }
-                    .listRowBackground(Color.clear)
+                    .onDelete { indexSet in
+                        for idx in indexSet {
+                            channelStore.delete(visibleChannels[idx])
+                        }
+                    }
+                    .onMove { source, destination in
+                        if hiddenChannels.isEmpty {
+                            channelStore.move(from: source, to: destination)
+                        } else {
+                            var reordered = visibleChannels
+                            reordered.move(fromOffsets: source, toOffset: destination)
+                            channelStore.replace(reordered + hiddenChannels)
+                        }
+                    }
+
+                    Section {
+                        Button(action: { showAddChannel = true }) {
+                            HStack {
+                                Spacer()
+                                Image(systemName: "plus")
+                                    .font(.body)
+                                    .fontWeight(.semibold)
+                                Text("新建频道")
+                                    .font(.body)
+                                    .fontWeight(.semibold)
+                                Spacer()
+                            }
+                            .foregroundStyle(.white)
+                            .padding(.vertical, 16)
+                            .background(Color.openClawRed)
+                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        }
+                        .listRowBackground(Color.clear)
+                    }
+                    .listSectionSpacing(.compact)
                 }
-                .listSectionSpacing(.compact)
+                .overlay {
+                    if visibleChannels.isEmpty {
+                        VStack(spacing: 16) {
+                            Image("LogoRed")
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: 80, height: 80)
+                                .opacity(0.6)
+                            Text("还没有频道")
+                                .font(.headline)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+                .listStyle(.insetGrouped)
             }
-            .overlay {
-                if visibleChannels.isEmpty {
-                    VStack(spacing: 16) {
-                        Image("LogoRed")
-                            .resizable()
-                            .scaledToFit()
-                            .frame(width: 80, height: 80)
-                            .opacity(0.6)
-                        Text("还没有频道")
-                            .font(.headline)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-            }
-            .listStyle(.insetGrouped)
             .navigationTitle("")
             .toolbar {
                 ToolbarItem(placement: .principal) {
@@ -181,7 +221,7 @@ struct ChannelListView: View {
                 }
             }
             .sheet(isPresented: $showSettings) {
-                SettingsView(store: settingsStore, gatewayConnection: gatewayConnection)
+                SettingsView(store: settingsStore, gatewayConnection: gatewayConnection, nodeConnection: nodeConnection)
             }
             .sheet(isPresented: $showAddChannel) {
                 AddChannelView(channelStore: channelStore, settings: settingsStore)

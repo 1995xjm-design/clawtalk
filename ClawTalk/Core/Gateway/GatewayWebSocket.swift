@@ -2,6 +2,25 @@ import Foundation
 import OSLog
 import UIKit
 
+/// TLS 挑战回调：主机在证书信任名单（CertificateTrustStore）内则放行自签证书，否则走系统默认校验。
+private final class GatewayTLSDelegate: NSObject, URLSessionDelegate {
+    func urlSession(
+        _ session: URLSession,
+        didReceive challenge: URLAuthenticationChallenge,
+        completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
+    ) {
+        let host = challenge.protectionSpace.host
+        Task { @MainActor in
+            let bypass = CertificateTrustStore.shared.shouldBypass(host: host)
+            if bypass, let trust = challenge.protectionSpace.serverTrust {
+                completionHandler(.useCredential, URLCredential(trust: trust))
+            } else {
+                completionHandler(.performDefaultHandling, nil)
+            }
+        }
+    }
+}
+
 /// Gateway WebSocket transport actor.
 ///
 /// Handles connection lifecycle, v3 handshake with Ed25519 device identity,
@@ -33,6 +52,8 @@ actor GatewayWebSocket {
         case responseError(method: String, code: String, message: String)
         case notConnected
         case encodingFailed
+        case pairingRequired(requestId: String?)
+        case bootstrapTokenInvalid
 
         var errorDescription: String? {
             switch self {
@@ -41,6 +62,8 @@ actor GatewayWebSocket {
             case .responseError(let method, let code, let msg): return "\(method)：[\(code)] \(msg)"
             case .notConnected: return "未连接到网关"
             case .encodingFailed: return "请求编码失败"
+            case .pairingRequired: return "设备未配对：请在 OpenClaw 网关管理端批准配对请求，App 将自动重试连接"
+            case .bootstrapTokenInvalid: return "配对码无效或已过期，请重新运行 openclaw qr 并扫码"
             }
         }
     }
@@ -48,6 +71,11 @@ actor GatewayWebSocket {
     // MARK: - Properties
 
     private let logger = Logger(subsystem: "com.openclaw.clawtalk", category: "gateway-ws")
+
+    // TLS 会话（带 URLSessionDelegate）：信任名单内主机放行自签证书
+    private let tlsDelegate: GatewayTLSDelegate
+    private let session: URLSession
+
     private var wsTask: URLSessionWebSocketTask?
     private var pending: [String: CheckedContinuation<GatewayFrame, Error>] = [:]
     private var isConnected = false
@@ -55,6 +83,7 @@ actor GatewayWebSocket {
     private var connectWaiters: [CheckedContinuation<Void, Error>] = []
     private var url: URL
     private var token: String?
+    private var bootstrapToken: String?
     private var shouldReconnect = true
     private var backoffMs: Double = 2000
     private var lastSeq: Int?
@@ -90,6 +119,7 @@ actor GatewayWebSocket {
     init(
         url: URL,
         token: String?,
+        bootstrapToken: String? = nil,
         role: String = "operator",
         scopes: [String] = ["operator.admin", "operator.read", "operator.write", "operator.approvals"],
         caps: [String] = [],
@@ -100,6 +130,7 @@ actor GatewayWebSocket {
     ) {
         self.url = url
         self.token = token
+        self.bootstrapToken = bootstrapToken
         self.role = role
         self.scopes = scopes
         self.caps = caps
@@ -107,6 +138,10 @@ actor GatewayWebSocket {
         self.clientMode = clientMode
         self.pushHandler = pushHandler
         self.stateHandler = stateHandler
+
+        let tlsDelegate = GatewayTLSDelegate()
+        self.tlsDelegate = tlsDelegate
+        self.session = URLSession(configuration: .default, delegate: tlsDelegate, delegateQueue: nil)
 
         Task { [weak self] in
             await self?.startWatchdog()
@@ -130,7 +165,7 @@ actor GatewayWebSocket {
         defer { isConnecting = false }
 
         wsTask?.cancel(with: .goingAway, reason: nil)
-        let task = URLSession.shared.webSocketTask(with: url)
+        let task = session.webSocketTask(with: url)
         task.maximumMessageSize = 16 * 1024 * 1024 // 16 MB
         wsTask = task
         task.resume()
@@ -181,6 +216,7 @@ actor GatewayWebSocket {
         tickTask?.cancel(); tickTask = nil
         keepaliveTask?.cancel(); keepaliveTask = nil
         wsTask?.cancel(with: .goingAway, reason: nil); wsTask = nil
+        session.invalidateAndCancel()
         await stateHandler?(.disconnected)
 
         let error = GatewayError.notConnected
@@ -289,6 +325,18 @@ actor GatewayWebSocket {
         let storedToken = DeviceAuthTokenStore.loadToken(deviceId: identity.deviceId, role: role, gatewayHost: gatewayHost)?.token
         let authToken = storedToken ?? token
 
+        // 配对分支：尚无已配对 deviceToken 时，若存在 bootstrapToken（来自 openclaw qr 配对码），
+        // 走 bootstrap 配对路径——auth.bootstrapToken + 签名负载 token 槽位用同一个值。
+        let pairingBootstrapToken: String?
+        if storedToken == nil {
+            let candidate = bootstrapToken ?? loadBootstrapTokenFromSettings()
+            let trimmed = candidate?.trimmingCharacters(in: .whitespacesAndNewlines)
+            pairingBootstrapToken = (trimmed?.isEmpty == false) ? trimmed : nil
+        } else {
+            pairingBootstrapToken = nil
+        }
+        let signingToken = pairingBootstrapToken ?? authToken
+
         let signedAtMs = Int(Date().timeIntervalSince1970 * 1000)
         let platform = "ios"
         let deviceFamily = await UIDevice.current.model.lowercased()
@@ -302,7 +350,7 @@ actor GatewayWebSocket {
             role: role,
             scopes: scopes,
             signedAtMs: signedAtMs,
-            token: authToken,
+            token: signingToken,
             nonce: nonce
         )
 
@@ -327,7 +375,9 @@ actor GatewayWebSocket {
             "scopes": AnyCodable(scopes.map { AnyCodable($0) }),
         ]
 
-        if let authToken {
+        if let pairingBootstrapToken {
+            params["auth"] = AnyCodable(["bootstrapToken": AnyCodable(pairingBootstrapToken)] as [String: AnyCodable])
+        } else if let authToken {
             params["auth"] = AnyCodable(["token": AnyCodable(authToken)] as [String: AnyCodable])
         }
 
@@ -398,6 +448,9 @@ actor GatewayWebSocket {
 
     private func handleConnectResponse(_ res: ResponseFrame, identity: DeviceIdentity) async throws {
         guard res.ok else {
+            if let error = classifyConnectError(res.error) {
+                throw error
+            }
             let msg = res.error?["message"]?.value as? String ?? "网关连接被拒绝"
             throw GatewayError.connectFailed(msg)
         }
@@ -585,6 +638,38 @@ actor GatewayWebSocket {
     }
 
     // MARK: - Helpers
+
+    /// 把 connect 响应错误归类为可识别的配对错误。
+    /// - not-paired：远程设备配对需要网关管理端审批。
+    /// - bootstrap_token_invalid：配对码无效/过期/已被其他设备绑定。
+    private func classifyConnectError(_ error: [String: AnyCodable]?) -> GatewayError? {
+        guard let error else { return nil }
+
+        let details = error["details"]?.dictValue ?? [:]
+        let detailCode = details["code"]?.stringValue ?? ""
+        let topCode = error["code"]?.stringValue ?? ""
+        let reason = details["reason"]?.stringValue ?? ""
+        let authReason = details["authReason"]?.stringValue ?? error["authReason"]?.stringValue ?? ""
+
+        if detailCode == "PAIRING_REQUIRED" || topCode.lowercased() == "not-paired" || reason == "not-paired" {
+            return .pairingRequired(requestId: details["requestId"]?.stringValue)
+        }
+        if detailCode == "AUTH_BOOTSTRAP_TOKEN_INVALID" || authReason == "bootstrap_token_invalid" {
+            return .bootstrapTokenInvalid
+        }
+        return nil
+    }
+
+    /// 从 AppSettings（UserDefaults）读取持久化的配对令牌。
+    /// Onboarding 扫码/粘贴配对码后由 SettingsStore.save() 写入。
+    private func loadBootstrapTokenFromSettings() -> String? {
+        guard let data = UserDefaults.standard.data(forKey: "app_settings"),
+              let settings = try? JSONDecoder().decode(AppSettings.self, from: data),
+              let token = settings.bootstrapToken?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !token.isEmpty
+        else { return nil }
+        return token
+    }
 
     /// Cancel the current WebSocket task. Used by timeout handlers to unblock pending receive() calls.
     private func cancelWebSocketTask() {

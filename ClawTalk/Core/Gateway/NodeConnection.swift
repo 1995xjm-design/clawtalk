@@ -31,6 +31,7 @@ final class NodeConnection {
         "device", "notifications", "location", "contacts",
         "calendar", "reminders", "motion", "photos", "camera",
         "screen", "canvas", "voice",
+        "health", "media",
     ]
     private static let declaredCommands = [
         "device.status", "device.info",
@@ -46,6 +47,8 @@ final class NodeConnection {
         "canvas.present", "canvas.navigate",
         "canvas.evalJS", "canvas.snapshot", "canvas.reset",
         "voicewake.set", "voicewake.get",
+        "health.steps",
+        "media.list",
     ]
 
     // MARK: - Connect
@@ -236,19 +239,31 @@ final class NodeConnection {
         // Reminders
         case "reminders.list":
             let params = request.decodedParams(as: RemindersListParams.self)
-            let reminders = try await CalendarCapability.listReminders(completed: params?.completed)
+            let reminders = try await RemindersCapability.list(completed: params?.completed)
             return try encodeJSON(reminders)
         case "reminders.add":
             guard let params = request.decodedParams(as: RemindersAddParams.self) else {
                 throw NodeError.unavailable("Missing reminder params")
             }
-            let result = try await CalendarCapability.addReminder(
+            let result = try await RemindersCapability.add(
                 title: params.title,
-                dueDate: params.dueDate,
+                dueDate: params.dueDate.flatMap { ISO8601DateFormatter().date(from: $0) },
                 notes: params.notes,
-                priority: params.priority
+                priority: params.priority ?? 0
             )
             return try encodeJSON(result)
+
+        // Health
+        case "health.steps":
+            let params = request.decodedParams(as: HealthStepsParams.self)
+            let result = try await HealthCapability.steps(days: params?.days ?? 7)
+            return try encodeJSON(result)
+
+        // Media
+        case "media.list":
+            let params = request.decodedParams(as: MediaListParams.self)
+            let items = try await MediaCapability.recent(count: params?.count ?? 20)
+            return try encodeJSON(items)
 
         // Motion
         case "motion.activity":
@@ -419,4 +434,14 @@ struct SystemNotifyParams: Decodable {
     let body: String?
     let sound: String?
     let priority: String?
+}
+
+// MARK: - Health/Media Params
+
+struct HealthStepsParams: Decodable {
+    let days: Int?
+}
+
+struct MediaListParams: Decodable {
+    let count: Int?
 }

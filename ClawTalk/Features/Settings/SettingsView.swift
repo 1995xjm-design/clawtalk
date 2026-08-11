@@ -3,6 +3,7 @@ import SwiftUI
 struct SettingsView: View {
     @Bindable var store: SettingsStore
     var gatewayConnection: GatewayConnection
+    var nodeConnection: NodeConnection? = nil
     @Environment(\.dismiss) private var dismiss
     @AppStorage("clawtalk_wechat_connected") private var wechatConnected = false
 
@@ -13,6 +14,9 @@ struct SettingsView: View {
     @State private var previewErrorMessage: String?
     @State private var showResetConfirm = false
     @State private var pendingReset: ResetOption?
+    @State private var gatewayProfileStore = GatewayProfileStore()
+    @State private var showAddWakeWord = false
+    @State private var newWakeWord = ""
 
     enum ResetOption: String, CaseIterable, Identifiable {
         case onboarding = "仅重置新手引导"
@@ -40,8 +44,11 @@ struct SettingsView: View {
                 wechatSection
                 dataSection
                 securitySection
+                privacySection
+                aboutSection
                 diagnosticsSection
                 resetSection
+                            integrationSection
             }
             .confirmationDialog("重置新手引导", isPresented: $showResetConfirm, titleVisibility: .visible) {
                 Button("仅重置新手引导") { performReset(.onboarding) }
@@ -56,6 +63,7 @@ struct SettingsView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("完成") {
+                            sanitizeVoiceWakeWords()
                             store.save()
                             dismiss()
                         }
@@ -69,6 +77,21 @@ struct SettingsView: View {
                 Button("好", role: .cancel) {}
             } message: {
                 Text(previewErrorMessage ?? "")
+            .alert("添加唤醒词", isPresented: $showAddWakeWord) {
+                TextField("唤醒词", text: $newWakeWord)
+                Button("添加") {
+                    let word = newWakeWord.trimmingCharacters(in: .whitespacesAndNewlines)
+                    if !word.isEmpty {
+                        store.settings.voiceWakeWords.append(word)
+                    }
+                    newWakeWord = ""
+                }
+                Button("取消", role: .cancel) {
+                    newWakeWord = ""
+                }
+            } message: {
+                Text("说出该词即可唤醒（建议 2-4 个字）。")
+            }
             }
         }
     }
@@ -109,163 +132,47 @@ private var connectionSection: some View {
                 }
             }
 
-            Toggle("WebSocket 模式", isOn: $store.settings.useWebSocket)
-                .onChange(of: store.settings.useWebSocket) { _, newValue in
-                    if newValue {
-                        store.settings.showTokenUsage = false
-                        // Auto-connect when toggled on
-                        if store.isConfigured {
-                            store.save()
-                            Task {
-                                await gatewayConnection.connect(
-                                    resolvedURL: store.settings.resolvedWebSocketURL,
-                                    token: store.gatewayToken
-                                )
-                            }
-                            // 自动批准设备：发指令让电脑 OpenClaw 批准待连接设备
-                            let gw = store.settings.gatewayURL
-                                .trimmingCharacters(in: .whitespacesAndNewlines)
-                                .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-                            if !gw.isEmpty {
-                                let instruction = "请执行 openclaw devices approve --latest 批准待连接的设备，然后回复「已批准」。"
-                                Task {
-                                    _ = try? await OpenClawClient().chat(
-                                        messages: [Message(role: .user, content: instruction)],
-                                        gatewayURL: gw,
-                                        token: store.gatewayToken
-                                    )
-                                }
-                            }
-                        }
-                    } else {
-                        // Disconnect when toggled off
-                        Task {
-                            await gatewayConnection.disconnect()
-                        }
-                    }
-                }
-
-            if store.settings.useWebSocket {
-                Text("开启后回复实时推送，语音更流畅。首次开启会自动让电脑 OpenClaw 批准设备。")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                TextField(
-                    "WebSocket 路径（默认留空=18789 端口的 /ws）",
-                    text: $store.settings.webSocketPath,
-                    prompt: Text("/ws")
-                )
-                .autocorrectionDisabled()
-                .textInputAutocapitalization(.never)
-                DisclosureGroup {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("1. 首次开启会自动向电脑 OpenClaw 发送批准指令（devices approve --latest）；")
-                        Text("2. 若提示 device is not approved，请到电脑 OpenClaw 执行 openclaw devices approve --latest，或在电脑 OpenClaw 里说「请批准待连接的设备」；")
-                        Text("3. 若提示 HTTPS，请在网关地址前使用 https；")
-                        Text("4. 仍连不上就关闭此开关，用普通模式（HTTP），功能一样能用。")
-                    }
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                } label: {
-                    Label("连不上？点这里", systemImage: "questionmark.circle")
-                        .font(.subheadline)
-                        .foregroundStyle(.openClawRed)
-                }
+            NavigationLink {
+                GatewayHeadersView(settings: store)
+            } label: {
+                Label("网关自定义头", systemImage: "bolt.horizontal.circle")
             }
 
-            if store.settings.useWebSocket {
-                // Live WebSocket connection status
+            // HTTP connection test
+            Button(action: { testConnection() }) {
                 HStack {
-                    Text("连接状态")
+                    Text("测试连接")
                     Spacer()
-                    switch gatewayConnection.connectionState {
-                    case .connected:
-                        HStack(spacing: 6) {
-                            Circle()
-                                .fill(.green)
-                                .frame(width: 8, height: 8)
-                            Text("已连接")
-                                .font(.subheadline)
-                                .foregroundStyle(.green)
-                        }
-                    case .connecting:
-                        HStack(spacing: 6) {
-                            ProgressView()
-                                .scaleEffect(0.7)
-                            Text("连接中...")
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                        }
-                    case .disconnected:
-                        HStack(spacing: 6) {
-                            Circle()
-                                .fill(.red)
-                                .frame(width: 8, height: 8)
-                            Text("未连接")
-                                .font(.subheadline)
-                                .foregroundStyle(.red)
-                        }
-                    }
-                }
-
-                if gatewayConnection.connectionState == .disconnected {
-                    if let error = gatewayConnection.lastError {
-                        Text(error)
-                            .font(.caption)
+                    switch connectionTestState {
+                    case .idle:
+                        EmptyView()
+                    case .testing:
+                        ProgressView()
+                            .scaleEffect(0.8)
+                    case .success:
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundStyle(.green)
+                    case .failed:
+                        Image(systemName: "xmark.circle.fill")
                             .foregroundStyle(.red)
                     }
+                }
+            }
+            .disabled(store.settings.gatewayURL.isEmpty || store.gatewayToken.isEmpty || connectionTestState == .testing)
 
-                    Button("重新连接") {
-                        store.save()
-                        Task {
-                            await gatewayConnection.connect(
-                                resolvedURL: store.settings.resolvedWebSocketURL,
-                                token: store.gatewayToken
-                            )
-                        }
-                    }
-                    .disabled(store.settings.gatewayURL.isEmpty || store.gatewayToken.isEmpty)
-                }
-            } else {
-                // HTTP connection test
-                Button(action: { testConnection() }) {
-                    HStack {
-                        Text("测试连接")
-                        Spacer()
-                        switch connectionTestState {
-                        case .idle:
-                            EmptyView()
-                        case .testing:
-                            ProgressView()
-                                .scaleEffect(0.8)
-                        case .success:
-                            Image(systemName: "checkmark.circle.fill")
-                                .foregroundStyle(.green)
-                        case .failed:
-                            Image(systemName: "xmark.circle.fill")
-                                .foregroundStyle(.red)
-                        }
-                    }
-                }
-                .disabled(store.settings.gatewayURL.isEmpty || store.gatewayToken.isEmpty || connectionTestState == .testing)
-
-                if case .failed(let error) = connectionTestState {
-                    Text(error)
-                        .font(.caption)
-                        .foregroundStyle(.red)
-                }
+            if case .failed(let error) = connectionTestState {
+                Text(error)
+                    .font(.caption)
+                    .foregroundStyle(.red)
             }
         } header: {
             Text("OpenClaw 网关")
         } footer: {
-            if store.settings.useWebSocket {
-                Text("WebSocket 实时推送：留空默认连接本地 18789 端口的 /ws；填端口数字（如 18789）连本地网关；填路径（如 /ws）用于穿透网关，并保留网关地址自带的端口。")
-            } else {
-                switch store.settings.agentAPIMode {
-                case .chatCompletions:
-                    Text("标准聊天接口，兼容所有网关。")
-                case .openResponses:
-                    Text("Open Responses API 模式提供 Token 用量数据，需网关支持（endpoints.responses.enabled）。")
-                }
+            switch store.settings.agentAPIMode {
+            case .chatCompletions:
+                Text("标准聊天接口，兼容所有网关。")
+            case .openResponses:
+                Text("Open Responses API 模式提供 Token 用量数据，需网关支持（endpoints.responses.enabled）。")
             }
         }
     }
@@ -281,15 +188,10 @@ private var connectionSection: some View {
             .pickerStyle(.segmented)
 
             Toggle("显示 Token 用量", isOn: $store.settings.showTokenUsage)
-                .disabled(store.settings.useWebSocket)
         } header: {
             Text("显示")
         } footer: {
-            if store.settings.useWebSocket {
-                Text("Token 用量在 WebSocket 模式下不可用，关闭 WebSocket 后可查看。")
-            } else {
-                Text("在助手消息下显示输入/输出 Token 用量，需 Open Responses API 模式。")
-            }
+            Text("在助手消息下显示输入/输出 Token 用量，需 Open Responses API 模式。")
         }
     }
 
@@ -308,10 +210,34 @@ private var connectionSection: some View {
                         Text(channel.name).tag(channel.id.uuidString as String?)
                     }
                 }
-                TextField("唤醒词", text: $store.settings.voiceWakeWord)
-                    .autocorrectionDisabled()
-                    .textInputAutocapitalization(.never)
-                Text("前台/后台均可唤醒；说「你好小爪」进入免提对话；唤醒后进入你选的频道。")
+                VStack(alignment: .leading, spacing: 10) {
+                    ForEach(Array(store.settings.voiceWakeWords.enumerated()), id: \.offset) { index, _ in
+                        HStack(spacing: 8) {
+                            TextField("唤醒词 \(index + 1)", text: $store.settings.voiceWakeWords[index])
+                                .autocorrectionDisabled()
+                                .textInputAutocapitalization(.never)
+                            Button {
+                                store.settings.voiceWakeWords.remove(at: index)
+                            } label: {
+                                Image(systemName: "minus.circle.fill")
+                                    .foregroundStyle(.red)
+                            }
+                            .buttonStyle(.borderless)
+                        }
+                    }
+                    HStack {
+                        Button("添加词") {
+                            newWakeWord = ""
+                            showAddWakeWord = true
+                        }
+                        Spacer()
+                        Button("重置默认") {
+                            store.settings.voiceWakeWords = ["你好小爪"]
+                        }
+                    }
+                    .font(.subheadline)
+                }
+                Text("每个词一行，任一唤醒词命中即进入免提对话；唤醒后进入你选的频道。")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -735,12 +661,93 @@ private var connectionSection: some View {
     private var securitySection: some View {
         Section {
             LabeledContent("Token Storage", value: "iOS Keychain")
-            LabeledContent("Transport", value: store.settings.useWebSocket ? "WSS + HTTPS" : "HTTPS Only")
+            LabeledContent("Transport", value: "HTTPS Only")
             LabeledContent("STT Processing", value: "On-Device")
         } header: {
             Text("安全")
         } footer: {
             Text("API keys and tokens are stored in the iOS Keychain, encrypted at rest. Voice is transcribed on-device — audio never leaves your phone. Agent communication uses HTTPS.")
+        }
+    }
+
+    // MARK: - Privacy
+
+    private var privacySection: some View {
+        Section {
+            NavigationLink {
+                PrivacyPermissionsView()
+            } label: {
+                Label("隐私与访问权限", systemImage: "hand.raised")
+            }
+        } header: {
+            Text("隐私")
+        } footer: {
+            Text("查看照片、相机、麦克风、联系人、日历、提醒和通知的授权状态，并可跳转系统设置调整。")
+        }
+    }
+
+    // MARK: - About
+
+    private var aboutSection: some View {
+        Section {
+            NavigationLink {
+                AboutView(settings: store, gatewayConnection: gatewayConnection)
+            } label: {
+                Label("关于", systemImage: "info.circle")
+            }
+        } header: {
+            Text("关于")
+        } footer: {
+            Text("App 版本、设备信息与当前网关连接状态。")
+        }
+    }
+
+    // MARK: - Wake Word Helpers
+
+    /// 清理唤醒词列表：去空白、去空词、按大小写去重；清空后回落到默认词。
+    private func sanitizeVoiceWakeWords() {
+        var seen = Set<String>()
+        var cleaned: [String] = []
+        for word in store.settings.voiceWakeWords {
+            let trimmed = word.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else { continue }
+            let key = trimmed.lowercased()
+            guard !seen.contains(key) else { continue }
+            seen.insert(key)
+            cleaned.append(trimmed)
+        }
+        store.settings.voiceWakeWords = cleaned.isEmpty ? ["你好小爪"] : cleaned
+    }
+
+
+    // MARK: - 系统集成（由「系统集成大包」子智能体追加：D 网关管理 / E 证书信任 / F 连接状态 / H 远程终端）
+
+    private var integrationSection: some View {
+        Section {
+            NavigationLink {
+                GatewayProfilesView(store: store, profileStore: gatewayProfileStore)
+            } label: {
+                Label("网关管理", systemImage: "server.rack")
+            }
+            NavigationLink {
+                CertificateTrustView()
+            } label: {
+                Label("证书信任", systemImage: "lock.shield")
+            }
+            NavigationLink {
+                GatewayConnectionStatusView(store: store, gatewayConnection: gatewayConnection, nodeConnection: nodeConnection)
+            } label: {
+                Label("连接状态", systemImage: "antenna.radiowaves.left.and.right")
+            }
+            NavigationLink {
+                TerminalView(store: store)
+            } label: {
+                Label("远程终端", systemImage: "terminal")
+            }
+        } header: {
+            Text("系统集成")
+        } footer: {
+            Text("网关多档案切换、自签证书信任、连接诊断与远程命令终端。")
         }
     }
 }

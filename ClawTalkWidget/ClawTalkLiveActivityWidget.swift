@@ -5,7 +5,6 @@ import WidgetKit
 /// ClawTalk 品牌红（与主 App Theme.openClawRed 一致）。
 private let clawTalkRed = Color(red: 0.85, green: 0.18, blue: 0.15)
 
-@main
 struct ClawTalkLiveActivityWidget: Widget {
     let kind: String = "ClawTalkLiveActivity"
 
