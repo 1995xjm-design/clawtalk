@@ -530,7 +530,7 @@ final class ChatViewModel {
         }
 
         let idempotencyKey = UUID().uuidString
-        let response: GatewayConnection.ChatSendResponse
+        let response: ChatSendResponse
         if let audioAttachment, voiceAttachmentTransportSupported {
             // 网关确认支持语音附件（audio）时走附件上传（默认未启用）。
             // HTTP 兜底路径不支持附件，失败时按现有逻辑降级为纯文字发送。
@@ -561,7 +561,7 @@ final class ChatViewModel {
             params["attachments"] = AnyCodable(allAttachments.map { AnyCodable($0) })
 
             let data = try await gateway.request(method: "chat.send", params: params)
-            response = try JSONDecoder().decode(GatewayConnection.ChatSendResponse.self, from: data)
+            response = try JSONDecoder().decode(ChatSendResponse.self, from: data)
         } else {
             response = try await gateway.chatSend(
                 sessionKey: sessionKey,

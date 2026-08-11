@@ -48,7 +48,7 @@ final class ConnectionHealthMonitor {
     private(set) var lastPingError: String?
     private(set) var lastPingDate: Date?
 
-    private var pingTask: Task<Void, Never>?
+    nonisolated(unsafe) private var pingTask: Task<Void, Never>?
     private var lastHealthy: Bool?
 
     init() {
