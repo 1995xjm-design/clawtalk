@@ -60,11 +60,11 @@ final class TLSFingerprintProbe {
         let capture = TrustCapture()
         let tlsOptions = NWProtocolTLS.Options()
         // 允许任意证书完成握手（仅用于抓取指纹，不影响 App 真实连接策略）
-        sec_protocol_options_set_verify_block(tlsOptions.securityProtocolOptions) { _, secTrust, complete in
+        sec_protocol_options_set_verify_block(tlsOptions.securityProtocolOptions, { _, secTrust, complete in
             let trust = sec_trust_copy_ref(secTrust).takeRetainedValue()
             capture.set(Self.extract(from: trust, host: host))
             complete(true)
-        }
+        }, DispatchQueue.main)
         let parameters = NWParameters(tls: tlsOptions)
         guard let nwPort = NWEndpoint.Port(rawValue: UInt16(port)) else {
             lastError = "端口无效：\(port)"
@@ -241,13 +241,14 @@ struct TLSFingerprintProbeView: View {
                 }
 
                 Section("信任状态") {
-                    LabeledContent("状态", content: {
-                        Label(
-                            result.isTrusted ? "已信任" : "未信任",
-                            systemImage: result.isTrusted ? "checkmark.shield.fill" : "shield.slash"
-                        )
-                        .foregroundStyle(result.isTrusted ? .green : .orange)
-                    })
+                    LabeledContent("状态") {
+                        HStack(spacing: 6) {
+                            Image(systemName: result.isTrusted ? "checkmark.shield.fill" : "shield.slash")
+                                .foregroundStyle(result.isTrusted ? .green : .orange)
+                            Text(result.isTrusted ? "已信任" : "未信任")
+                                .foregroundStyle(result.isTrusted ? .green : .orange)
+                        }
+                    }
 
                     if result.isTrusted {
                         Button("取消信任此主机", role: .destructive) {
