@@ -176,7 +176,7 @@ final class EdgeTTSService: SpeechService {
     }
 
     private func ssmlFrame(text: String, voiceID: String, requestID: String) -> String {
-        let escaped = sanitize(text)
+        let escaped = Self.sanitize(text)
             .replacingOccurrences(of: "&", with: "&amp;")
             .replacingOccurrences(of: "<", with: "&lt;")
             .replacingOccurrences(of: ">", with: "&gt;")
@@ -187,7 +187,7 @@ final class EdgeTTSService: SpeechService {
         // 注意：X-Timestamp 末尾的 Z 是微软接口的已知行为（edge-tts 注释 "This is not a mistake"），照抄
         return "X-RequestId:\(requestID)\r\n" +
             "Content-Type:application/ssml+xml\r\n" +
-            "X-Timestamp:\(timestampString())Z\r\n" +
+            "X-Timestamp:\(Self.timestampString())Z\r\n" +
             "Path:ssml\r\n\r\n" + ssml
     }
 
