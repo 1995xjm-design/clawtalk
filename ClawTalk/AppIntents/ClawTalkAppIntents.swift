@@ -99,7 +99,7 @@ struct ClawTalkStatusIntent: AppIntent {
 
 /// 快捷指令入口（系统设置 > 快捷指令 中可搜索添加）。
 struct ClawTalkShortcuts: AppShortcutsProvider {
-    static var appShortcuts: [AppShortcut] {
+    @MainActor static var appShortcuts: [AppShortcut] {
         AppShortcut(
             intent: ClawTalkSendMessageIntent(),
             phrases: ["用 \(.applicationName) 发送消息", "让 \(.applicationName) 发消息"],
