@@ -171,15 +171,15 @@ targets:
           NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).ShareViewController
 
   # ---------- watchOS 手表端（配套 watch app，embedded in ClawTalk） ----------
-  # XcodeGen 写法：watch app 容器用 type: watch2-app（productType
-  # application.watchapp2），扩展用 type: watch2-extension（productType
+  # XcodeGen 写法：watch app 容器用 type: com.apple.product-type.application.watchapp2（productType
+  # application.watchapp2），扩展用 type: com.apple.product-type.watchkit2-extension（productType
   # watchkit2-extension）；iOS 主 App 依赖 watch2-app 会自动生成
   # "Embed Watch Content" 拷贝阶段，watch app 依赖扩展自动嵌入扩展。
   # 签名假设：沿用 app.lgm.7517 体系。watch 扩展用 app.lgm.7517.watch、
   # watch app 容器用 app.lgm.7517.watchapp；profile 暂用 7517ext 占位，
   # 正式出包前需在开发者后台给 watchOS 补描述文件（见 docs/watchos-wiring.md）。
   ClawTalkWatchApp:
-    type: watch2-app
+    type: com.apple.product-type.application.watchapp2
     platform: watchOS
     deploymentTarget: "10.0"
     sources:
@@ -203,7 +203,7 @@ targets:
         WKCompanionAppBundleIdentifier: app.lgm.7517
 
   ClawTalkWatchExtension:
-    type: watch2-extension
+    type: com.apple.product-type.watchkit2-extension
     platform: watchOS
     deploymentTarget: "10.0"
     sources:
