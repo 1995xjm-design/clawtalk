@@ -358,11 +358,18 @@ private var connectionSection: some View {
                     Text("小艺（女，替代已下线的晓墨）").tag("zh-CN-XiaoyiNeural")
                     Text("云希（男）").tag("zh-CN-YunxiNeural")
                     Text("云扬（男）").tag("zh-CN-YunyangNeural")
+                    Text("云健（男）").tag("zh-CN-YunjianNeural")
+                    Text("云夏（女）").tag("zh-CN-YunxiaNeural")
                 }
                 Text("微软 Edge 免费接口，无需 API Key。晓墨（zh-CN-XiaomoNeural）已被微软移除（实测 Unsupported voice），用同为女声的「小艺」替代。")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 voicePreviewButton
+            }
+
+            if store.settings.ttsProvider != .doubao {
+                speedSlider
+                pitchSlider
             }
         } header: {
             Text("文字转语音")
@@ -376,6 +383,52 @@ private var connectionSection: some View {
                 Text("微软 Edge 免费接口（非官方），无需 API Key；24kHz 高音质，需联网。")
             }
         }
+    }
+
+    private var ttsSpeedBinding: Binding<Double> {
+        Binding(
+            get: { Double(store.settings.ttsSpeed) },
+            set: { store.settings.ttsSpeed = Int($0.rounded()) }
+        )
+    }
+
+    private var ttsPitchBinding: Binding<Double> {
+        Binding(
+            get: { Double(store.settings.ttsPitch) },
+            set: { store.settings.ttsPitch = Int($0.rounded()) }
+        )
+    }
+
+    private var speedSlider: some View {
+        HStack {
+            Text("语速")
+                .frame(width: 44, alignment: .leading)
+            Slider(value: ttsSpeedBinding, in: -50...50, step: 5)
+            Text(speedValueText)
+                .frame(width: 44, alignment: .trailing)
+                .monospacedDigit()
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private var pitchSlider: some View {
+        HStack {
+            Text("音调")
+                .frame(width: 44, alignment: .leading)
+            Slider(value: ttsPitchBinding, in: -10...10, step: 1)
+            Text(pitchValueText)
+                .frame(width: 44, alignment: .trailing)
+                .monospacedDigit()
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private var speedValueText: String {
+        store.settings.ttsSpeed > 0 ? "+\(store.settings.ttsSpeed)" : "\(store.settings.ttsSpeed)"
+    }
+
+    private var pitchValueText: String {
+        store.settings.ttsPitch > 0 ? "+\(store.settings.ttsPitch)" : "\(store.settings.ttsPitch)"
     }
     // MARK: - STT Model
 
@@ -617,9 +670,9 @@ private var connectionSection: some View {
         case .doubao:
             tts = DoubaoTTSService(apiKey: store.doubaoAPIKey, voiceID: store.settings.doubaoVoiceID)
         case .apple:
-            tts = AppleTTSService()
+            tts = AppleTTSService(speed: store.settings.ttsSpeed, pitch: store.settings.ttsPitch)
         case .edge:
-            tts = EdgeTTSService(voiceID: store.settings.edgeVoiceID)
+            tts = EdgeTTSService(voiceID: store.settings.edgeVoiceID, speed: store.settings.ttsSpeed, pitch: store.settings.ttsPitch)
         }
         previewService = tts
         isPreviewing = true

@@ -55,6 +55,10 @@ struct AppSettings: Codable {
     var openclawVoice: String
     var doubaoVoiceID: String
     var edgeVoiceID: String
+    /// 全局语速（-50~50，0=默认；仅 Edge/Apple 生效，豆包不支持）
+    var ttsSpeed: Int
+    /// 全局音调（-10~10，0=默认；仅 Edge/Apple 生效，豆包不支持）
+    var ttsPitch: Int
     var wechatBridgeURL: String
     /// STT 识别语言（复用旧 whisperLanguage 字段名，兼容旧数据）
     var whisperLanguage: String
@@ -83,6 +87,8 @@ struct AppSettings: Codable {
         openclawVoice: "BV700_streaming",
         doubaoVoiceID: "zh_female_jitangmei_uranus_bigtts",
         edgeVoiceID: "zh-CN-XiaoxiaoNeural",
+        ttsSpeed: 0,
+        ttsPitch: 0,
         wechatBridgeURL: "",
         whisperLanguage: "zh",
         voiceOutputEnabled: true,
@@ -130,6 +136,8 @@ struct AppSettings: Codable {
         openclawVoice: String = "BV700_streaming",
         doubaoVoiceID: String = "zh_female_jitangmei_uranus_bigtts",
         edgeVoiceID: String = "zh-CN-XiaoxiaoNeural",
+        ttsSpeed: Int = 0,
+        ttsPitch: Int = 0,
         wechatBridgeURL: String = "",
         whisperLanguage: String = "zh",
         voiceOutputEnabled: Bool,
@@ -152,6 +160,8 @@ struct AppSettings: Codable {
         self.openclawVoice = openclawVoice
         self.doubaoVoiceID = doubaoVoiceID
         self.edgeVoiceID = edgeVoiceID
+        self.ttsSpeed = ttsSpeed
+        self.ttsPitch = ttsPitch
         self.wechatBridgeURL = wechatBridgeURL
         self.whisperLanguage = whisperLanguage
         self.voiceOutputEnabled = voiceOutputEnabled
@@ -177,6 +187,8 @@ struct AppSettings: Codable {
         openclawVoice = try container.decodeIfPresent(String.self, forKey: .openclawVoice) ?? "BV700_streaming"
         doubaoVoiceID = try container.decodeIfPresent(String.self, forKey: .doubaoVoiceID) ?? "zh_female_jitangmei_uranus_bigtts"
         edgeVoiceID = try container.decodeIfPresent(String.self, forKey: .edgeVoiceID) ?? "zh-CN-XiaoxiaoNeural"
+        ttsSpeed = try container.decodeIfPresent(Int.self, forKey: .ttsSpeed) ?? 0
+        ttsPitch = try container.decodeIfPresent(Int.self, forKey: .ttsPitch) ?? 0
         wechatBridgeURL = try container.decodeIfPresent(String.self, forKey: .wechatBridgeURL) ?? ""
         whisperLanguage = try container.decodeIfPresent(String.self, forKey: .whisperLanguage) ?? "zh"
         voiceOutputEnabled = try container.decode(Bool.self, forKey: .voiceOutputEnabled)
@@ -201,6 +213,7 @@ struct AppSettings: Codable {
 
     enum CodingKeys: String, CodingKey {
         case gatewayURL, ttsProvider, sttProvider, fusionBackendURL, openclawVoice, doubaoVoiceID, edgeVoiceID
+        case ttsSpeed, ttsPitch
         case wechatBridgeURL, whisperLanguage, voiceOutputEnabled, voiceInputEnabled
         case agentAPIMode, showTokenUsage, useWebSocket
         case webSocketPath, webSocketPort // webSocketPort for legacy decode only
@@ -221,6 +234,8 @@ struct AppSettings: Codable {
         try container.encode(openclawVoice, forKey: .openclawVoice)
         try container.encode(doubaoVoiceID, forKey: .doubaoVoiceID)
         try container.encode(edgeVoiceID, forKey: .edgeVoiceID)
+        try container.encode(ttsSpeed, forKey: .ttsSpeed)
+        try container.encode(ttsPitch, forKey: .ttsPitch)
         try container.encode(wechatBridgeURL, forKey: .wechatBridgeURL)
         try container.encode(whisperLanguage, forKey: .whisperLanguage)
         try container.encode(voiceOutputEnabled, forKey: .voiceOutputEnabled)

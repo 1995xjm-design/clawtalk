@@ -6,6 +6,8 @@ import AVFoundation
 /// ?????????????????? voice??????????????
 final class AppleTTSService: NSObject, SpeechService, AVSpeechSynthesizerDelegate {
     private let synthesizer = AVSpeechSynthesizer()
+    private let speed: Int
+    private let pitch: Int
 
     private struct Item {
         let id = UUID()
@@ -17,7 +19,9 @@ final class AppleTTSService: NSObject, SpeechService, AVSpeechSynthesizerDelegat
     private var current: Item?
     private var stopped = false
 
-    override init() {
+    init(speed: Int = 0, pitch: Int = 0) {
+        self.speed = speed
+        self.pitch = pitch
         super.init()
         synthesizer.delegate = self
     }
@@ -25,7 +29,8 @@ final class AppleTTSService: NSObject, SpeechService, AVSpeechSynthesizerDelegat
     func streamSpeech(text: String) -> AsyncThrowingStream<Data, Error> {
         AsyncThrowingStream { continuation in
             let utterance = AVSpeechUtterance(string: text)
-            utterance.rate = AVSpeechUtteranceDefaultSpeechRate
+            utterance.rate = min(max(0.5 + Double(speed) / 100.0, 0.1), 1.0)
+            utterance.pitchMultiplier = min(max(1.0 + Double(pitch) / 10.0, 0.5), 2.0)
 
             let itemID = UUID()
             continuation.onTermination = { [weak self] _ in

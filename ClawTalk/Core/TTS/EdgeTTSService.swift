@@ -20,13 +20,17 @@ final class EdgeTTSService: SpeechService {
     private static let userAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0"
 
     private let voiceID: String
+    private let speed: Int
+    private let pitch: Int
 
     private var webSocketTask: URLSessionWebSocketTask?
     private var isStopped = false
     private let lock = NSLock()
 
-    init(voiceID: String) {
+    init(voiceID: String, speed: Int = 0, pitch: Int = 0) {
         self.voiceID = voiceID
+        self.speed = speed
+        self.pitch = pitch
     }
 
     func streamSpeech(text: String) -> AsyncThrowingStream<Data, Error> {
@@ -55,7 +59,7 @@ final class EdgeTTSService: SpeechService {
                     continuation.finish(throwing: error)
                 }
             }
-            task.send(.string(EdgeTTSService.ssmlFrame(text: text, voiceID: self.voiceID, requestID: requestID))) { error in
+            task.send(.string(self.ssmlFrame(text: text, voiceID: self.voiceID, requestID: requestID))) { error in
                 if let error {
                     continuation.finish(throwing: error)
                 }
@@ -171,13 +175,15 @@ final class EdgeTTSService: SpeechService {
             "Path:speech.config\r\n\r\n" + config
     }
 
-    private static func ssmlFrame(text: String, voiceID: String, requestID: String) -> String {
+    private func ssmlFrame(text: String, voiceID: String, requestID: String) -> String {
         let escaped = sanitize(text)
             .replacingOccurrences(of: "&", with: "&amp;")
             .replacingOccurrences(of: "<", with: "&lt;")
             .replacingOccurrences(of: ">", with: "&gt;")
+        let rate = speed >= 0 ? "+\(speed)%" : "\(speed)%"
+        let pitchValue = pitch >= 0 ? "+\(pitch)Hz" : "\(pitch)Hz"
         let ssml = "<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xml:lang='zh-CN'>" +
-            "<voice name='\(voiceID)'><prosody pitch='+0Hz' rate='+0%' volume='+0%'>\(escaped)</prosody></voice></speak>"
+            "<voice name='\(voiceID)'><prosody pitch='\(pitchValue)' rate='\(rate)' volume='+0%'>\(escaped)</prosody></voice></speak>"
         // 注意：X-Timestamp 末尾的 Z 是微软接口的已知行为（edge-tts 注释 "This is not a mistake"），照抄
         return "X-RequestId:\(requestID)\r\n" +
             "Content-Type:application/ssml+xml\r\n" +
