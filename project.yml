@@ -21,6 +21,8 @@ packages:
   MarkdownUI:
     url: https://github.com/gonzalezreal/swift-markdown-ui.git
     from: "2.4.0"
+  HamsterKeyboardKit:
+    path: KeyboardPackages/HamsterKeyboardKit
 
 targets:
   ClawTalk:
@@ -37,6 +39,7 @@ targets:
       - target: ClawTalkKeyboard
       - target: ClawTalkWidget
       - target: ClawTalkShareExtension
+      - target: ClawTalkWatchApp
     settings:
       base:
         INFOPLIST_FILE: ClawTalk/Resources/Info.plist
@@ -105,8 +108,14 @@ targets:
     platform: iOS
     sources:
       - path: ClawTalkKeyboard
+        excludes:
+          - Resources/SharedSupport/**
     resources:
       - path: ClawTalkKeyboard/Localizable.xcstrings
+      - path: ClawTalkKeyboard/Resources/SharedSupport
+        type: folder
+    dependencies:
+      - package: HamsterKeyboardKit
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: app.lgm.7517.123
@@ -115,6 +124,7 @@ targets:
         SWIFT_ACTIVE_COMPILATION_CONDITIONS: KEYBOARD_EXTENSION
         CODE_SIGN_ENTITLEMENTS: ClawTalkKeyboard/ClawTalkKeyboard.entitlements
         TARGETED_DEVICE_FAMILY: "1,2"
+        OTHER_LDFLAGS: "-Xlinker -interposable"
 
   ClawTalkWidget:
     type: app-extension
@@ -159,3 +169,60 @@ targets:
               NSExtensionActivationSupportsFileWithMaxCount: 10
           NSExtensionPointIdentifier: com.apple.share-services
           NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).ShareViewController
+
+  # ---------- watchOS 手表端（配套 watch app，embedded in ClawTalk） ----------
+  # XcodeGen 写法：watch app 容器用 type: watch2-app（productType
+  # application.watchapp2），扩展用 type: watch2-extension（productType
+  # watchkit2-extension）；iOS 主 App 依赖 watch2-app 会自动生成
+  # "Embed Watch Content" 拷贝阶段，watch app 依赖扩展自动嵌入扩展。
+  # 签名假设：沿用 app.lgm.7517 体系。watch 扩展用 app.lgm.7517.watch、
+  # watch app 容器用 app.lgm.7517.watchapp；profile 暂用 7517ext 占位，
+  # 正式出包前需在开发者后台给 watchOS 补描述文件（见 docs/watchos-wiring.md）。
+  ClawTalkWatchApp:
+    type: watch2-app
+    platform: watchOS
+    deploymentTarget: "10.0"
+    sources:
+      - path: ClawTalkWatchApp/Resources
+    dependencies:
+      - target: ClawTalkWatchExtension
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.lgm.7517.watchapp
+        PROVISIONING_PROFILE_SPECIFIER: 7517ext
+        TARGETED_DEVICE_FAMILY: "4"
+        MARKETING_VERSION: "1.1.0"
+        CURRENT_PROJECT_VERSION: 2
+    info:
+      path: ClawTalkWatchApp/Resources/Info.plist
+      properties:
+        CFBundleDisplayName: ClawTalk
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        WKApplication: true
+        WKCompanionAppBundleIdentifier: app.lgm.7517
+
+  ClawTalkWatchExtension:
+    type: watch2-extension
+    platform: watchOS
+    deploymentTarget: "10.0"
+    sources:
+      - path: ClawTalkWatchApp/App
+      - path: ClawTalkWatchApp/Extension
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.lgm.7517.watch
+        PROVISIONING_PROFILE_SPECIFIER: 7517ext
+        CODE_SIGN_ENTITLEMENTS: ClawTalkWatchApp/ClawTalkWatch.entitlements
+        TARGETED_DEVICE_FAMILY: "4"
+        MARKETING_VERSION: "1.1.0"
+        CURRENT_PROJECT_VERSION: 2
+    info:
+      path: ClawTalkWatchApp/Resources/Extension-Info.plist
+      properties:
+        CFBundleDisplayName: ClawTalk
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        WKAppBundleIdentifier: app.lgm.7517.watchapp
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.watchkit

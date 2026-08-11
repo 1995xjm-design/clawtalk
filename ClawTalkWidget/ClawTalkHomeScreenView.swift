@@ -23,6 +23,7 @@ struct ClawTalkHomeScreenView: View {
             Spacer(minLength: 2)
             statusRow
             sessionRow
+            reminderRow
             if family == .systemMedium {
                 Spacer(minLength: 0)
                 Text("每 15 分钟自动刷新")
@@ -34,6 +35,7 @@ struct ClawTalkHomeScreenView: View {
         .containerBackground(for: .widget) {
             Color(uiColor: .systemBackground)
         }
+        .widgetURL(WidgetAppGroup.widgetURL(for: entry))
     }
 
     private var displayTitle: String {
@@ -46,6 +48,10 @@ struct ClawTalkHomeScreenView: View {
 
     private var sessionText: String {
         entry.recentSession.isEmpty ? "暂无会话，打开 ClawTalk 同步" : entry.recentSession
+    }
+
+    private var reminderText: String {
+        entry.nextReminder.isEmpty ? "暂无提醒" : entry.nextReminder
     }
 
     private var statusRow: some View {
@@ -64,8 +70,20 @@ struct ClawTalkHomeScreenView: View {
         Text(sessionText)
             .font(.footnote)
             .foregroundStyle(.secondary)
-            .lineLimit(family == .systemMedium ? 2 : 3)
+            .lineLimit(2)
             .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var reminderRow: some View {
+        HStack(spacing: 5) {
+            Image(systemName: "bell")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+            Text(reminderText)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+        }
     }
 
     private var statusColor: Color {

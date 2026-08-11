@@ -25,6 +25,7 @@ struct ClawTalkApp: App {
     @State private var gatewaySessionsViewModel: ToolsViewModel?
     @State private var widgetSnapshot: WidgetSnapshot?
     @State private var syncedChannelsSignature: String?
+    @State private var selectedTab = 0
 
     init() {
         #if DEBUG
@@ -79,6 +80,35 @@ struct ClawTalkApp: App {
         }
     }
 
+    // MARK: - 主界面 TabView（频道列表 + 副主页 Tab）
+
+    @ViewBuilder
+    private var mainTabView: some View {
+        TabView(selection: $selectedTab) {
+            mainZStack
+                .toolbar(isChatPresented ? .hidden : .visible, for: .tabBar)
+                .tabItem {
+                    Label("频道", systemImage: "message.fill")
+                }
+                .tag(0)
+
+            HomeTabView(
+                settings: settingsStore,
+                gatewayConnection: gatewayConnection,
+                chatViewModel: chatViewModel
+            )
+            .tabItem {
+                Label("副主页", systemImage: "square.grid.2x2")
+            }
+            .tag(1)
+        }
+    }
+
+    /// 聊天 / 同步聊天 / 文件传输覆盖层打开时隐藏 Tab 栏，保持全屏聊天体验。
+    private var isChatPresented: Bool {
+        chatViewModel != nil || selectedSyncChannel != nil || showFileTransferChannel
+    }
+
     var body: some Scene {
         WindowGroup {
             windowContent
@@ -94,7 +124,7 @@ struct ClawTalkApp: App {
                         // Onboarding complete
                     }
                 } else {
-                    mainZStack
+                    mainTabView
                 }
             }
             .onOpenURL { url in
@@ -218,6 +248,7 @@ struct ClawTalkApp: App {
     }
 
     private func selectChannel(_ channel: Channel, restartVoiceWake: Bool = true) {
+        selectedTab = 0
         // 三端同步频道（codex/claude）：不走网关 session，改用桥的 /sync 全历史 + 3 秒轮询
         if channel.agentId == "codex" || channel.agentId == "claude" {
             stopVoiceWake()

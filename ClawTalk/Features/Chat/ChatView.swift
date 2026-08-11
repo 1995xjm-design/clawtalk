@@ -166,13 +166,23 @@ struct ChatView: View {
             ScrollView {
                 LazyVStack(spacing: 4) {
                     ForEach(viewModel.messages) { message in
-                        MessageBubble(
-                            message: message,
-                            showTokenUsage: settingsStore.settings.showTokenUsage,
-                            onRetry: message.hasFailed ? { viewModel.retryMessage(id: message.id) } : nil,
-                            onDelete: { viewModel.deleteMessage(id: message.id) }
-                        )
-                        .id(message.id)
+                        if let attachment = viewModel.voiceAttachment(for: message.id) {
+                            VoiceMessageBubble(
+                                message: message,
+                                attachment: attachment,
+                                onRetry: message.hasFailed ? { viewModel.retryMessage(id: message.id) } : nil,
+                                onDelete: { viewModel.deleteMessage(id: message.id) }
+                            )
+                            .id(message.id)
+                        } else {
+                            MessageBubble(
+                                message: message,
+                                showTokenUsage: settingsStore.settings.showTokenUsage,
+                                onRetry: message.hasFailed ? { viewModel.retryMessage(id: message.id) } : nil,
+                                onDelete: { viewModel.deleteMessage(id: message.id) }
+                            )
+                            .id(message.id)
+                        }
                     }
                 }
                 .padding(.vertical, 12)
@@ -325,6 +335,16 @@ struct ChatView: View {
             }
 
             HStack(spacing: 10) {
+                // 语音消息：按住录音 → 松开发送（本地存档 + 附件标记；网关不支持时降级文字）
+                if !viewModel.isConversationMode, settingsStore.settings.voiceInputEnabled {
+                    VoiceMessageButton(
+                        isRecording: viewModel.isRecordingVoiceMessage,
+                        hapticsEnabled: settingsStore.settings.hapticsEnabled,
+                        onHoldStart: { viewModel.startVoiceMessageRecording() },
+                        onHoldEnd: { viewModel.stopVoiceMessageRecordingAndSend() }
+                    )
+                }
+
                 attachmentsMenu
 
                 TextField("消息…", text: $textInput, axis: .vertical)

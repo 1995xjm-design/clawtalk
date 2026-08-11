@@ -60,6 +60,15 @@ final class ChatViewModel {
     private var currentEventSubId: UUID?
     private var ttsStopped = false
     private let ttsConcurrency = TTSConcurrency()
+    /// 网关是否支持语音附件（audio 类型）上传。默认 false：OpenClaw 网关语音附件支持未确认，
+    /// 语音消息按「录音 → STT → 发文字」降级发送并诚实标注；主智能体确认网关支持后置 true，
+    /// WebSocket 发送将带上 attachments(audio/wav) 上传。
+    var voiceAttachmentTransportSupported = false
+
+    /// 语音消息附件索引：Message.id → 附件（本地文件 + 元数据），消息气泡据此渲染语音 UI。
+    private(set) var voiceAttachments: [UUID: VoiceMessageAttachment] = [:]
+    /// 正在录制语音消息（输入区「语音消息」按钮按住期间）。
+    private(set) var isRecordingVoiceMessage = false
 
     /// Stable session key for this channel, used for server-side session management.
     var sessionKey: String {
@@ -95,7 +104,7 @@ final class ChatViewModel {
     }
 
     func stopRecordingAndSend(images: [Data] = []) {
-        guard state == .recording else { return }
+        guard state == .recording, !isRecordingVoiceMessage else { return }
         if isConversationMode { return }
 
         let samples = audioCapture.stopRecording()
@@ -138,6 +147,80 @@ final class ChatViewModel {
             // 录音发送流程结束（成功或失败）：麦克风已释放，恢复唤醒监听
             NotificationCenter.default.post(name: .clawTalkWakeRestartRequested, object: nil)
         }
+    }
+
+    // MARK: - 语音消息（按住录音 → 松开发送）
+
+    /// 开始录制语音消息（与按住说话共用麦克风，录音前先停唤醒监听）。
+    func startVoiceMessageRecording() {
+        guard state == .idle, !isConversationMode else { return }
+        VoiceWakeCapability.shared.stopListening()
+        errorMessage = nil
+        do {
+            try audioCapture.startRecording()
+            recordingStart = Date()
+            isRecordingVoiceMessage = true
+            state = .recording
+        } catch {
+            errorMessage = "麦克风访问失败：\(AppErrorText.localized(error.localizedDescription))"
+        }
+    }
+
+    /// 停止录音并发送语音消息：本地存 WAV → STT 转文字 → 按网关支持情况发送。
+    func stopVoiceMessageRecordingAndSend() {
+        guard isRecordingVoiceMessage, state == .recording else { return }
+        isRecordingVoiceMessage = false
+
+        let samples = audioCapture.stopRecording()
+        // 误触（<0.5s）取消：此时文件尚未保存，直接恢复
+        let duration = Date().timeIntervalSince(recordingStart ?? Date())
+        guard duration >= 0.5, samples.count > 8000 else {
+            state = .idle
+            NotificationCenter.default.post(name: .clawTalkWakeRestartRequested, object: nil)
+            return
+        }
+
+        state = .transcribing
+        sendTask = Task {
+            defer {
+                // 录音发送流程结束（成功或失败）：麦克风已释放，恢复唤醒监听
+                NotificationCenter.default.post(name: .clawTalkWakeRestartRequested, object: nil)
+            }
+            do {
+                guard let stt = transcriptionService else {
+                    throw ChatError.notConfigured("语音转文字服务未初始化")
+                }
+
+                let transcript: String
+                if let doubao = stt as? DoubaoSTTService {
+                    transcript = try await doubao.finishStreaming()
+                } else {
+                    transcript = try await stt.transcribe(audioSamples: samples)
+                }
+                guard !transcript.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                    state = .idle
+                    return
+                }
+
+                // 语音文件本地存档（WAV 16kHz），消息带附件标记；网关未确认支持语音附件时
+                // 附件仅本地回放，消息按文字发送（诚实标注 sentAsText）。
+                var attachment = try VoiceMessageFileStore.save(
+                    samples: samples,
+                    duration: duration,
+                    transcript: transcript
+                )
+                attachment.sentAsText = !voiceAttachmentTransportSupported
+                await sendMessage(transcript, voiceAttachment: attachment)
+            } catch {
+                errorMessage = "语音消息发送失败：\(AppErrorText.localized(error.localizedDescription))"
+                state = .idle
+            }
+        }
+    }
+
+    /// 取某条消息的语音附件（无则返回 nil，气泡按普通文本渲染）。
+    func voiceAttachment(for messageID: UUID) -> VoiceMessageAttachment? {
+        voiceAttachments[messageID]
     }
 
     // MARK: - Text Input
@@ -307,9 +390,12 @@ final class ChatViewModel {
 
     // MARK: - Core Send Flow
 
-    private func sendMessage(_ content: String, images: [Data]? = nil) async {
+    private func sendMessage(_ content: String, images: [Data]? = nil, voiceAttachment: VoiceMessageAttachment? = nil) async {
         let userMessage = Message(role: .user, content: content, imageData: images)
         messages.append(userMessage)
+        if let voiceAttachment {
+            voiceAttachments[userMessage.id] = voiceAttachment
+        }
         let userID = userMessage.id
 
         let assistantMessage = Message(role: .assistant, content: "", isStreaming: true)
@@ -333,7 +419,7 @@ final class ChatViewModel {
             if settings.settings.useWebSocket, let gateway = gatewayConnection,
                gateway.connectionState == .connected {
                 do {
-                    try await sendMessageViaWebSocket(content, images: images, gateway: gateway)
+                    try await sendMessageViaWebSocket(content, images: images, audioAttachment: voiceAttachment, gateway: gateway)
                 } catch is CancellationError {
                     throw CancellationError()
                 } catch {
@@ -433,7 +519,7 @@ final class ChatViewModel {
 
     // MARK: - WebSocket Send Path
 
-    private func sendMessageViaWebSocket(_ content: String, images: [Data]? = nil, gateway: GatewayConnection) async throws {
+    private func sendMessageViaWebSocket(_ content: String, images: [Data]? = nil, audioAttachment: VoiceMessageAttachment? = nil, gateway: GatewayConnection) async throws {
         // Subscribe to chat events BEFORE sending to avoid missing any
         let (subId, eventStream) = gateway.subscribeChatEvents()
         currentEventSubId = subId
@@ -444,12 +530,46 @@ final class ChatViewModel {
         }
 
         let idempotencyKey = UUID().uuidString
-        let response = try await gateway.chatSend(
-            sessionKey: sessionKey,
-            message: content,
-            images: images,
-            idempotencyKey: idempotencyKey
-        )
+        let response: GatewayConnection.ChatSendResponse
+        if let audioAttachment, voiceAttachmentTransportSupported {
+            // 网关确认支持语音附件（audio）时走附件上传（默认未启用）。
+            // HTTP 兜底路径不支持附件，失败时按现有逻辑降级为纯文字发送。
+            var params: [String: AnyCodable] = [
+                "sessionKey": AnyCodable(sessionKey),
+                "message": AnyCodable(content),
+                "thinking": AnyCodable(""),
+                "idempotencyKey": AnyCodable(idempotencyKey),
+                "timeoutMs": AnyCodable(30000),
+            ]
+            let audioData = (try? Data(contentsOf: audioAttachment.localFileURL)) ?? Data()
+            var allAttachments: [[String: AnyCodable]] = []
+            if let images, !images.isEmpty {
+                allAttachments.append(contentsOf: images.map { data in
+                    [
+                        "type": AnyCodable("image"),
+                        "mimeType": AnyCodable("image/jpeg"),
+                        "content": AnyCodable(data.base64EncodedString()),
+                    ]
+                })
+            }
+            allAttachments.append([
+                "type": AnyCodable("audio"),
+                "mimeType": AnyCodable("audio/wav"),
+                "filename": AnyCodable(audioAttachment.localFileURL.lastPathComponent),
+                "content": AnyCodable(audioData.base64EncodedString()),
+            ])
+            params["attachments"] = AnyCodable(allAttachments.map { AnyCodable($0) })
+
+            let data = try await gateway.request(method: "chat.send", params: params)
+            response = try JSONDecoder().decode(GatewayConnection.ChatSendResponse.self, from: data)
+        } else {
+            response = try await gateway.chatSend(
+                sessionKey: sessionKey,
+                message: content,
+                images: images,
+                idempotencyKey: idempotencyKey
+            )
+        }
         let runId = response.runId
         currentRunId = runId
 
@@ -807,6 +927,9 @@ final class ChatViewModel {
     // MARK: - Message Management
 
     func deleteMessage(id: UUID) {
+        if let attachment = voiceAttachments.removeValue(forKey: id) {
+            VoiceMessageFileStore.delete(attachment)
+        }
         messages.removeAll { $0.id == id }
         conversationStore.save(messages, channelId: channel.id)
     }
@@ -835,8 +958,9 @@ final class ChatViewModel {
         // Remove the original user message — sendMessage will re-add it
         messages.remove(at: idx)
 
+        let attachment = voiceAttachments.removeValue(forKey: id)
         sendTask = Task {
-            await sendMessage(content, images: images)
+            await sendMessage(content, images: images, voiceAttachment: attachment)
         }
     }
 

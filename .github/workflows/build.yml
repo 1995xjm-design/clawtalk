@@ -15,6 +15,24 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Prepare Rime frameworks + schemas
+        run: |
+          set -e
+          # 1) 5 个 Rime xcframework（仓库未提交时从 zgl LibrimeKit v0.1.0 下载）
+          if [ ! -f Frameworks/librime.xcframework/Info.plist ]; then
+            mkdir -p Frameworks
+            cd Frameworks
+            BASE="https://github.com/zhanggenlove/LibrimeKit/releases/download/v0.1.0"
+            for f in librime libleveldb libmarisa libopencc libyaml-cpp; do
+              curl -fL -o "$f.xcframework.zip" "$BASE/$f.xcframework.zip"
+              unzip -oq "$f.xcframework.zip"
+              rm -f "$f.xcframework.zip"
+            done
+            cd ..
+          fi
+          # 2) Rime 简体拼音方案（每次重新生成，保证与代码同步）
+          bash scripts/rime-schemas-build.sh
+
       - name: Install xcodegen
         run: brew install xcodegen
 

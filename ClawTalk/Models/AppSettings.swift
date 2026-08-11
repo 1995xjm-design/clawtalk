@@ -51,6 +51,21 @@ enum Appearance: String, Codable, CaseIterable, Identifiable {
     var id: String { rawValue }
 }
 
+/// Live Activity（锁屏/灵动岛）卡片风格。
+enum LiveActivityStyle: String, Codable, CaseIterable, Identifiable {
+    case minimal = "简约"
+    case standard = "标准"
+    case detailed = "详细"
+
+    /// 兼容旧数据：未知值回退到「标准」。
+    init(from decoder: Decoder) throws {
+        let raw = try decoder.singleValueContainer().decode(String.self)
+        self = LiveActivityStyle(rawValue: raw) ?? .standard
+    }
+
+    var id: String { rawValue }
+}
+
 struct AppSettings: Codable {
     var gatewayURL: String
     /// 一次性配对令牌（来自 `openclaw qr` 配对码）。首次连接且尚无已配对 deviceToken 时，
@@ -99,6 +114,10 @@ struct AppSettings: Codable {
     var fileServerURL: String
     /// 网关自定义请求头（仅附加到 OpenClaw 网关请求）
     var customHeaders: [String: String]
+    /// 灵动岛/锁屏卡片风格（简约/标准/详细）
+    var liveActivityStyle: LiveActivityStyle
+    /// 随 agent 切换：当前频道/agent 变化时自动更新 Live Activity 内容
+    var liveActivityFollowAgent: Bool
 
     static let defaults = AppSettings(
         gatewayURL: "",
@@ -123,7 +142,9 @@ struct AppSettings: Codable {
         voiceWakeEnabled: false,
         voiceWakeWords: ["你好小爪"],
         fileServerURL: "",
-        customHeaders: [:]
+        customHeaders: [:],
+        liveActivityStyle: .standard,
+        liveActivityFollowAgent: false
     )
 
     /// Build the full WebSocket URL from the gateway URL + port/path override.
@@ -176,7 +197,9 @@ struct AppSettings: Codable {
         voiceWakeWords: [String]? = nil,
         voiceWakeChannelID: String? = nil,
         fileServerURL: String = "",
-        customHeaders: [String: String] = [:]
+        customHeaders: [String: String] = [:],
+        liveActivityStyle: LiveActivityStyle = .standard,
+        liveActivityFollowAgent: Bool = false
     ) {
         self.gatewayURL = gatewayURL
         self.bootstrapToken = bootstrapToken
@@ -203,6 +226,8 @@ struct AppSettings: Codable {
         self.voiceWakeChannelID = voiceWakeChannelID
         self.fileServerURL = fileServerURL
         self.customHeaders = customHeaders
+        self.liveActivityStyle = liveActivityStyle
+        self.liveActivityFollowAgent = liveActivityFollowAgent
     }
 
     init(from decoder: Decoder) throws {
@@ -242,6 +267,8 @@ struct AppSettings: Codable {
         voiceWakeChannelID = try container.decodeIfPresent(String.self, forKey: .voiceWakeChannelID)
         fileServerURL = try container.decodeIfPresent(String.self, forKey: .fileServerURL) ?? ""
         customHeaders = try container.decodeIfPresent([String: String].self, forKey: .customHeaders) ?? [:]
+        liveActivityStyle = try container.decodeIfPresent(LiveActivityStyle.self, forKey: .liveActivityStyle) ?? .standard
+        liveActivityFollowAgent = try container.decodeIfPresent(Bool.self, forKey: .liveActivityFollowAgent) ?? false
 
         // Migrate legacy webSocketPort -> webSocketPath
         if let legacyPort = try container.decodeIfPresent(Int.self, forKey: .webSocketPort) {
@@ -266,6 +293,8 @@ struct AppSettings: Codable {
         case voiceWakeChannelID
         case fileServerURL
         case customHeaders
+        case liveActivityStyle
+        case liveActivityFollowAgent
     }
 
     func encode(to encoder: Encoder) throws {
@@ -296,6 +325,8 @@ struct AppSettings: Codable {
         try container.encodeIfPresent(voiceWakeChannelID, forKey: .voiceWakeChannelID)
         try container.encode(fileServerURL, forKey: .fileServerURL)
         try container.encode(customHeaders, forKey: .customHeaders)
+        try container.encode(liveActivityStyle, forKey: .liveActivityStyle)
+        try container.encode(liveActivityFollowAgent, forKey: .liveActivityFollowAgent)
         // webSocketPort intentionally not encoded - legacy only
     }
 }

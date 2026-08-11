@@ -1,6 +1,8 @@
 import SwiftUI
 
-/// 远程终端（任务 H）：输入命令 -> 通过网关 chat 让 OpenClaw agent 执行 -> 显示输出。
+/// 远程终端（任务 H）：输入命令 -> 通过网关 chat 让 OpenClaw agent 执行 -> 流式显示输出。
+/// 输出方式：网关未提供交互式 WS 终端会话，本页通过 OpenClawClient.stream（SSE 流式回显）
+/// 持续显示命令输出；流式中断时保留已回显部分并诚实标注错误。
 /// 入口已加在设置页「系统集成」分组；也可由主智能体在工具页/ToolsView 增加入口。
 struct TerminalView: View {
     @Bindable var store: SettingsStore
@@ -11,9 +13,10 @@ struct TerminalView: View {
     struct TerminalEntry: Identifiable {
         let id = UUID()
         let command: String
-        let output: String
+        var output: String
         let date: Date
         let isError: Bool
+        var isStreaming: Bool
     }
 
     @State private var entries: [TerminalEntry] = []
@@ -24,11 +27,13 @@ struct TerminalView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            statusBar
+
             if entries.isEmpty {
                 ContentUnavailableView(
                     "远程终端",
                     systemImage: "terminal",
-                    description: Text("输入命令，由网关上的 OpenClaw agent 执行并返回真实输出。")
+                    description: Text("输入命令，由网关上的 OpenClaw agent 执行并流式返回真实输出。\n网关未提供交互式 WS 终端，本页为「命令执行 + SSE 流式回显」，同一会话可持续输入。")
                 )
             } else {
                 ScrollViewReader { proxy in
@@ -87,6 +92,42 @@ struct TerminalView: View {
         }
     }
 
+    // MARK: - 连接状态
+
+    private var statusBar: some View {
+        HStack(spacing: 6) {
+            Circle()
+                .fill(statusColor)
+                .frame(width: 8, height: 8)
+            Text(statusText)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Spacer()
+            if isRunning {
+                ProgressView()
+                    .controlSize(.mini)
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+    }
+
+    private var statusColor: Color {
+        if !store.isConfigured { return .orange }
+        if isRunning { return .green }
+        if entries.last?.isError == true { return .red }
+        return .secondary
+    }
+
+    private var statusText: String {
+        if !store.isConfigured { return "未配置网关" }
+        if isRunning { return "执行中 · SSE 流式回显（网关会话）" }
+        if entries.last?.isError == true { return "上次执行失败，已保留已回显输出" }
+        return "就绪 · 网关会话 · 非交互式终端"
+    }
+
+    // MARK: - 执行
+
     private func run() {
         let trimmed = command.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
@@ -103,34 +144,61 @@ struct TerminalView: View {
         let token = store.gatewayToken
         let instruction = "请执行以下命令，并返回命令的真实输出（stdout/stderr）。如果命令需要确认或会修改系统，请直接说明而不执行。\n命令：\(trimmed)"
 
+        let entry = TerminalEntry(command: trimmed, output: "", date: Date(), isError: false, isStreaming: true)
+        entries.append(entry)
+
         Task {
             do {
-                let output = try await OpenClawClient().chat(
+                let stream = OpenClawClient().stream(
                     messages: [Message(role: .user, content: instruction)],
                     gatewayURL: baseURL,
                     token: token,
+                    model: "openclaw:main",
+                    apiMode: store.settings.agentAPIMode,
                     sessionKey: Self.terminalSessionKey
                 )
-                entries.append(TerminalEntry(
-                    command: trimmed,
-                    output: output,
-                    date: Date(),
-                    isError: false
-                ))
+                var output = ""
+                for try await event in stream {
+                    switch event {
+                    case .textDelta(let delta):
+                        output += delta
+                        if let index = entries.lastIndex(where: { $0.id == entry.id }) {
+                            entries[index].output = output
+                        }
+                    case .modelIdentified:
+                        break
+                    case .completed:
+                        break
+                    }
+                }
+                if output.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    output = "（无输出）"
+                }
+                finalize(entry, output: output, isError: false)
                 command = ""
             } catch {
                 let message = "执行失败：\(AppErrorText.localized(error.localizedDescription))"
-                entries.append(TerminalEntry(
-                    command: trimmed,
-                    output: message,
-                    date: Date(),
-                    isError: true
-                ))
+                if let index = entries.lastIndex(where: { $0.id == entry.id }) {
+                    let partial = entries[index].output
+                    let combined = partial.isEmpty ? message : partial + "\n\n" + message
+                    finalize(entry, output: combined, isError: true)
+                }
                 errorMessage = message
                 LogCollector.record(module: "远程终端", message)
             }
             isRunning = false
         }
+    }
+
+    private func finalize(_ entry: TerminalEntry, output: String, isError: Bool) {
+        guard let index = entries.lastIndex(where: { $0.id == entry.id }) else { return }
+        entries[index] = TerminalEntry(
+            command: entry.command,
+            output: output,
+            date: entry.date,
+            isError: isError,
+            isStreaming: false
+        )
     }
 }
 
@@ -144,6 +212,11 @@ private struct TerminalEntryView: View {
                 Text("$ \(entry.command)")
                     .font(.system(.body, design: .monospaced))
                     .textSelection(.enabled)
+                if entry.isStreaming {
+                    Label("流式输出中", systemImage: "waveform")
+                        .font(.caption2)
+                        .foregroundStyle(.blue)
+                }
                 Spacer()
                 Text(entry.date.formatted(date: .omitted, time: .shortened))
                     .font(.caption2)

@@ -38,6 +38,7 @@ struct SettingsView: View {
                 connectionSection
             keyboardSection
                 displaySection
+                liveActivitySection
                 voiceSection
                 ttsSection
                 sttSection
@@ -192,6 +193,26 @@ private var connectionSection: some View {
             Text("显示")
         } footer: {
             Text("在助手消息下显示输入/输出 Token 用量，需 Open Responses API 模式。")
+        }
+    }
+
+    // MARK: - 灵动岛 / Live Activity
+
+    /// 灵动岛/锁屏卡片风格与「随 agent 切换」设置。
+    private var liveActivitySection: some View {
+        Section {
+            Picker("风格", selection: $store.settings.liveActivityStyle) {
+                ForEach(LiveActivityStyle.allCases) { style in
+                    Text(style.displayName).tag(style)
+                }
+            }
+            .pickerStyle(.segmented)
+
+            Toggle("随 agent 切换", isOn: $store.settings.liveActivityFollowAgent)
+        } header: {
+            Text("灵动岛")
+        } footer: {
+            Text("免提对话期间的锁屏/灵动岛卡片风格：简约=仅状态；标准=频道名+状态；详细=图标+频道名+状态两行。开启「随 agent 切换」后，切换频道/agent 时卡片自动改为新 agent 名称。Live Activity 本地更新仅在 App 前台/后台任务期间生效（未配置 APNs 推送更新）。")
         }
     }
 
@@ -744,10 +765,32 @@ private var connectionSection: some View {
             } label: {
                 Label("远程终端", systemImage: "terminal")
             }
+            NavigationLink {
+                ScreenStreamView(store: store)
+            } label: {
+                Label("远程屏幕", systemImage: "display")
+            }
+            NavigationLink {
+                GatewayAutoDiscoveryView(knownGatewayURL: store.settings.gatewayURL) { url in
+                    store.settings.gatewayURL = url
+                }
+            } label: {
+                Label("自动发现网关", systemImage: "dot.radiowaves.left.and.right")
+            }
+            NavigationLink {
+                TLSFingerprintProbeView(settings: store)
+            } label: {
+                Label("TLS 指纹", systemImage: "lock.doc")
+            }
+            NavigationLink {
+                NotificationPreferencesView()
+            } label: {
+                Label("通知细分", systemImage: "bell.badge")
+            }
         } header: {
             Text("系统集成")
         } footer: {
-            Text("网关多档案切换、自签证书信任、连接诊断与远程命令终端。")
+            Text("网关多档案切换、自签证书信任、自动发现、连接诊断与远程命令终端/屏幕。")
         }
     }
 }

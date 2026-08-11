@@ -40,6 +40,13 @@ struct ToolsView: View {
                     toolRow(.models, label: "模型", icon: "sparkles") {
                         ModelsView(viewModel: viewModel)
                     }
+
+                    NavigationLink {
+                        CapabilitiesView(settings: settings)
+                    } label: {
+                        Label("能力面板", systemImage: "square.stack.3d.up")
+                            .foregroundStyle(Color.openClawRed)
+                    }
                 } header: {
                     Text("网关信息")
                 } footer: {
