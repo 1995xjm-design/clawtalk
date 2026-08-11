@@ -20,7 +20,6 @@ enum ClawTalkIntentError: LocalizedError {
 struct ClawTalkSendMessageIntent: AppIntent {
     static let title: LocalizedStringResource = "向 ClawTalk 发送消息"
     static let description = IntentDescription("把文本消息发给 ClawTalk 网关上的 OpenClaw 智能体，并返回回复。")
-    static let parameterSummary = Summary("发送「\(\.$text)」给 ClawTalk")
 
     @Parameter(title: "消息内容")
     var text: String
