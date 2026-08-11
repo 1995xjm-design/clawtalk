@@ -56,7 +56,7 @@ actor GatewayWebSocket {
     private var url: URL
     private var token: String?
     private var shouldReconnect = true
-    private var backoffMs: Double = 500
+    private var backoffMs: Double = 2000
     private var lastSeq: Int?
     private var lastTick: Date?
     private var tickIntervalMs: Double = 30000
@@ -163,7 +163,7 @@ actor GatewayWebSocket {
 
         listen()
         isConnected = true
-        backoffMs = 500
+        backoffMs = 2000
         lastSeq = nil
         startKeepalive()
         await stateHandler?(.connected)

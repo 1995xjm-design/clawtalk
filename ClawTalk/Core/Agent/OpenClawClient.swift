@@ -496,6 +496,14 @@ final class OpenClawClient {
             throw OpenClawError.invalidResponse
         }
 
+        // 2xx 但响应体不是合法 JSON：多半是网关地址/路径填错（指向了后端而非 OpenClaw 网关）
+        if (200...299).contains(http.statusCode),
+           (try? JSONSerialization.jsonObject(with: data)) == nil {
+            throw OpenClawError.responseError(
+                "网关返回了非 JSON 数据：请检查网关地址/路径是否正确（工具接口应指向 OpenClaw 网关 18789，而不是后端 18890）"
+            )
+        }
+
         // Try to parse error body for both HTTP errors and {ok: false} responses
         if !((200...299).contains(http.statusCode)) {
             if let errorResponse = try? JSONDecoder().decode(ToolInvokeResponse.self, from: data),

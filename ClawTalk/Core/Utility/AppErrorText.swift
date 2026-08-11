@@ -51,6 +51,19 @@ enum AppErrorText {
                 ? "连接网关超时：请检查网络后重试。"
                 : "Gateway connection timed out: check your network and retry."
         }
+        // 网关返回错误响应（连错网关/路径）
+        if lower.contains("bad server response") || lower.contains("unexpected response") {
+            return isChinese
+                ? "网关返回了错误响应：请检查网关地址是否为 OpenClaw 网关（端口 18789），WebSocket 路径保持 /ws，不要填成后端 18890"
+                : "Gateway returned an unexpected response: make sure the gateway URL points to OpenClaw (port 18789) and the WebSocket path is /ws, not the backend 18890."
+        }
+        // 麦克风不可用
+        if lower.contains("osstatus") {
+            return isChinese
+                ? "麦克风不可用：请检查 iOS 麦克风权限，或关闭正在占用麦克风的其他应用"
+                : "Microphone unavailable: check iOS microphone permission, or close other apps using the microphone."
+        }
+
         // URL 无效
         if lower.contains("invalid url") || lower.contains("bad url") || lower.contains("malformed url") {
             return isChinese
