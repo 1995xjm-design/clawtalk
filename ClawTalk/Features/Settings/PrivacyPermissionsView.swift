@@ -104,6 +104,17 @@ struct PrivacyPermissionsView: View {
         }
     }
 
+    private static func contactsStatusText(_ status: CNAuthorizationStatus) -> String {
+        switch status {
+        case .authorized: return "已授权"
+        case .limited: return "部分访问"
+        case .denied: return "已拒绝"
+        case .restricted: return "受限"
+        case .notDetermined: return "未请求"
+        @unknown default: return "未知"
+        }
+    }
+
     private static func avStatusText(_ status: AVAuthorizationStatus) -> String {
         switch status {
         case .authorized: return "已授权"
