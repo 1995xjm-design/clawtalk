@@ -18,10 +18,13 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>NSExtension</key>
 	<dict>
+		<key>NSExtensionAttributes</key>
+		<dict>
+			<key>WKAppBundleIdentifier</key>
+			<string>app.lgm.7517.watchapp</string>
+		</dict>
 		<key>NSExtensionPointIdentifier</key>
 		<string>com.apple.watchkit</string>
 	</dict>
-	<key>WKAppBundleIdentifier</key>
-	<string>app.lgm.7517.watchapp</string>
 </dict>
 </plist>

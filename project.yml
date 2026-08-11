@@ -223,6 +223,7 @@ targets:
         CFBundleDisplayName: ClawTalk
         CFBundleShortVersionString: "$(MARKETING_VERSION)"
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
-        WKAppBundleIdentifier: app.lgm.7517.watchapp
         NSExtension:
+          NSExtensionAttributes:
+            WKAppBundleIdentifier: app.lgm.7517.watchapp
           NSExtensionPointIdentifier: com.apple.watchkit
