@@ -10,9 +10,9 @@ struct GatewayProfilesView: View {
     @State private var showAddSheet = false
     @State private var editingProfile: GatewayProfile?
 
-    init(store: SettingsStore, profileStore: GatewayProfileStore = GatewayProfileStore()) {
+    init(store: SettingsStore, profileStore: GatewayProfileStore? = nil) {
         self.store = store
-        _profileStore = State(initialValue: profileStore)
+        _profileStore = State(initialValue: profileStore ?? GatewayProfileStore())
     }
 
     var body: some View {
