@@ -52,7 +52,7 @@ enum Appearance: String, Codable, CaseIterable, Identifiable {
 }
 
 /// Live Activity（锁屏/灵动岛）卡片风格。
-enum LiveActivityStyle: String, Codable, CaseIterable, Identifiable {
+enum LiveActivityStyle: String, Codable, CaseIterable, Identifiable, Hashable {
     case minimal = "简约"
     case standard = "标准"
     case detailed = "详细"
@@ -61,7 +61,10 @@ enum LiveActivityStyle: String, Codable, CaseIterable, Identifiable {
     init(from decoder: Decoder) throws {
         let raw = try decoder.singleValueContainer().decode(String.self)
         self = LiveActivityStyle(rawValue: raw) ?? .standard
-    
+    }
+
+    var id: String { rawValue }
+
     var displayName: String {
         switch self {
         case .minimal: return "简约"
@@ -69,9 +72,6 @@ enum LiveActivityStyle: String, Codable, CaseIterable, Identifiable {
         case .detailed: return "详细"
         }
     }
-}
-
-    var id: String { rawValue }
 }
 
 struct AppSettings: Codable {

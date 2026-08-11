@@ -61,9 +61,8 @@ final class TLSFingerprintProbe {
         let tlsOptions = NWProtocolTLS.Options()
         // 允许任意证书完成握手（仅用于抓取指纹，不影响 App 真实连接策略）
         sec_protocol_options_set_verify_block(tlsOptions.securityProtocolOptions) { _, secTrust, complete in
-            if let trust = sec_trust_copy_ref(secTrust)?.takeRetainedValue() {
-                capture.set(Self.extract(from: trust, host: host))
-            }
+            let trust = sec_trust_copy_ref(secTrust).takeRetainedValue()
+            capture.set(Self.extract(from: trust, host: host))
             complete(true)
         }
         let parameters = NWParameters(tls: tlsOptions)
@@ -73,7 +72,7 @@ final class TLSFingerprintProbe {
         }
         let connection = NWConnection(host: NWEndpoint.Host(host), port: nwPort, using: parameters)
 
-        let outcome = await withCheckedContinuation { continuation in
+        let outcome: TrustCapture.Outcome = await withCheckedContinuation { continuation in
             var didResume = false
             let lock = NSLock()
             func resumeOnce(_ value: TrustCapture.Outcome) {
@@ -242,13 +241,13 @@ struct TLSFingerprintProbeView: View {
                 }
 
                 Section("信任状态") {
-                    LabeledContent("状态") {
+                    LabeledContent("状态", content: {
                         Label(
                             result.isTrusted ? "已信任" : "未信任",
                             systemImage: result.isTrusted ? "checkmark.shield.fill" : "shield.slash"
                         )
                         .foregroundStyle(result.isTrusted ? .green : .orange)
-                    }
+                    })
 
                     if result.isTrusted {
                         Button("取消信任此主机", role: .destructive) {
