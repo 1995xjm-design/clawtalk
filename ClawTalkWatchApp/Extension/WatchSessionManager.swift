@@ -75,21 +75,6 @@ final class WatchSessionManager: NSObject, ObservableObject, WCSessionDelegate {
         }
     }
 
-    func sessionDidBecomeInactive(_ session: WCSession) {
-        DispatchQueue.main.async {
-            self.isActivated = false
-            self.updateStatusText()
-        }
-    }
-
-    func sessionDidDeactivate(_ session: WCSession) {
-        // 系统要求 deactivate 后重新 activate，才能恢复后续连接。
-        WCSession.default.activate()
-        DispatchQueue.main.async {
-            self.isActivated = false
-            self.updateStatusText()
-        }
-    }
 
     func sessionReachabilityDidChange(_ session: WCSession) {
         DispatchQueue.main.async {
