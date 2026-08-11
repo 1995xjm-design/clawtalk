@@ -639,10 +639,13 @@ extension OpenClawClient {
     static func resolveHTTPToken(settingsToken: String, gatewayURL: String) -> String {
         let identity = DeviceIdentityManager.loadOrCreate()
         let host = URL(string: gatewayURL)?.host ?? gatewayURL
-        if let entry = DeviceAuthTokenStore.loadToken(
-            deviceId: identity.deviceId, role: "user", gatewayHost: host
-        ) {
-            return entry.token
+        // 配对成功时设备令牌按网关返回的 role（node/operator/user）存储，这里逐一尝试取到即用
+        for role in ["user", "node", "operator"] {
+            if let entry = DeviceAuthTokenStore.loadToken(
+                deviceId: identity.deviceId, role: role, gatewayHost: host
+            ) {
+                return entry.token
+            }
         }
         return settingsToken
     }
