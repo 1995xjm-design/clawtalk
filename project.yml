@@ -211,7 +211,7 @@ targets:
       - path: ClawTalkWatchApp/Extension
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: app.lgm.7517.watch
+        PRODUCT_BUNDLE_IDENTIFIER: app.lgm.7517.watchapp.watch
         PROVISIONING_PROFILE_SPECIFIER: 7517ext
         CODE_SIGN_ENTITLEMENTS: ClawTalkWatchApp/ClawTalkWatch.entitlements
         TARGETED_DEVICE_FAMILY: "4"
