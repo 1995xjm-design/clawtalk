@@ -39,7 +39,6 @@ targets:
       - target: ClawTalkKeyboard
       - target: ClawTalkWidget
       - target: ClawTalkShareExtension
-      - target: ClawTalkWatchApp
     settings:
       base:
         INFOPLIST_FILE: ClawTalk/Resources/Info.plist
