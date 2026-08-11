@@ -130,7 +130,7 @@ final class TLSFingerprintProbe {
     // MARK: - 证书解析
 
     /// 从 SecTrust 提取叶证书指纹与有效期（在 verify block 中执行，不触碰 MainActor 状态）。
-    nonisolated static func extract(from trust: SecTrust, host: String) -> TrustCapture.CapturedTrust? {
+    nonisolated fileprivate static func extract(from trust: SecTrust, host: String) -> TrustCapture.CapturedTrust? {
         guard let chain = SecTrustCopyCertificateChain(trust) as? [SecCertificate], let leaf = chain.first else {
             return nil
         }
