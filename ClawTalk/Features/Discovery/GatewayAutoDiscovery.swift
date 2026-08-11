@@ -241,7 +241,7 @@ final class GatewayAutoDiscovery {
         while let current = cursor {
             let family = current.pointee.ifa_addr?.pointee.sa_family
             if family == sa_family_t(AF_INET), let addressPointer = current.pointee.ifa_addr {
-                var address = addressPointer.withMemoryRebound(to: sockaddr_in.self, capacity: 1).pointee
+                let address = addressPointer.withMemoryRebound(to: sockaddr_in.self, capacity: 1) { $0.pointee }
                 var buffer = [CChar](repeating: 0, count: Int(INET_ADDRSTRLEN))
                 var ip = ""
                 buffer.withUnsafeMutableBufferPointer { ptr in

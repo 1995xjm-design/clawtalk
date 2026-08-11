@@ -397,7 +397,7 @@ struct ConnectionDiagnostics {
 
         var resolved = "解析成功"
         if let addr = result.pointee.ai_addr {
-            var address = addr.withMemoryRebound(to: sockaddr_in.self, capacity: 1).pointee
+            let address = addr.withMemoryRebound(to: sockaddr_in.self, capacity: 1) { $0.pointee }
             var buffer = [CChar](repeating: 0, count: Int(INET_ADDRSTRLEN))
             var resolvedAddress = ""
             buffer.withUnsafeMutableBufferPointer { ptr in
