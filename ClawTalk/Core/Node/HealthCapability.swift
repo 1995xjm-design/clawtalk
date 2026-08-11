@@ -44,11 +44,11 @@ enum HealthCapability {
         }
 
         do {
-            let granted = try await store.requestAuthorization(
+            try await store.requestAuthorization(
                 toShare: [],
                 read: [stepType]
             )
-            guard granted else { throw HealthError.denied }
+            guard store.authorizationStatus(for: stepType) == .sharingAuthorized else { throw HealthError.denied }
         } catch let error as HealthError {
             throw error
         } catch {

@@ -431,7 +431,7 @@ struct FileTransferChannelView: View {
             // 右侧按钮：未下载 → 直接下载；已下载 → 分享
             if viewModel.downloadingFileName == file.name {
                 ProgressView()
-            } else if local != nil {
+            } else if let local {
                 ShareLink(item: local.url) {
                     Image(systemName: "arrow.up.forward.circle")
                         .font(.title3)
