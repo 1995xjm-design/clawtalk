@@ -42,7 +42,7 @@ final class DictationRecorderViewModel {
     /// 文档标题（可编辑，空则 AI/本地规则生成）
     var documentTitle: String = ""
     /// 整理完成后的文档（驱动详情 sheet）
-    private(set) var savedNote: DictationNote?
+    var savedNote: DictationNote?
     /// 整理来源说明（诚实：AI 整理 / 本地整理（未接 AI）及原因）
     var organizationNotice: String?
 

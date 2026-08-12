@@ -151,7 +151,7 @@ struct EmergencyView: View {
                     summary,
                     systemImage: store.phase == .sending ? "arrow.triangle.2.circlepath" : "checkmark.shield.fill"
                 )
-                .foregroundStyle(store.phase == .sending ? .secondary : .green)
+                .foregroundStyle(store.phase == .sending ? Color.secondary : Color.green)
 
                 if !store.lastSendResults.isEmpty {
                     ForEach(store.lastSendResults) { result in
