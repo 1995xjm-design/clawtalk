@@ -23,6 +23,9 @@ struct SettingsView: View {
     @State private var gatewayProfileStore = GatewayProfileStore()
     @State private var showAddWakeWord = false
     @State private var newWakeWord = ""
+    @State private var showScanPairing = false
+    @State private var pairingMessage: String?
+    @State private var showPairingResult = false
     @State private var wakeWordEdits: [WakeWordEdit] = []
 
 
@@ -95,6 +98,15 @@ struct SettingsView: View {
             .navigationTitle("设置")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button {
+                        showScanPairing = true
+                    } label: {
+                        Image(systemName: "qrcode.viewfinder")
+                            .fontWeight(.semibold)
+                    }
+                    .accessibilityLabel("扫码配对")
+                }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("完成") {
                             sanitizeVoiceWakeWords()
@@ -126,10 +138,72 @@ struct SettingsView: View {
             } message: {
                 Text("说出该词即可唤醒（建议 2-4 个字）。")
             }
+            .alert("扫码配对", isPresented: $showPairingResult) {
+                Button("好", role: .cancel) {}
+            } message: {
+                Text(pairingMessage ?? "")
+            }
+            .fullScreenCover(isPresented: $showScanPairing) {
+                QRScannerView(
+                    onScan: { value in
+                        handlePairingCode(value)
+                        showScanPairing = false
+                    },
+                    onCancel: { showScanPairing = false }
+                )
+                .ignoresSafeArea()
+            }
             }
         }
     }
 
+    // MARK: - 扫码配对（换电脑/换网关一键重新配对）
+
+    private func handlePairingCode(_ raw: String) {
+        guard let code = GatewaySetupCode.parse(raw) else {
+            pairingMessage = "无法识别配对码，请重新扫码"
+            showPairingResult = true
+            return
+        }
+        let httpURL = GatewaySetupCode.httpForm(of: code.url)
+        store.settings.gatewayURL = httpURL
+        store.settings.bootstrapToken = code.bootstrapToken
+        store.settings.useWebSocket = true
+        store.save()
+        Task { @MainActor in
+            await testPairing(bootstrapToken: code.bootstrapToken)
+        }
+    }
+
+    @MainActor
+    private func testPairing(bootstrapToken: String) async {
+        let resolved = store.settings.resolvedWebSocketURL
+        guard !resolved.isEmpty, let wsURL = URL(string: resolved) else {
+            pairingMessage = "无效的网关地址"
+            showPairingResult = true
+            return
+        }
+        let gateway = GatewayWebSocket(
+            url: wsURL,
+            token: nil,
+            bootstrapToken: bootstrapToken,
+            deviceTokenHandler: { [store] deviceToken in
+                Task { @MainActor in
+                    store.gatewayToken = deviceToken
+                    store.save()
+                }
+            }
+        )
+        do {
+            try await gateway.connect()
+            await gateway.shutdown()
+            pairingMessage = "配对成功，网关令牌已更新"
+        } catch {
+            await gateway.shutdown()
+            pairingMessage = "配对失败：\(AppErrorText.localized(error.localizedDescription))"
+        }
+        showPairingResult = true
+    }
     // MARK: - Connection
 
         private var keyboardSection: some View {
@@ -564,6 +638,53 @@ private var connectionSection: some View {
         }
     }
 
+    // MARK: - 扫码配对（换电脑/换网关一键重新配对）
+
+    private func handlePairingCode(_ raw: String) {
+        guard let code = GatewaySetupCode.parse(raw) else {
+            pairingMessage = "无法识别配对码，请重新扫码"
+            showPairingResult = true
+            return
+        }
+        let httpURL = GatewaySetupCode.httpForm(of: code.url)
+        store.settings.gatewayURL = httpURL
+        store.settings.bootstrapToken = code.bootstrapToken
+        store.settings.useWebSocket = true
+        store.save()
+        Task { @MainActor in
+            await testPairing(bootstrapToken: code.bootstrapToken)
+        }
+    }
+
+    @MainActor
+    private func testPairing(bootstrapToken: String) async {
+        let resolved = store.settings.resolvedWebSocketURL
+        guard !resolved.isEmpty, let wsURL = URL(string: resolved) else {
+            pairingMessage = "无效的网关地址"
+            showPairingResult = true
+            return
+        }
+        let gateway = GatewayWebSocket(
+            url: wsURL,
+            token: nil,
+            bootstrapToken: bootstrapToken,
+            deviceTokenHandler: { [store] deviceToken in
+                Task { @MainActor in
+                    store.gatewayToken = deviceToken
+                    store.save()
+                }
+            }
+        )
+        do {
+            try await gateway.connect()
+            await gateway.shutdown()
+            pairingMessage = "配对成功，网关令牌已更新"
+        } catch {
+            await gateway.shutdown()
+            pairingMessage = "配对失败：\(AppErrorText.localized(error.localizedDescription))"
+        }
+        showPairingResult = true
+    }
     // MARK: - Connection Test
 
     private func testConnection() {

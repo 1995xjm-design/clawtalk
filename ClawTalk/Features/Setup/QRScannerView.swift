@@ -25,7 +25,7 @@ struct QRScannerView: UIViewControllerRepresentable {
 }
 
 /// 相机扫码控制器（AVFoundation AVCaptureMetadataOutput）。
-final class QRScannerViewController: UIViewController, AVCaptureMetadataOutputObjectsDelegate {
+final class QRScannerViewController: UIViewController, AVCaptureMetadataOutputObjectsDelegate, PHPickerViewControllerDelegate {
     var onScan: ((String) -> Void)?
     var onCancel: (() -> Void)?
 
@@ -35,6 +35,7 @@ final class QRScannerViewController: UIViewController, AVCaptureMetadataOutputOb
 
     private let closeButton = UIButton(type: .system)
     private let torchButton = UIButton(type: .system)
+    private let photoButton = UIButton(type: .system)
     private let hintLabel = UILabel()
     private let errorLabel = UILabel()
     private let overlayView = ScannerOverlayView()
@@ -157,6 +158,14 @@ final class QRScannerViewController: UIViewController, AVCaptureMetadataOutputOb
         torchButton.addTarget(self, action: #selector(toggleTorch), for: .touchUpInside)
         view.addSubview(torchButton)
 
+        photoButton.setImage(UIImage(systemName: "photo.on.rectangle"), for: .normal)
+        photoButton.tintColor = .white
+        photoButton.backgroundColor = UIColor.black.withAlphaComponent(0.5)
+        photoButton.layer.cornerRadius = 20
+        photoButton.translatesAutoresizingMaskIntoConstraints = false
+        photoButton.addTarget(self, action: #selector(photoTapped), for: .touchUpInside)
+        view.addSubview(photoButton)
+
         hintLabel.text = "将二维码放入框内即可自动识别"
         hintLabel.textColor = .white
         hintLabel.font = .systemFont(ofSize: 15, weight: .medium)
@@ -186,6 +195,11 @@ final class QRScannerViewController: UIViewController, AVCaptureMetadataOutputOb
             torchButton.widthAnchor.constraint(equalToConstant: 40),
             torchButton.heightAnchor.constraint(equalToConstant: 40),
 
+            photoButton.trailingAnchor.constraint(equalTo: torchButton.leadingAnchor, constant: -12),
+            photoButton.centerYAnchor.constraint(equalTo: torchButton.centerYAnchor),
+            photoButton.widthAnchor.constraint(equalToConstant: 40),
+            photoButton.heightAnchor.constraint(equalToConstant: 40),
+
             hintLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 24),
             hintLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -24),
             hintLabel.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -48),
@@ -206,6 +220,46 @@ final class QRScannerViewController: UIViewController, AVCaptureMetadataOutputOb
         onCancel?()
     }
 
+    @objc private func photoTapped() {
+        var config = PHPickerConfiguration()
+        config.selectionLimit = 1
+        config.filter = .images
+        let picker = PHPickerViewController(configuration: config)
+        picker.delegate = self
+        present(picker, animated: true)
+    }
+
+    func picker(_ picker: PHPickerViewController, didFinishPicking results: [PHPickerResult]) {
+        picker.dismiss(animated: true)
+        guard let provider = results.first?.itemProvider,
+              provider.canLoadObject(ofClass: UIImage.self) else { return }
+        provider.loadObject(ofClass: UIImage.self) { [weak self] object, _ in
+            guard let self, let image = object as? UIImage else { return }
+            self.recognizeQR(in: image)
+        }
+    }
+
+    /// Vision 识别相册图片中的二维码（扫码页新增「相册」入口）。
+    private func recognizeQR(in image: UIImage) {
+        guard let cgImage = image.cgImage else { return }
+        let request = VNDetectBarcodesRequest { [weak self] request, _ in
+            guard let self else { return }
+            if let payload = request.results?
+                .compactMap({ ($0 as? VNBarcodeObservation)?.payloadStringValue })
+                .first {
+                DispatchQueue.main.async {
+                    self.stopSession()
+                    self.onScan?(payload)
+                }
+            } else {
+                DispatchQueue.main.async {
+                    self.showError("图片中未识别到二维码")
+                }
+            }
+        }
+        let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
+        try? handler.perform([request])
+    }
     @objc private func toggleTorch() {
         guard let device = AVCaptureDevice.default(for: .video), device.hasTorch else { return }
         do {
@@ -242,6 +296,8 @@ final class ScannerOverlayView: UIView {
         super.init(frame: frame)
         isOpaque = false
         backgroundColor = .clear
+        // 纯装饰遮罩：不拦截触摸，否则会盖住关闭/手电筒/相册按钮（历史「扫码页无法退出」根因）
+        isUserInteractionEnabled = false
     }
 
     required init?(coder: NSCoder) {
