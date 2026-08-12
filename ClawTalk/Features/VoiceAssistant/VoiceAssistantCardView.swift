@@ -3,15 +3,16 @@ import UIKit
 
 /// 随身语音助手主卡片：点按开始/结束连续对讲，长按退出。
 ///
-/// 新设计（明哥拍板）：去掉中央麦克风按钮，以「状态大字 + 底部音波带」为主视觉。
-/// 四种状态统一由底部音波带呈现（同一组竖条连续变形，不跳变）：
-/// - idle（待机）：音波带正弦微澜 + 背景光斑缓慢流动 + 提示文字轮播 —— 卡片常驻「活」感
-/// - listening（聆听中）：音波跟随实时输入音量跳动
-/// - thinking（思考中）：光带从左到右扫过（扫描感）+ 微呼吸
-/// - speaking（播报中）：声波跳动，叠加实时音量
+/// Siri 风格整卡灵动（明哥拍板 v037 重做）：无按钮、无内框，
+/// 整张卡片就是动态主体——背景三团流动彩带（红→紫→蓝）缓慢游走、
+/// 悬浮光点漂移、整卡呼吸透明度；状态切换时整卡动作跟着变化：
+/// - idle（待机）：彩带慢速流动 + 光点漂浮 + 文字呼吸（卡片始终「��着」）
+/// - listening（聆听中）：中央波纹扩散到整卡 + 彩带加速
+/// - thinking（思考中）：中央旋转光点 + 彩带轻缓
+/// - speaking（播报中）：整卡快速脉动 + 呼吸光罩
 ///
 /// 说明：卡片自身不再绘制渐变底/描边（由 VoiceAssistantCardSlot 统一提供），
-/// 本视图只负责内容层 + 状态动画 + 点按反馈 + 顶部操作栏。
+/// 本视图负责整卡动画内容层 + 点按反馈 + 顶部操作栏。
 struct VoiceAssistantCardView: View, VoiceAssistantCardContent {
     @Bindable var viewModel: VoiceAssistantViewModel
     /// 语音快捷设置（齿轮）数据源
@@ -19,20 +20,22 @@ struct VoiceAssistantCardView: View, VoiceAssistantCardContent {
 
     // 首次使用引导是否显示
     @State private var showFirstUseGuide = false
-    // 实时转写逐字冒出：已显示字符数 + 当前逐字显示的原文（同段文字不重复重播）
+    // 实时转写逐字冒出
     @State private var revealedTranscriptCount = 0
     @State private var revealedTranscriptText = ""
     @State private var transcriptRevealTask: Task<Void, Never>?
     // 点按反馈：按下收缩 / 松手回弹
     @State private var pressed = false
     @State private var pressStart: Date?
+    // 待机文字呼吸
+    @State private var textBreathing = false
     // 待机提示轮播
     @State private var tipIndex = 0
     @State private var tipTask: Task<Void, Never>?
     // 齿轮 → 语音快捷设置
     @State private var showQuickSettings = false
 
-    private let cardHeight: CGFloat = 240
+    private let cardHeight: CGFloat = 250
     private let firstUseDefaultsKey = "voiceAssistant.didShowFirstUseGuide"
 
     init(viewModel: VoiceAssistantViewModel, settingsStore: SettingsStore) {
@@ -42,45 +45,18 @@ struct VoiceAssistantCardView: View, VoiceAssistantCardContent {
 
     var body: some View {
         ZStack {
-            // A. 常驻灵动：缓慢流动的光斑（呼吸灯），待机也在「呼吸」
-            ambientLayer
+            // 整卡流动彩带（Siri 风，四态共用一套背景，速度/亮度随状态变化）
+            SiriBackgroundLayer(state: viewModel.state)
+            // 悬浮光点（整卡漂浮）
+            ParticleLayer()
+            // 状态特效：聆听波纹扩散 / 思考旋转光点 / 播报整卡脉动
+            StateEffectLayer(state: viewModel.state)
 
-            VStack(spacing: 6) {
-                Spacer(minLength: 0)
-
-                // 状态大字（主视觉，无按钮遮挡）
-                Text(statusText)
-                    .font(.system(size: 26.0 * sceneFontScale, weight: .bold))
-                    .foregroundStyle(.white)
-                    .contentTransition(.opacity)
-
-                // 首次引导 / 待机提示轮播 / 实时转写与回复
-                if showFirstUseGuide {
-                    Text("点按开始说话 · 长按退出")
-                        .font(.system(size: 12.0 * sceneFontScale, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.92))
-                        .transition(.opacity)
-                } else if viewModel.state == .idle {
-                    Text(currentTip)
-                        .font(.system(size: 12.0 * sceneFontScale))
-                        .foregroundStyle(.white.opacity(0.78))
-                        .lineLimit(1)
-                        .id("tip-\(tipIndex)")
-                        .transition(.opacity.combined(with: .offset(y: 3)))
-                } else {
-                    liveTextArea
-                }
-
-                Spacer(minLength: 0)
-
-                // 底部音波带（主角）
-                waveBand
-            }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 16)
+            contentOverlay
         }
         .frame(maxWidth: .infinity)
         .frame(height: cardHeight)
+        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
         .scaleEffect(pressed ? 0.97 : 1.0)
         .contentShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
         .gesture(cardGesture)
@@ -99,9 +75,11 @@ struct VoiceAssistantCardView: View, VoiceAssistantCardContent {
         .onAppear {
             maybeShowFirstUseGuide()
             startTipRotation()
+            startTextBreathing()
         }
         .onDisappear {
             stopTipRotation()
+            stopTextBreathing()
         }
         .onChange(of: viewModel.state) { _, newState in
             handleStateChange(newState)
@@ -113,6 +91,41 @@ struct VoiceAssistantCardView: View, VoiceAssistantCardContent {
                 startTranscriptReveal()
             }
         }
+    }
+
+    // MARK: - 中央内容（状态大字 + 提示/转写）
+
+    private var contentOverlay: some View {
+        VStack(spacing: 8) {
+            Spacer(minLength: 0)
+
+            Text(statusText)
+                .font(.system(size: 27.0 * sceneFontScale, weight: .bold))
+                .foregroundStyle(.white)
+                .scaleEffect(viewModel.state == .idle ? (textBreathing ? 1.03 : 1.0) : 1.0)
+                .opacity(viewModel.state == .idle ? (textBreathing ? 0.9 : 1.0) : 1.0)
+                .contentTransition(.opacity)
+
+            if showFirstUseGuide {
+                Text("点按开始说话 · 长按退出")
+                    .font(.system(size: 12.0 * sceneFontScale, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.92))
+                    .transition(.opacity)
+            } else if viewModel.state == .idle {
+                Text(currentTip)
+                    .font(.system(size: 12.0 * sceneFontScale))
+                    .foregroundStyle(.white.opacity(0.78))
+                    .lineLimit(1)
+                    .id("tip-\(tipIndex)")
+                    .transition(.opacity.combined(with: .offset(y: 3)))
+            } else {
+                liveTextArea
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 24)
+        .padding(.vertical, 14)
     }
 
     // MARK: - 手势：短按切换 / 长按退出（主手势，兼容滚动）
@@ -137,7 +150,7 @@ struct VoiceAssistantCardView: View, VoiceAssistantCardContent {
         }
     }
 
-    /// B. 跟手反馈：按下瞬间卡片轻微收缩 + 轻触觉；开始滚动/松手时回弹。
+    /// 点按反馈：按下瞬间卡片轻微收缩 + 轻触觉；开始滚动/松手时回弹。
     /// 只做视觉与触觉反馈，不触发任何动作（动作由 cardGesture 决定），
     /// 这样不影响主页 ScrollView 的滚动识别。
     private var pressFeedbackGesture: some Gesture {
@@ -163,41 +176,6 @@ struct VoiceAssistantCardView: View, VoiceAssistantCardContent {
                     pressed = false
                 }
             }
-    }
-
-    // MARK: - A. 常驻灵动：流动光斑（呼吸灯）
-
-    @ViewBuilder
-    private var ambientLayer: some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { context in
-            let time = context.date.timeIntervalSinceReferenceDate
-            ZStack {
-                Circle()
-                    .fill(.white.opacity(0.10))
-                    .frame(width: 220, height: 220)
-                    .blur(radius: 46)
-                    .offset(x: CGFloat(72 * sin(time * 0.35)), y: CGFloat(36 * cos(time * 0.5)))
-                Circle()
-                    .fill(Color.openClawDarkRed.opacity(0.38))
-                    .frame(width: 180, height: 180)
-                    .blur(radius: 34)
-                    .offset(x: CGFloat(-58 * cos(time * 0.28)), y: CGFloat(32 * sin(time * 0.44)))
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-        }
-    }
-
-    // MARK: - 底部音波带（主视觉，四种状态同一组竖条连续变形）
-
-    private var waveBand: some View {
-        VoiceWaveBandView(state: viewModel.state, level: viewModel.audioLevel)
-            .frame(height: 72)
-            .frame(maxWidth: .infinity)
-            .background(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(.black.opacity(0.14))
-            )
     }
 
     // MARK: - 顶部操作栏（长按退出角标 + 语音设置齿轮 + 场景切换）
@@ -248,7 +226,20 @@ struct VoiceAssistantCardView: View, VoiceAssistantCardContent {
         }
     }
 
-    // MARK: - 待机提示轮播
+    // MARK: - 待机文字呼吸与提示轮播
+
+    private func startTextBreathing() {
+        textBreathing = false
+        withAnimation(.easeInOut(duration: 2.4).repeatForever(autoreverses: true)) {
+            textBreathing = true
+        }
+    }
+
+    private func stopTextBreathing() {
+        withAnimation(.easeInOut(duration: 0.2)) {
+            textBreathing = false
+        }
+    }
 
     private let idleTips = [
         "说：帮我记一笔账",
@@ -411,66 +402,180 @@ struct VoiceAssistantCardView: View, VoiceAssistantCardContent {
     }
 }
 
-// MARK: - 底部音波带：同一组竖条，四种状态连续变形（C. 状态连贯）
+// MARK: - 整卡流动彩带（Siri 风）
 
-private struct VoiceWaveBandView: View {
+private struct SiriBackgroundLayer: View {
     let state: VoiceAssistantState
-    let level: Float
-
-    private let barCount = 26
 
     var body: some View {
         TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { context in
-            let time = context.date.timeIntervalSinceReferenceDate
-            HStack(alignment: .center, spacing: 4) {
-                ForEach(0..<barCount, id: \.self) { index in
-                    Capsule()
-                        .fill(Color.white.opacity(barOpacity(at: time, index: index)))
-                        .frame(width: 4, height: barHeight(at: time, index: index))
-                        .animation(.easeInOut(duration: 0.3), value: state)
-                }
+            let t = context.date.timeIntervalSinceReferenceDate
+            let speed = speedFactor
+            // 整卡呼吸透明度（待机也有「活」感）
+            let breathing = 0.88 + 0.10 * abs(sin(t * 1.3))
+            ZStack {
+                // 三团流动色：红 → 紫 → 蓝，缓慢游走
+                Circle()
+                    .fill(Color(red: 0.62, green: 0.10, blue: 0.22).opacity(0.55))
+                    .frame(width: 300, height: 300)
+                    .blur(radius: 80)
+                    .offset(x: CGFloat(100 * sin(t * 0.30 * speed)), y: CGFloat(55 * cos(t * 0.22 * speed)))
+                Circle()
+                    .fill(Color(red: 0.50, green: 0.10, blue: 0.62).opacity(0.50))
+                    .frame(width: 270, height: 270)
+                    .blur(radius: 72)
+                    .offset(x: CGFloat(75 * cos(t * 0.26 * speed)), y: CGFloat(65 * sin(t * 0.34 * speed)))
+                Circle()
+                    .fill(Color(red: 0.08, green: 0.28, blue: 0.62).opacity(0.48))
+                    .frame(width: 250, height: 250)
+                    .blur(radius: 66)
+                    .offset(x: CGFloat(-85 * sin(t * 0.22 * speed)), y: CGFloat(-45 * cos(t * 0.30 * speed)))
+                // 呼吸光罩：状态越活跃越亮、动得越快
+                Circle()
+                    .fill(.white.opacity(0.04 + 0.05 * abs(sin(t * (state == .speaking ? 2.4 : 1.5)))))
+                    .frame(width: 340, height: 340)
+                    .blur(radius: 80)
             }
-            .frame(maxWidth: .infinity)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .opacity(breathing)
         }
+        .allowsHitTesting(false)
     }
 
-    /// 竖条高度：idle 微澜 → listening 实时音量 → thinking 扫描光带 → speaking 声波跳动。
-    private func barHeight(at time: TimeInterval, index: Int) -> CGFloat {
-        let phase = Double(index) * 0.5
-        let levelBoost = CGFloat(min(max(level, 0), 1))
+    /// 待机最慢（安静呼吸），聆听/播报加速（有「反应」）。
+    private var speedFactor: Double {
         switch state {
-        case .idle:
-            let wave = abs(sin(time * 1.8 + phase * 0.4))
-            return 6 + wave * 22
-        case .listening:
-            let wave = abs(sin(time * 3.2 + phase))
-            return 10 + wave * 34 + levelBoost * 30
-        case .thinking:
-            let sweep = (time * 2.2).truncatingRemainder(dividingBy: Double(barCount))
-            let pulse = exp(-abs(Double(index) - sweep) * 0.55)
-            return 8 + pulse * 42 + 6 * abs(sin(time * 1.4 + phase * 0.3))
-        case .speaking:
-            let wave = abs(sin(time * 2.8 + phase))
-            return 10 + wave * 40 + levelBoost * 24
-        }
-    }
-
-    private func barOpacity(at time: TimeInterval, index: Int) -> Double {
-        let phase = Double(index) * 0.5
-        switch state {
-        case .idle:
-            return 0.32 + 0.16 * abs(sin(time * 1.6 + phase * 0.3))
-        case .listening:
-            return 0.66 + 0.34 * abs(sin(time * 3.2 + phase))
-        case .thinking:
-            return 0.5 + 0.3 * abs(sin(time * 2.0 + phase * 0.4))
-        case .speaking:
-            return 0.6 + 0.4 * abs(sin(time * 2.8 + phase))
+        case .idle: return 0.55
+        case .listening: return 1.0
+        case .thinking: return 0.8
+        case .speaking: return 1.25
         }
     }
 }
 
-// MARK: - 语音快捷设置（齿轮入口，方案1 第一步）
+// MARK: - 悬浮光点（整卡漂浮）
+
+private struct ParticleLayer: View {
+    private let count = 14
+
+    var body: some View {
+        GeometryReader { geo in
+            TimelineView(.animation(minimumInterval: 1.0 / 24.0)) { context in
+                let t = context.date.timeIntervalSinceReferenceDate
+                ZStack {
+                    ForEach(0..<count, id: \.self) { index in
+                        let phase = Double(index) * 0.85
+                        let x = geo.size.width * (0.10 + 0.80 * (Double(index % 5) / 4.0))
+                            + CGFloat(12 * sin(t * 0.5 + phase))
+                        let y = geo.size.height * (0.14 + 0.72 * (Double(index / 5) / 2.0))
+                            + CGFloat(9 * cos(t * 0.6 + phase))
+                        Circle()
+                            .fill(.white.opacity(0.08 + 0.10 * abs(sin(t * 0.7 + phase))))
+                            .frame(width: 3.5 + CGFloat(index % 3) * 1.5)
+                            .position(x: x, y: y)
+                    }
+                }
+            }
+        }
+        .allowsHitTesting(false)
+    }
+}
+
+// MARK: - 状态特效（聆听波纹 / 思考光点 / 播报脉动）
+
+private struct StateEffectLayer: View {
+    let state: VoiceAssistantState
+    @State private var ripple = false
+
+    var body: some View {
+        GeometryReader { geo in
+            ZStack {
+                switch state {
+                case .idle:
+                    EmptyView()
+                case .listening:
+                    // 中央波纹扩散到整卡（Siri 听感）
+                    ForEach(0..<3, id: \.self) { index in
+                        Circle()
+                            .stroke(Color.white.opacity(0.28), lineWidth: 1.5)
+                            .frame(width: 60, height: 60)
+                            .scaleEffect(ripple ? 1.0 + CGFloat(index + 1) * 2.8 : 1.0)
+                            .opacity(ripple ? 0 : 0.55)
+                            .animation(
+                                .easeOut(duration: 2.0)
+                                    .repeatForever(autoreverses: false)
+                                    .delay(Double(index) * 0.6),
+                                value: ripple
+                            )
+                    }
+                case .thinking:
+                    // 中央旋转光点
+                    ThinkingOrbitView(color: .white, size: 84)
+                case .speaking:
+                    // 整卡快速脉动光罩
+                    Circle()
+                        .fill(.white.opacity(0.05))
+                        .frame(width: geo.size.width * 0.92)
+                        .blur(radius: 44)
+                        .scaleEffect(ripple ? 1.12 : 0.9)
+                        .opacity(ripple ? 0.10 : 0.03)
+                        .animation(
+                            .easeInOut(duration: 0.8).repeatForever(autoreverses: true),
+                            value: ripple
+                        )
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .allowsHitTesting(false)
+        .onAppear { startRipple() }
+        .onChange(of: state) { _, _ in
+            // 状态切换时重开动画，避免旧动画延续
+            ripple = false
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 60_000_000)
+                startRipple()
+            }
+        }
+    }
+
+    private func startRipple() {
+        withAnimation(.easeInOut(duration: 0.2)) {
+            ripple = true
+        }
+    }
+}
+
+// MARK: - 思考：旋转光点
+
+private struct ThinkingOrbitView: View {
+    let color: Color
+    let size: CGFloat
+
+    @State private var spinning = false
+
+    var body: some View {
+        ZStack {
+            ForEach(0..<4, id: \.self) { index in
+                Circle()
+                    .fill(color)
+                    .frame(width: 9, height: 9)
+                    .shadow(color: color.opacity(0.9), radius: 4)
+                    .offset(y: -size * 0.42)
+                    .rotationEffect(.degrees(Double(index) * 90 + (spinning ? 360 : 0)))
+            }
+        }
+        .frame(width: size, height: size)
+        .onAppear {
+            spinning = false
+            withAnimation(.linear(duration: 1.1).repeatForever(autoreverses: false)) {
+                spinning = true
+            }
+        }
+    }
+}
+
+// MARK: - 语音快捷设置（齿轮入口）
 
 /// 语音大卡右上角齿轮弹出的快捷设置：对讲/唤醒开关 + 场景模式。
 /// 完整的提供商/音色/语速音调/实时预览页由「方案1 语音设置入口」任务继续补齐。
