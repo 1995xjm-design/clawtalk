@@ -4,9 +4,11 @@ struct ToolsView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var viewModel: ToolsViewModel
     private let settings: SettingsStore
+    private let gatewayConnection: GatewayConnection?
     private let nodeConnection: NodeConnection?
 
     init(settings: SettingsStore, gatewayConnection: GatewayConnection? = nil, nodeConnection: NodeConnection? = nil) {
+        self.gatewayConnection = gatewayConnection
         self.settings = settings
         self.nodeConnection = nodeConnection
         _viewModel = State(initialValue: ToolsViewModel(settings: settings, gatewayConnection: gatewayConnection))
