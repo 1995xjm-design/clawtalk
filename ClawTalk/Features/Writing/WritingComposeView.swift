@@ -69,7 +69,7 @@ final class WritingComposeViewModel {
     /// 生成说明（诚实：AI 生成 / 本地生成（未接 AI）及原因）
     private(set) var generationNotice: String?
     /// 生成完成后的草稿（驱动详情 sheet）
-    private(set) var savedDraft: ArticleDraft?
+    var savedDraft: ArticleDraft?
 
     var isGenerating: Bool {
         state == .generating

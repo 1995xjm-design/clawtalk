@@ -44,7 +44,7 @@ final class MeetingRecorderViewModel {
     /// 参与者输入（逗号/顿号/空格分隔）
     var participantsInput: String = ""
     /// 整理完成后的纪要（驱动详情 sheet）
-    private(set) var savedNote: MeetingNote?
+    var savedNote: MeetingNote?
     /// 整理来源说明（诚实：AI 整理 / 本地整理（未接 AI）及原因）
     var organizationNotice: String?
 

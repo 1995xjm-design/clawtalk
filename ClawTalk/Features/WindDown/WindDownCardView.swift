@@ -57,7 +57,7 @@ struct WindDownCardView: View {
             )
         }
         .buttonStyle(.plain)
-        .task { load() }
+        .task { await load() }
     }
 
     /// 摘要：说晚安 + 明日提醒数（本地读取，未授权/无数据诚实显示）。
