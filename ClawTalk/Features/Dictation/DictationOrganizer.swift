@@ -73,8 +73,8 @@ struct DictationOrganizer {
                     content: paragraphs.joined(separator: "\n\n"),
                     paragraphs: paragraphs,
                     keyPoints: draft.keyPoints,
-                    rawTranscript: trimmed,
-                    organizedByAI: true
+                    organizedByAI: true,
+                    rawTranscript: trimmed
                 )
                 return DictationOrganizationResult(note: note, usedFallback: false, fallbackReason: nil, aiError: nil)
             }
@@ -209,8 +209,8 @@ enum DictationLocalOrganizer {
             content: paragraphs.joined(separator: "\n\n"),
             paragraphs: paragraphs,
             keyPoints: keyPoints,
-            rawTranscript: transcript,
-            organizedByAI: false
+            organizedByAI: false,
+            rawTranscript: transcript
         )
     }
 
