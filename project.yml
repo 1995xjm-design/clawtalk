@@ -111,8 +111,15 @@ targets:
           - Resources/SharedSupport/**
     resources:
       - path: ClawTalkKeyboard/Localizable.xcstrings
-      - path: ClawTalkKeyboard/Resources/SharedSupport
-        type: folder
+    postBuildScripts:
+      - name: Copy Rime SharedSupport into appex
+        script: |
+          set -e
+          SRC="$SRCROOT/ClawTalkKeyboard/Resources/SharedSupport"
+          DST="$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/SharedSupport"
+          mkdir -p "$DST"
+          cp -R "$SRC/." "$DST/"
+          ls -la "$DST"
     dependencies:
       - package: HamsterKeyboardKit
     settings:
