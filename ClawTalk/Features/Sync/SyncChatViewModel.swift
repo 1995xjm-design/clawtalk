@@ -289,9 +289,9 @@ final class SyncChatViewModel {
 
     // MARK: - 发送
 
-    func send(_ text: String, images: [Data] = []) {
+    func send(_ text: String, images: [Data] = [], file: ChatFileAttachment? = nil) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty, !isSending else { return }
+        guard !trimmed.isEmpty || file != nil, !isSending else { return }
         guard settings.isConfigured else {
             errorMessage = "三端同步发送不可用：请在设置中配置 OpenClaw 网关。"
             return
@@ -325,7 +325,7 @@ final class SyncChatViewModel {
                     gatewayURL: self.settings.settings.gatewayURL
                 )
                 let eventStream = self.openClaw.stream(
-                    messages: history + [Message(role: .user, content: trimmed, imageData: images.isEmpty ? nil : images)],
+                    messages: history + [Message(role: .user, content: trimmed, imageData: images.isEmpty ? nil : images, fileAttachment: file)],
                     gatewayURL: self.settings.settings.gatewayURL,
                     token: token,
                     model: "openclaw:\(self.agentId)",

@@ -49,7 +49,20 @@ enum HomeWallpaper {
         }
     }
 
-    /// 当前主页背景图：自定义照片优先，否则内置壁纸。
+    /// 是否已选择壁纸（区别于「默认纯色」）：自定义照片 或 内置壁纸（id > 0）。
+    /// 默认状态（systemWallpaper + id 0）= 无壁纸纯色，跟随系统深浅色。
+    static func hasSelectedWallpaper(_ settings: AppSettings) -> Bool {
+        if settings.homeThemeSource == .customPhoto, settings.customWallpaperPath != nil {
+            return true
+        }
+        if settings.homeThemeSource == .systemWallpaper, settings.homeWallpaperID > 0 {
+            return true
+        }
+        return false
+    }
+
+    /// 当前主页背景图：自定义照片优先，否则内置壁纸；
+    /// 「默认」状态（systemWallpaper + id 0）返回 nil = 无壁纸纯色。
     static func currentImage(settings: AppSettings, screenSize: CGSize = UIScreen.main.bounds.size) -> UIImage? {
         if settings.homeThemeSource == .customPhoto,
            let path = settings.customWallpaperPath,
@@ -57,6 +70,7 @@ enum HomeWallpaper {
            let image = UIImage(data: data) {
             return image
         }
+        guard settings.homeWallpaperID > 0 else { return nil }
         return builtinImage(id: settings.homeWallpaperID, size: screenSize)
     }
 

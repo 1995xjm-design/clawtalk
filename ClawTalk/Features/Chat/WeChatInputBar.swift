@@ -66,7 +66,7 @@ struct WeChatInputBar: View {
             // 右侧：加号（语音/键盘模式都在，随时可发图）
             Button(action: onAddAttachment) {
                 Image(systemName: "plus.circle.fill")
-                    .font(.title2)
+                    .font(.title)
                     .foregroundStyle(.openClawRed)
             }
             .buttonStyle(.plain)

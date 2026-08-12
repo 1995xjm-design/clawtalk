@@ -137,7 +137,19 @@ final class AudioCaptureManager {
             log.error("voice processing unavailable: \(error.localizedDescription, privacy: .public)")
             LogCollector.record(module: "语音对话", "语音处理（回声消除/降噪）不可用：\(AppErrorText.localized(error.localizedDescription))")
         }
-        let format = inputNode.outputFormat(forBus: 0)
+var format = inputNode.outputFormat(forBus: 0)
+
+        // SIGABRT ???2026-08-12 ?? IsFormatSampleRateAndChannelCountValid false??
+        // ????/??/??????? inputNode ? outputFormat ??????????
+        // ?? installTap + engine.start() ??? coreaudio NSException ???
+        // ????????? 44.1kHz ??????tap ?????????
+        if format.sampleRate <= 0 || format.channelCount == 0 {
+            log.error("invalid input format sampleRate=\(format.sampleRate) channels=\(format.channelCount); fallback 44.1kHz mono")
+            LogCollector.record(module: "????", "????????????\(format.sampleRate)/??\(format.channelCount)??????????")
+            if let fallback = AVAudioFormat(standardFormatWithSampleRate: 44100, channels: 1) {
+                format = fallback
+            }
+        }
 
         samples = []
         smoothedRms = 0

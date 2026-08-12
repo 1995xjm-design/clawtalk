@@ -6,7 +6,10 @@ import Contacts
 import EventKit
 import UserNotifications
 
-/// 隐私与访问权限：展示各项权限授权状态，点击跳转系统设置。
+/// 隐私与访问权限：展示各项权限授权状态。
+/// - 未请求：点击胶囊开关原地弹出系统授权框；
+/// - 已拒绝/受限：点击胶囊开关跳转系统设置（底部「前往系统设置」按钮同样保留）；
+/// - 已授权：胶囊显示开启状态，点击无操作。
 struct PrivacyPermissionsView: View {
     @State private var photoStatus = ""
     @State private var cameraStatus = ""
@@ -19,17 +22,17 @@ struct PrivacyPermissionsView: View {
     var body: some View {
         List {
             Section {
-                permissionRow("照片", icon: "photo", status: photoStatus)
-                permissionRow("相机", icon: "camera", status: cameraStatus)
-                permissionRow("麦克风", icon: "mic", status: micStatus)
-                permissionRow("联系人", icon: "person.crop.circle", status: contactsStatus)
-                permissionRow("日历", icon: "calendar", status: calendarStatus)
-                permissionRow("提醒", icon: "bell", status: remindersStatus)
-                permissionRow("通知", icon: "bell.badge", status: notificationStatus)
+                permissionRow("照片", icon: "photo", status: photoStatus, kind: .photos)
+                permissionRow("相机", icon: "camera", status: cameraStatus, kind: .camera)
+                permissionRow("麦克风", icon: "mic", status: micStatus, kind: .microphone)
+                permissionRow("联系人", icon: "person.crop.circle", status: contactsStatus, kind: .contacts)
+                permissionRow("日历", icon: "calendar", status: calendarStatus, kind: .calendar)
+                permissionRow("提醒", icon: "bell", status: remindersStatus, kind: .reminders)
+                permissionRow("通知", icon: "bell.badge", status: notificationStatus, kind: .notifications)
             } header: {
                 Text("权限状态")
             } footer: {
-                Text("点击任意一行可前往系统设置查看/调整该 App 的权限。权限被拒绝时，对应功能（如照片、麦克风）将不可用，请手动开启。")
+                Text("未请求的权限可直接点击右侧开关原地授权；已拒绝的权限需前往系统设置开启。权限被拒绝时，对应功能（如照片、麦克风）将不可用。")
             }
 
             Section {
@@ -46,16 +49,65 @@ struct PrivacyPermissionsView: View {
         .refreshable { refresh() }
     }
 
-    private func permissionRow(_ title: String, icon: String, status: String) -> some View {
-        Button {
+    /// 权限类型：与系统授权 API 一一对应。
+    private enum PermissionKind {
+        case photos, camera, microphone, contacts, calendar, reminders, notifications
+    }
+
+    private func permissionRow(_ title: String, icon: String, status: String, kind: PermissionKind) -> some View {
+        HStack {
+            Label(title, systemImage: icon)
+            Spacer()
+            Text(status.isEmpty ? "—" : status)
+                .font(.caption)
+                .foregroundStyle(statusColor(status))
+            CapsulePermissionControl(status: status) {
+                handleTap(status: status, kind: kind)
+            }
+        }
+    }
+
+    /// 点击胶囊开关：未请求→原地请求授权；已拒绝/受限→跳系统设置；已授权→无操作。
+    private func handleTap(status: String, kind: PermissionKind) {
+        switch status {
+        case "未请求":
+            request(kind)
+        case "已拒绝", "受限", "未知":
             openSystemSettings()
-        } label: {
-            HStack {
-                Label(title, systemImage: icon)
-                Spacer()
-                Text(status.isEmpty ? "—" : status)
-                    .font(.caption)
-                    .foregroundStyle(statusColor(status))
+        default:
+            break
+        }
+    }
+
+    private func request(_ kind: PermissionKind) {
+        switch kind {
+        case .photos:
+            PHPhotoLibrary.requestAuthorization(for: .readWrite) { _ in
+                Task { @MainActor in refresh() }
+            }
+        case .camera:
+            AVCaptureDevice.requestAccess(for: .video) { _ in
+                Task { @MainActor in refresh() }
+            }
+        case .microphone:
+            AVAudioApplication.requestRecordPermission { _ in
+                Task { @MainActor in refresh() }
+            }
+        case .contacts:
+            CNContactStore().requestAccess(for: .contacts) { _, _ in
+                Task { @MainActor in refresh() }
+            }
+        case .calendar:
+            EKEventStore().requestFullAccessToEvents { _, _ in
+                Task { @MainActor in refresh() }
+            }
+        case .reminders:
+            EKEventStore().requestFullAccessToReminders { _, _ in
+                Task { @MainActor in refresh() }
+            }
+        case .notifications:
+            UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { _, _ in
+                Task { @MainActor in refresh() }
             }
         }
     }
@@ -155,5 +207,44 @@ struct PrivacyPermissionsView: View {
         case .notDetermined: return "未请求"
         @unknown default: return "未知"
         }
+    }
+}
+
+/// 胶囊形权限开关：按当前权限状态渲染（未请求=授权；已拒绝=前往设置；已授权=已开启）。
+private struct CapsulePermissionControl: View {
+    let status: String
+    let action: () -> Void
+
+    private var isGranted: Bool {
+        ["已授权", "部分访问", "仅写入", "临时授权"].contains(status)
+    }
+
+    private var isDenied: Bool {
+        ["已拒绝", "受限", "未知"].contains(status)
+    }
+
+    private var fillColor: Color {
+        if isGranted { return .green }
+        if isDenied { return .red }
+        return .orange
+    }
+
+    private var labelText: String {
+        if isGranted { return "已开启" }
+        if isDenied { return "前往设置" }
+        return "授权"
+    }
+
+    var body: some View {
+        Button(action: action) {
+            Text(labelText)
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(.white)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(Capsule().fill(fillColor))
+        }
+        .buttonStyle(.plain)
+        .disabled(isGranted)
     }
 }

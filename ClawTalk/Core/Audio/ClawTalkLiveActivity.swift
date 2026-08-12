@@ -38,7 +38,7 @@ enum ClawTalkLiveActivity {
                 return
             }
             let content = ActivityContent(
-                state: ClawTalkLiveActivityAttributes.ContentState(statusText: composedText),
+                state: ClawTalkLiveActivityAttributes.ContentState(statusText: composedText, style: currentStyle.rawValue),
                 staleDate: nil
             )
             Task { await activity.update(content) }
@@ -105,7 +105,7 @@ enum ClawTalkLiveActivity {
             isWake: isWake
         )
         let content = ActivityContent(
-            state: ClawTalkLiveActivityAttributes.ContentState(statusText: composedText),
+            state: ClawTalkLiveActivityAttributes.ContentState(statusText: composedText, style: currentStyle.rawValue),
             staleDate: nil
         )
         Task {
@@ -232,7 +232,7 @@ enum ClawTalkLiveActivity {
     private static func createActivity(channelName: String, initialStatus: String) {
         let attributes = ClawTalkLiveActivityAttributes(channelName: channelName)
         let content = ActivityContent(
-            state: ClawTalkLiveActivityAttributes.ContentState(statusText: initialStatus),
+            state: ClawTalkLiveActivityAttributes.ContentState(statusText: initialStatus, style: currentStyle.rawValue),
             staleDate: nil
         )
         do {

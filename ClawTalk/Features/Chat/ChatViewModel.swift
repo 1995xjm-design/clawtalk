@@ -274,8 +274,8 @@ final class ChatViewModel {
 
     // MARK: - Text Input
 
-    func sendText(_ text: String, images: [Data] = []) {
-        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !images.isEmpty else { return }
+    func sendText(_ text: String, images: [Data] = [], file: ChatFileAttachment? = nil) {
+        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !images.isEmpty || file != nil else { return }
         // 允许在语音播放/流式回复时发送新消息：先打断当前语音和正在进行的回复
         if state == .speaking || state == .streaming {
             // 取消上一条正在跑的发送任务，避免新旧发送任务并发导致「发下一句不接话」
@@ -299,7 +299,7 @@ final class ChatViewModel {
         }
 
         sendTask = Task {
-            await sendMessage(text, images: images.isEmpty ? nil : images)
+            await sendMessage(text, images: images.isEmpty ? nil : images, file: file)
         }
     }
 
@@ -439,8 +439,8 @@ final class ChatViewModel {
 
     // MARK: - Core Send Flow
 
-    private func sendMessage(_ content: String, images: [Data]? = nil, voiceAttachment: VoiceMessageAttachment? = nil) async {
-        let userMessage = Message(role: .user, content: content, imageData: images)
+    private func sendMessage(_ content: String, images: [Data]? = nil, voiceAttachment: VoiceMessageAttachment? = nil, file: ChatFileAttachment? = nil) async {
+        let userMessage = Message(role: .user, content: content, imageData: images, fileAttachment: file)
         messages.append(userMessage)
         if let voiceAttachment {
             voiceAttachments[userMessage.id] = voiceAttachment
@@ -465,7 +465,7 @@ final class ChatViewModel {
                 throw ChatError.notConfigured("请在设置中配置你的 OpenClaw 网关。")
             }
 
-            if settings.settings.useWebSocket, let gateway = gatewayConnection,
+            if file == nil, settings.settings.useWebSocket, let gateway = gatewayConnection,
                gateway.connectionState == .connected {
                 do {
                     try await sendMessageViaWebSocket(content, images: images, audioAttachment: voiceAttachment, gateway: gateway)

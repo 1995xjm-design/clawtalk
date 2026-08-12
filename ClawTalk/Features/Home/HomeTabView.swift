@@ -1,6 +1,9 @@
 import SwiftUI
 
-/// 主页 Tab：顶部语音助手大卡位 + 「今日概览」横向统计卡 + 下方快捷卡片网格。
+/// 主页 Tab：顶部语音助手大卡位 + 「今日概览」横向统计卡 + 下方可配置合并卡片网格。
+///
+/// D2：23→8 卡合并（家庭共享移除，工具卡回工具页）；D3：长按卡片可移除（AppStorage 持久化，工具页可回加）；
+/// B5：默认无壁纸 = 系统纯色跟随深浅，选壁纸后固定（深浅只改蒙层+卡片），NavigationStack 不再盖住壁纸层。
 struct HomeTabView: View {
     private let settings: SettingsStore
     private let gatewayConnection: GatewayConnection?
@@ -20,11 +23,14 @@ struct HomeTabView: View {
     /// 自动化数据源：本地任务实时读取；网关 cron 排程后回填 nextRunAt。
     @State private var automationViewModel: AutomationViewModel?
 
-    // 33 项功能包的 Store（卡片需要共享实例；MainActor 上下文中创建）
-    @State private var fileVaultStore: FileVaultStore
+    // 合并卡共享 Store（MainActor 上下文中创建）
     @State private var habitStore: HabitStore
     @State private var geofenceStore: GeofenceStore
-    @State private var emergencyStore: EmergencyStore
+    /// 记账卡摘要数据源（本月收支）
+    @State private var expenseStore: ExpenseStore
+
+    /// D3：主页卡片自定义（长按移除 / 工具页添加），AppStorage 持久化。
+    @AppStorage(HomeCardRegistry.storageKey) private var enabledCardKindsStorage = HomeCardRegistry.defaultStorageValue
 
     /// 今日日记数：TODO(主智能体接线) Diary 组暂无 DiaryStore 类，日记数据在
     /// VoiceDiaryViewModel.entries；等日记组接口就绪后改为「entries 中 date 为今天的条数」。
@@ -39,112 +45,58 @@ struct HomeTabView: View {
         self.gatewayConnection = gatewayConnection
         self.chatViewModel = chatViewModel
         _careStore = State(initialValue: CareReminderStore())
-        _fileVaultStore = State(initialValue: FileVaultStore())
         _habitStore = State(initialValue: HabitStore())
         _geofenceStore = State(initialValue: GeofenceStore())
-        _emergencyStore = State(initialValue: EmergencyStore(settings: SettingsStore()))
+        _expenseStore = State(initialValue: ExpenseStore())
     }
 
-    /// 快捷入口卡片网格（拆出独立计算属性，避免 SwiftUI 类型检查超时）。
+    /// 可配置卡片网格（D3：长按移除；全部移除后提供一键恢复）。
     private var cardGrid: some View {
-        LazyVGrid(columns: columns, spacing: 12) {
-
-                            // 提醒卡（自带 NavigationLink → 提醒列表）
-                            ReminderCardView()
-
-                            // 每日简报卡（今日提醒/日程/待办/天气一览，HomeCare 组已交付）
-                            DailyBriefCardView()
-
-                            // 健康卡（步数摘要 + 近 7 天趋势，自带 NavigationLink → 健康详情）
-                            HealthCardView()
-
-                            // 语音日记卡
-                            HomeCardView(
-                                card: HomeCard(
-                                    id: "voice-diary",
-                                    title: "语音日记",
-                                    icon: "waveform",
-                                    color: .pink,
-                                    summary: "说一段话，记下今天",
-                                    destination: VoiceDiaryView(settingsStore: settings)
-                                )
-                            )
-
-                            // 我的记忆卡（第二大脑，自带 NavigationLink → 记忆中心）
-                            MemoryHubCardView(settings: settings, gatewayConnection: gatewayConnection)
-
-                            // 自动化卡
-                            HomeCardView(
-                                card: HomeCard(
-                                    id: "automation",
-                                    title: "自动化",
-                                    icon: "bolt.fill",
-                                    color: .blue,
-                                    summary: "自动流程与快捷指令",
-                                    destination: AutomationListView(settings: settings)
-                                )
-                            )
-
-                            // 语音记账卡
-                            ExpenseCardView(settings: settings)
-
-                            // 随手捕捉卡
-                            CaptureCardView(settings: settings)
-
-                            // 会议纪要卡
-                            MeetingCardView(settingsStore: settings)
-
-                            // 每日播报卡
-                            DailyBriefingCardView(settings: settings)
-
-                            // 文档口述卡
-                            DictationCardView(settingsStore: settings)
-
-                            // 家庭共享提醒卡
-                            FamilyShareCardView(settings: settings)
-
-                            // 健康周报卡
-                            HealthReportCardView(settings: settings)
-
-                            // 习惯打卡卡
-                            HabitCardView(store: habitStore)
-
-                            // 到家/离开提醒卡
-                            GeofenceCardView(store: geofenceStore)
-
-                            // 停车位置卡
-                            ParkingCardView()
-
-                            // 差旅管家卡
-                            TravelCardView()
-
-                            // 紧急求助卡
-                            EmergencyHomeCardView(store: emergencyStore)
-
-                            // 重要文件防丢卡
-                            FileVaultCardView(store: fileVaultStore)
-
-                            // 知识库问答卡
-                            KBCardView(settings: settings, gatewayConnection: gatewayConnection)
-
-                            // 周报月报卡
-                            ReportCardView(settings: settings)
-
-                            // 主动建议卡
-                            SuggestionHomeCard()
-
-                            // 长文摘要卡
-                            SummarizeCardView(settingsStore: settings)
-
-                            // 纪念日提醒卡
-                            AnniversaryCardView()
-
-                            // 语音写文章卡
-                            WritingCardView(settingsStore: settings)
-
-                            // 睡前陪伴卡
-                            WindDownCardView(settings: settings)
-                                }
+        let kinds = HomeCardRegistry.enabledKinds(from: enabledCardKindsStorage)
+        return Group {
+            if kinds.isEmpty {
+                VStack(spacing: 10) {
+                    Image(systemName: "square.grid.2x2")
+                        .font(.system(size: 30))
+                        .foregroundStyle(.secondary)
+                    Text("主页卡片已全部移除")
+                        .font(.subheadline.weight(.medium))
+                    Text("长按卡片移除后回到工具页；这里可一键恢复全部")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Button("恢复全部卡片") {
+                        enabledCardKindsStorage = HomeCardRegistry.defaultStorageValue
+                    }
+                    .font(.subheadline.weight(.semibold))
+                    .buttonStyle(.borderedProminent)
+                    .tint(.openClawRed)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 24)
+            } else {
+                LazyVGrid(columns: columns, spacing: 12) {
+                    ForEach(kinds) { kind in
+                        HomeMergedCard(
+                            kind: kind,
+                            settings: settings,
+                            careStore: careStore,
+                            habitStore: habitStore,
+                            geofenceStore: geofenceStore,
+                            gatewayConnection: gatewayConnection,
+                            badge: badgeText(for: kind)
+                        )
+                        .contextMenu {
+                            Button(role: .destructive) {
+                                enabledCardKindsStorage = HomeCardRegistry.removing(kind, from: enabledCardKindsStorage)
+                            } label: {
+                                Label("从主页移除", systemImage: "xmark.circle")
+                            }
+                        }
+                    }
+                }
+                .task { expenseStore.reload() }
+            }
+        }
     }
 
     var body: some View {
@@ -164,9 +116,12 @@ struct HomeTabView: View {
                         todayOverviewSection
 
                         VStack(alignment: .leading, spacing: 12) {
-                            Text("快捷入口")
+                            Text("常用卡片")
                                 .font(.headline)
                                 .foregroundStyle(.primary)
+                            Text("长按卡片可移除；到工具页可重新添加")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
 
                             cardGrid
                         }
@@ -176,6 +131,7 @@ struct HomeTabView: View {
                 }
                 .scrollContentBackground(.hidden)
                 .background(.clear)
+                .toolbarBackground(.hidden, for: .navigationBar)
                 .navigationTitle("主页")
                 .navigationBarTitleDisplayMode(.inline)
                 .onAppear {
@@ -186,27 +142,29 @@ struct HomeTabView: View {
         }
     }
 
-    /// 主页主题壁纸层：内置壁纸/自定义照片 + 毛玻璃（模糊强度随设置）+ 轻度暗化。
+    /// 主页主题壁纸层（B5）：默认无壁纸 = 系统纯色（深浅色自适应）；
+    /// 选了内置壁纸/自定义照片后壁纸固定，深浅切换只改蒙层与卡片。
     private var wallpaperLayer: some View {
         GeometryReader { geo in
             ZStack {
-                if let image = HomeWallpaper.currentImage(settings: settings.settings) {
+                if HomeWallpaper.hasSelectedWallpaper(settings.settings),
+                   let image = HomeWallpaper.currentImage(settings: settings.settings) {
                     Image(uiImage: image)
                         .resizable()
                         .scaledToFill()
                         .frame(width: geo.size.width, height: geo.size.height)
                         .blur(radius: CGFloat((1 - settings.settings.homeBlurStrength) * 22))
                         .clipped()
+                    Color.black.opacity(0.12)
                 } else {
                     Color(.systemGroupedBackground)
                 }
-                Color.black.opacity(0.12)
             }
             .ignoresSafeArea()
         }
     }
 
-    /// 「今日概览」区：语音助手下方、快捷入口上方，4 个横向小统计卡。
+    /// 「今日概览」区：语音助手下方、常用卡片上方，4 个横向小统计卡。
     private var todayOverviewSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("今日概览")
@@ -241,6 +199,22 @@ struct HomeTabView: View {
             }
         }
         .padding(.horizontal, 16)
+    }
+
+    /// 卡片实时徽标（与各 Store 共用同一数据源；无数据时返回 nil 显示纯卡片）。
+    private func badgeText(for kind: HomeCardKind) -> String? {
+        switch kind {
+        case .reminders:
+            let count = careStore.todayReminderCount
+            return count > 0 ? "今日 \(count)" : nil
+        case .expense:
+            let summary = expenseStore.monthSummary()
+            if summary.expense > 0 { return "¥\(summary.expense.expenseAmountText)" }
+            if summary.income > 0 { return "¥\(summary.income.expenseAmountText)" }
+            return nil
+        default:
+            return nil
+        }
     }
 
     /// 自动化下次执行文案：取已启用任务中最近的 nextRunAt（网关排程后回填）；

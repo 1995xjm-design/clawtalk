@@ -6,7 +6,7 @@ import UIKit
 /// Siri 风格整卡灵动（明哥拍板 v037 重做）：无按钮、无内框，
 /// 整张卡片就是动态主体——背景三团流动彩带（红→紫→蓝）缓慢游走、
 /// 悬浮光点漂移、整卡呼吸透明度；状态切换时整卡动作跟着变化：
-/// - idle（待机）：彩带慢速流动 + 光点漂浮 + 文字呼吸（卡片始终「��着」）
+/// - idle（待机）：彩带慢速流动 + 光点漂浮 + 文字呼吸（卡片始终「着」）
 /// - listening（聆听中）：中央波纹扩散到整卡 + 彩带加速
 /// - thinking（思考中）：中央旋转光点 + 彩带轻缓
 /// - speaking（播报中）：整卡快速脉动 + 呼吸光罩
@@ -34,9 +34,16 @@ struct VoiceAssistantCardView: View, VoiceAssistantCardContent {
     @State private var tipTask: Task<Void, Never>?
     // 齿轮 → 语音快捷设置
     @State private var showQuickSettings = false
+    // 大卡主题（AppStorage 持久化，齿轮设置里切换）
+    @AppStorage("voiceAssistant.theme") private var themeRawValue = VoiceAssistantTheme.aurora.rawValue
 
     private let cardHeight: CGFloat = 250
     private let firstUseDefaultsKey = "voiceAssistant.didShowFirstUseGuide"
+
+    /// 当前主题（AppStorage rawValue 映射；未知值回退极光）。
+    private var theme: VoiceAssistantTheme {
+        VoiceAssistantTheme(rawValue: themeRawValue) ?? .aurora
+    }
 
     init(viewModel: VoiceAssistantViewModel, settingsStore: SettingsStore) {
         self.viewModel = viewModel
@@ -46,9 +53,16 @@ struct VoiceAssistantCardView: View, VoiceAssistantCardContent {
     var body: some View {
         ZStack {
             // 整卡流动彩带（Siri 风，四态共用一套背景，速度/亮度随状态变化）
-            SiriBackgroundLayer(state: viewModel.state)
+            SiriBackgroundLayer(state: viewModel.state, theme: theme)
+            // 底部动态条（待机微澜 / 对讲随真实麦克风音量起伏）
+            IdleWaveLayer(
+                state: viewModel.state,
+                theme: theme,
+                micLevel: viewModel.audioLevel,
+                micActive: viewModel.isMicActive
+            )
             // 悬浮光点（整卡漂浮）
-            ParticleLayer()
+            ParticleLayer(theme: theme)
             // 状态特效：聆听波纹扩散 / 思考旋转光点 / 播报整卡脉动
             StateEffectLayer(state: viewModel.state)
 
@@ -67,7 +81,8 @@ struct VoiceAssistantCardView: View, VoiceAssistantCardContent {
         .sheet(isPresented: $showQuickSettings) {
             VoiceAssistantQuickSettingsSheet(
                 viewModel: viewModel,
-                settingsStore: settingsStore
+                settingsStore: settingsStore,
+                themeRawValue: $themeRawValue
             )
         }
         .accessibilityElement(children: .combine)
@@ -407,6 +422,7 @@ struct VoiceAssistantCardView: View, VoiceAssistantCardContent {
 
 private struct SiriBackgroundLayer: View {
     let state: VoiceAssistantState
+    let theme: VoiceAssistantTheme
 
     var body: some View {
         TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { context in
@@ -418,12 +434,7 @@ private struct SiriBackgroundLayer: View {
                 ZStack {
                     // 主色带：环形渐变绕中心旋转（Siri 绸缎流动感）
                     AngularGradient(
-                        colors: [
-                            Color(red: 0.62, green: 0.10, blue: 0.22),
-                            Color(red: 0.50, green: 0.10, blue: 0.62),
-                            Color(red: 0.08, green: 0.28, blue: 0.62),
-                            Color(red: 0.62, green: 0.10, blue: 0.22)
-                        ],
+                        colors: theme.ribbonColors,
                         center: .center,
                         angle: .degrees(360 * (t * 0.05 * speed).truncatingRemainder(dividingBy: 1.0))
                     )
@@ -480,6 +491,7 @@ private struct SiriBackgroundLayer: View {
 // MARK: - 悬浮光点（整卡漂浮）
 
 private struct ParticleLayer: View {
+    let theme: VoiceAssistantTheme
     private let count = 14
 
     var body: some View {
@@ -494,7 +506,7 @@ private struct ParticleLayer: View {
                         let y = geo.size.height * (0.14 + 0.72 * (Double(index / 5) / 2.0))
                             + CGFloat(9 * cos(t * 0.6 + phase))
                         Circle()
-                            .fill(.white.opacity(0.08 + 0.10 * abs(sin(t * 0.7 + phase))))
+                            .fill(.white.opacity(theme.particleOpacity * (0.08 + 0.10 * abs(sin(t * 0.7 + phase)))))
                             .frame(width: 3.5 + CGFloat(index % 3) * 1.5)
                             .position(x: x, y: y)
                     }
@@ -505,7 +517,7 @@ private struct ParticleLayer: View {
                         let x = geo.size.width * (progress * 1.35 - 0.18)
                         let y = geo.size.height * (0.18 + progress * 0.55)
                         Capsule()
-                            .fill(.white.opacity(0.28 * (1 - progress)))
+                            .fill(.white.opacity(theme.particleOpacity * 0.28 * (1 - progress)))
                             .frame(width: 46, height: 1.5)
                             .rotationEffect(.degrees(-35))
                             .position(x: x, y: y)
@@ -610,14 +622,107 @@ private struct ThinkingOrbitView: View {
     }
 }
 
+// MARK: - 底部动态条（待机微澜 / 对讲随真实音量）
+
+/// 大卡底部动态条：
+/// - 待机（麦克风引擎未运行）：低幅平滑随机微澜。诚实实现——空闲时不启动麦克风引擎
+///   （省电、不占麦、与语音唤醒不抢资源），无法实时采集环境音量，因此用 TimelineView
+///   确定性伪随机公式模拟起伏感（同一时刻同一根条位置稳定，无闪烁）；
+/// - 对讲中（聆听/播报，麦克风引擎在跑）：竖条幅度跟随真实麦克风 RMS 音量起伏。
+private struct IdleWaveLayer: View {
+    let state: VoiceAssistantState
+    let theme: VoiceAssistantTheme
+    let micLevel: Float
+    let micActive: Bool
+
+    private let barCount = 26
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { context in
+            let t = context.date.timeIntervalSinceReferenceDate
+            GeometryReader { geo in
+                ZStack {
+                    ForEach(0..<barCount, id: \.self) { index in
+                        barView(index: index, t: t, size: geo.size)
+                    }
+                }
+                .frame(width: geo.size.width, height: geo.size.height)
+            }
+        }
+        .allowsHitTesting(false)
+        .opacity(state == .idle ? 0.95 : 0.7)
+    }
+
+    /// 单根动态条：高度/位移由「待机伪随机 或 真实麦克风音量」驱动，按主题样式渲染。
+    @ViewBuilder
+    private func barView(index: Int, t: TimeInterval, size: CGSize) -> some View {
+        let phase = Double(index) * 0.55
+        let sway = sin(t * theme.idleSpeed + phase)
+        let x = size.width * (CGFloat(index) + 0.5) / CGFloat(barCount)
+        let baseY = size.height * 0.66
+
+        let ambient: Double
+        if state != .idle && micActive {
+            // 对讲中：真实麦克风 RMS（voiceChat 模式已做回声消除，TTS 回声不会驱动起伏）。
+            ambient = Double(min(micLevel * 6.0, 1.0))
+        } else {
+            // 待机：确定性伪随机微澜（诚实实现，见结构注释）。
+            ambient = theme.idleAmplitude * (0.40 + 0.60 * abs(sin(t * 1.3 + phase * 1.7)))
+        }
+        let column = 0.35 + 0.65 * abs(sin(Double(index) * 0.42 + t * 0.8))
+        let height = size.height * (0.05 + 0.32 * ambient) * (0.45 + 0.55 * column)
+        let color = Color.white.opacity(theme.barOpacity * (0.7 + 0.3 * abs(sway)))
+
+        switch theme.barStyle {
+        case .waveform:
+            Capsule()
+                .fill(color)
+                .frame(width: 2.6, height: max(3, height * 0.55))
+                .position(x: x, y: baseY + CGFloat(sway) * height * 0.45)
+        case .bars:
+            Capsule()
+                .fill(color)
+                .frame(width: 3.2, height: max(3, height))
+                .position(x: x, y: baseY)
+        case .dots:
+            Circle()
+                .fill(color)
+                .frame(width: max(2.5, height * 0.32))
+                .position(x: x, y: baseY + CGFloat(sway) * height * 0.6)
+        case .line:
+            Capsule()
+                .fill(color)
+                .frame(width: 4.0, height: max(1.6, height * 0.22))
+                .position(x: x, y: baseY + CGFloat(sway) * height * 0.5)
+        case .spark:
+            Circle()
+                .fill(color)
+                .frame(width: max(1.8, height * 0.20))
+                .position(x: x + CGFloat(2.5 * sin(t * 1.1 + phase)), y: baseY + CGFloat(sway) * height * 0.7)
+        }
+    }
+}
 // MARK: - 语音快捷设置（齿轮入口）
 
-/// 语音大卡右上角齿轮弹出的快捷设置：对讲/唤醒开关 + 场景模式。
-/// 完整的提供商/音色/语速音调/实时预览页由「方案1 语音设置入口」任务继续补齐。
+/// 语音大卡右上角齿轮弹出的快捷设置：对讲/唤醒开关 + 场景模式 +
+/// 大卡主题（5 套）+ 文字转语音（提供商/音色/语速/音调/试听）+ 语音转文字（提供商/语言）。
 struct VoiceAssistantQuickSettingsSheet: View {
     @Bindable var viewModel: VoiceAssistantViewModel
     @Bindable var settingsStore: SettingsStore
+    @Binding var themeRawValue: String
     @Environment(\.dismiss) private var dismiss
+
+    // 试听（TTS 预览）状态
+    @State private var previewService: (any SpeechService)?
+    @State private var previewPlayback: AudioPlaybackManager?
+    @State private var isPreviewing = false
+    @State private var previewErrorMessage: String?
+
+    init(viewModel: VoiceAssistantViewModel, settingsStore: SettingsStore, themeRawValue: Binding<String>) {
+        self.viewModel = viewModel
+        self.settingsStore = settingsStore
+        self._themeRawValue = themeRawValue
+    }
 
     var body: some View {
         NavigationStack {
@@ -652,6 +757,70 @@ struct VoiceAssistantQuickSettingsSheet: View {
                     }
                     .pickerStyle(.segmented)
                 }
+                Section("大卡主题") {
+                    Picker("主题", selection: $themeRawValue) {
+                        ForEach(VoiceAssistantTheme.allCases) { theme in
+                            Text(theme.displayName).tag(theme.rawValue)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                }
+                Section("文字转语音") {
+                    Picker("提供商", selection: valueBinding(\.ttsProvider)) {
+                        ForEach(TTSProvider.allCases) { provider in
+                            Text(provider.rawValue).tag(provider)
+                        }
+                    }
+                    switch settingsStore.settings.ttsProvider {
+                    case .apple:
+                        previewButton
+                    case .doubao:
+                        SecureField("豆包 API Key", text: $settingsStore.doubaoAPIKey)
+                            .textContentType(.password)
+                        Picker("音色", selection: valueBinding(\.doubaoVoiceID)) {
+                            Text("鸡汤妹妹 Hope 2.0").tag("zh_female_jitangmei_uranus_bigtts")
+                            Text("温柔淑女 2.0").tag("zh_female_wenroushunv_uranus_bigtts")
+                            Text("甜美小源 2.0").tag("zh_female_tianmeixiaoyuan_uranus_bigtts")
+                            Text("渊博小叔 2.0").tag("zh_male_yuanboxiaoshu_uranus_bigtts")
+                            Text("爽朗少年 Brayan 2.0").tag("zh_male_shaonianzixin_uranus_bigtts")
+                        }
+                        TextField("自定义音色 ID", text: valueBinding(\.doubaoVoiceID))
+                            .autocorrectionDisabled()
+                            .textInputAutocapitalization(.never)
+                        previewButton
+                    case .edge:
+                        Picker("音色", selection: valueBinding(\.edgeVoiceID)) {
+                            Text("晓晓（女）").tag("zh-CN-XiaoxiaoNeural")
+                            Text("小艺").tag("zh-CN-XiaoyiNeural")
+                            Text("云希（男）").tag("zh-CN-YunxiNeural")
+                            Text("云扬（男）").tag("zh-CN-YunyangNeural")
+                            Text("云健（男）").tag("zh-CN-YunjianNeural")
+                            Text("云夏（女）").tag("zh-CN-YunxiaNeural")
+                        }
+                        previewButton
+                    }
+                    if settingsStore.settings.ttsProvider != .doubao {
+                        speedSlider
+                        pitchSlider
+                    }
+                }
+                Section("语音转文字") {
+                    Picker("提供商", selection: valueBinding(\.sttProvider)) {
+                        ForEach(STTProvider.allCases) { provider in
+                            Text(provider.rawValue).tag(provider)
+                        }
+                    }
+                    switch settingsStore.settings.sttProvider {
+                    case .apple:
+                        Picker("识别语言", selection: valueBinding(\.whisperLanguage)) {
+                            Text("中文").tag("zh")
+                            Text("跟随系统").tag("auto")
+                        }
+                    case .doubao:
+                        SecureField("豆包 API Key", text: $settingsStore.doubaoAPIKey)
+                            .textContentType(.password)
+                    }
+                }
             }
             .navigationTitle("语音设置")
             .navigationBarTitleDisplayMode(.inline)
@@ -662,6 +831,14 @@ struct VoiceAssistantQuickSettingsSheet: View {
             }
         }
         .presentationDetents([.medium, .large])
+        .alert("试听失败", isPresented: Binding(
+            get: { previewErrorMessage != nil },
+            set: { if !$0 { previewErrorMessage = nil } }
+        )) {
+            Button("好", role: .cancel) {}
+        } message: {
+            Text(previewErrorMessage ?? "")
+        }
     }
 
     /// 生成「修改即保存」的绑定（AppSettings 非 Equatable，逐字段绑定最稳）。
@@ -678,5 +855,165 @@ struct VoiceAssistantQuickSettingsSheet: View {
     private var wakeWordsText: String {
         let words = settingsStore.settings.voiceWakeWords
         return words.isEmpty ? "未设置唤醒词" : "唤醒词：\(words.joined(separator: "、"))"
+    }
+
+    // MARK: - 通用「修改即保存」绑定
+
+    /// 通用绑定（Equatable 字段：提供商/音色/识别语言等），修改立即写回并保存。
+    private func valueBinding<T: Equatable>(_ keyPath: WritableKeyPath<AppSettings, T>) -> Binding<T> {
+        Binding(
+            get: { settingsStore.settings[keyPath: keyPath] },
+            set: { newValue in
+                settingsStore.settings[keyPath: keyPath] = newValue
+                settingsStore.save()
+            }
+        )
+    }
+
+    // MARK: - 语速 / 音调滑块
+
+    private var speedSlider: some View {
+        HStack {
+            Text("语速")
+                .frame(width: 44, alignment: .leading)
+            Slider(value: speedBinding, in: -50...50, step: 5)
+            Text(speedValueText)
+                .frame(width: 44, alignment: .trailing)
+                .monospacedDigit()
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private var pitchSlider: some View {
+        HStack {
+            Text("音调")
+                .frame(width: 44, alignment: .leading)
+            Slider(value: pitchBinding, in: -10...10, step: 1)
+            Text(pitchValueText)
+                .frame(width: 44, alignment: .trailing)
+                .monospacedDigit()
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private var speedBinding: Binding<Double> {
+        Binding(
+            get: { Double(settingsStore.settings.ttsSpeed) },
+            set: {
+                settingsStore.settings.ttsSpeed = Int($0.rounded())
+                settingsStore.save()
+            }
+        )
+    }
+
+    private var pitchBinding: Binding<Double> {
+        Binding(
+            get: { Double(settingsStore.settings.ttsPitch) },
+            set: {
+                settingsStore.settings.ttsPitch = Int($0.rounded())
+                settingsStore.save()
+            }
+        )
+    }
+
+    private var speedValueText: String {
+        let v = settingsStore.settings.ttsSpeed
+        return v > 0 ? "+\(v)" : "\(v)"
+    }
+
+    private var pitchValueText: String {
+        let v = settingsStore.settings.ttsPitch
+        return v > 0 ? "+\(v)" : "\(v)"
+    }
+
+    // MARK: - TTS 试听
+
+    private var previewButton: some View {
+        Button {
+            if isPreviewing {
+                stopPreview()
+            } else {
+                startPreview()
+            }
+        } label: {
+            Label(isPreviewing ? "停止试听" : "试听音色", systemImage: isPreviewing ? "stop.circle.fill" : "play.circle.fill")
+        }
+        .disabled(previewDisabled)
+    }
+
+    private var previewDisabled: Bool {
+        switch settingsStore.settings.ttsProvider {
+        case .doubao:
+            return settingsStore.doubaoAPIKey.isEmpty
+        case .apple, .edge:
+            return false
+        }
+    }
+
+    /// 与设置页同链路：Apple 直接消费流触发 AVSpeechSynthesizer；豆包/Edge 走 PCM + AudioPlaybackManager。
+    private func startPreview() {
+        let sampleText = "你好，这是你的语音预览。"
+        let s = settingsStore.settings
+
+        let tts: any SpeechService
+        switch s.ttsProvider {
+        case .doubao:
+            tts = DoubaoTTSService(apiKey: settingsStore.doubaoAPIKey, voiceID: s.doubaoVoiceID)
+        case .apple:
+            tts = AppleTTSService(speed: s.ttsSpeed, pitch: s.ttsPitch)
+        case .edge:
+            tts = EdgeTTSService(voiceID: s.edgeVoiceID, speed: s.ttsSpeed, pitch: s.ttsPitch)
+        }
+        previewService = tts
+        isPreviewing = true
+
+        switch s.ttsProvider {
+        case .apple:
+            // Apple TTS 通过 AVSpeechSynthesizer 直接发声；必须真正消费流才会开始朗读。
+            Task {
+                do {
+                    for try await _ in tts.streamSpeech(text: sampleText) {}
+                } catch {
+                    let message = "语音预览失败：\(AppErrorText.localized(error.localizedDescription))"
+                    previewErrorMessage = message
+                    LogCollector.record(module: "语音预览", message)
+                }
+            }
+            // Apple TTS 无完成回调，4 秒后自动复位。
+            Task {
+                try? await Task.sleep(for: .seconds(4))
+                if isPreviewing { isPreviewing = false }
+            }
+        default:
+            // 豆包 / Edge 返回 PCM，交给 AudioPlaybackManager 播放。
+            let playback = AudioPlaybackManager()
+            previewPlayback = playback
+            Task {
+                do {
+                    try playback.start()
+                    let audioStream = tts.streamSpeech(text: sampleText)
+                    for try await chunk in audioStream {
+                        playback.enqueue(pcmData: chunk)
+                    }
+                    playback.markStreamingDone()
+                    await playback.waitUntilFinished()
+                } catch {
+                    let message = "语音预览失败：\(AppErrorText.localized(error.localizedDescription))"
+                    previewErrorMessage = message
+                    LogCollector.record(module: "语音预览", message)
+                }
+                playback.stop()
+                isPreviewing = false
+                previewPlayback = nil
+            }
+        }
+    }
+
+    private func stopPreview() {
+        previewService?.stop()
+        previewPlayback?.stop()
+        previewPlayback = nil
+        previewService = nil
+        isPreviewing = false
     }
 }

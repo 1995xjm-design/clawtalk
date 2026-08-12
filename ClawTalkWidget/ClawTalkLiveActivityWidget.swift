@@ -12,7 +12,8 @@ struct ClawTalkLiveActivityWidget: Widget {
         ActivityConfiguration(for: ClawTalkLiveActivityAttributes.self) { context in
             LiveActivityLockScreenView(
                 channelName: context.attributes.channelName,
-                statusText: context.state.statusText
+                statusText: context.state.statusText,
+                style: LiveActivityStyle(rawValue: context.state.style ?? "") ?? .standard
             )
             .activityBackgroundTint(clawTalkRed.opacity(0.18))
         } dynamicIsland: { context in
@@ -48,24 +49,30 @@ struct ClawTalkLiveActivityWidget: Widget {
 }
 
 /// 锁屏 / 横幅视图：状态文案 + 频道名（小字）。
+/// ?? / ?????????????????=??? / ??=???+?? / ??=??+???+????
 private struct LiveActivityLockScreenView: View {
     let channelName: String
     let statusText: String
+    let style: LiveActivityStyle
 
     var body: some View {
         HStack(spacing: 12) {
-            Image(systemName: "waveform.circle.fill")
-                .font(.title2)
-                .foregroundStyle(clawTalkRed)
+            if style == .detailed {
+                Image(systemName: "waveform.circle.fill")
+                    .font(.title2)
+                    .foregroundStyle(clawTalkRed)
+            }
             VStack(alignment: .leading, spacing: 2) {
                 Text(statusText)
                     .font(.headline)
-                    .lineLimit(1)
+                    .lineLimit(2)
                     .minimumScaleFactor(0.8)
-                Text(channelName)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
+                if style != .minimal {
+                    Text(channelName)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
             }
             Spacer(minLength: 0)
         }

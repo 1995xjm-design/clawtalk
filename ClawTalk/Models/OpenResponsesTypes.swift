@@ -47,6 +47,7 @@ struct OpenResponsesRequest: Encodable {
     enum ContentPart: Encodable {
         case inputText(String)
         case inputImage(mediaType: String, base64Data: String)
+        case inputFile(mediaType: String, base64Data: String, filename: String)
 
         func encode(to encoder: Encoder) throws {
             var container = encoder.container(keyedBy: CodingKeys.self)
@@ -60,6 +61,12 @@ struct OpenResponsesRequest: Encodable {
                     Base64Source(mediaType: mediaType, data: base64Data),
                     forKey: .source
                 )
+            case .inputFile(let mediaType, let base64Data, let filename):
+                try container.encode("input_file", forKey: .type)
+                try container.encode(
+                    Base64Source(mediaType: mediaType, data: base64Data, filename: filename),
+                    forKey: .source
+                )
             }
         }
 
@@ -71,11 +78,19 @@ struct OpenResponsesRequest: Encodable {
             let type = "base64"
             let mediaType: String
             let data: String
+            let filename: String?
+
+            init(mediaType: String, data: String, filename: String? = nil) {
+                self.mediaType = mediaType
+                self.data = data
+                self.filename = filename
+            }
 
             enum CodingKeys: String, CodingKey {
                 case type
                 case mediaType = "media_type"
                 case data
+                case filename
             }
         }
     }

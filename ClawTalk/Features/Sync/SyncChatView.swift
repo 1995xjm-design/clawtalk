@@ -1,6 +1,7 @@
 import SwiftUI
 import MarkdownUI
 import PhotosUI
+import UniformTypeIdentifiers
 
 /// 三端同步聊天页：手机 / 电脑 AutoClaw / 桌面 AI 统一对话历史。
 /// 数据源为桥的 GET /sync（codex 18991 / claude 18992），每 3 秒轮询增量刷新；
@@ -21,6 +22,10 @@ struct SyncChatView: View {
     @State private var showSyncPhotosPicker = false
     @State private var selectedSyncPhotos: [PhotosPickerItem] = []
     @State private var attachedSyncImages: [Data] = []
+    @State private var showSyncAttachmentMenu = false
+    @State private var showSyncFileImporter = false
+    @State private var attachedSyncFile: ChatFileAttachment?
+    @State private var syncFileAttachmentError: String?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -67,6 +72,35 @@ struct SyncChatView: View {
     }
 
     /// 相册多选 → 压缩后存入待发送图片。
+    static let allowedFileTypes: [UTType] = [
+        .plainText, .delimitedText, .commaSeparatedText, .json, .html, .xml, .pdf, .markdown
+    ]
+
+    private func loadSyncFile(from url: URL) {
+        guard let data = try? Data(contentsOf: url) else {
+            LogCollector.record(module: "??", "???????????\(url.lastPathComponent)")
+            syncFileAttachmentError = "??????????"
+            return
+        }
+        guard data.count <= 5 * 1024 * 1024 else {
+            syncFileAttachmentError = "???? 5MB ??"
+            return
+        }
+        let mime: String
+        switch url.pathExtension.lowercased() {
+        case "txt": mime = "text/plain"
+        case "md", "markdown": mime = "text/markdown"
+        case "html", "htm": mime = "text/html"
+        case "csv": mime = "text/csv"
+        case "json": mime = "application/json"
+        case "pdf": mime = "application/pdf"
+        default:
+            syncFileAttachmentError = "?????????? txt/md/html/csv/json/pdf?"
+            return
+        }
+        attachedSyncFile = ChatFileAttachment(filename: url.lastPathComponent, mimeType: mime, data: data)
+    }
+
     private func loadSyncPhotos() async {
         var newImages: [Data] = []
         for item in selectedSyncPhotos {
@@ -298,6 +332,25 @@ struct SyncChatView: View {
                 .padding(.top, 10)
             }
 
+            if let attachedSyncFile {
+                HStack(spacing: 8) {
+                    Image(systemName: "doc.fill")
+                        .foregroundStyle(.openClawRed)
+                    Text(attachedSyncFile.filename)
+                        .font(.caption)
+                        .lineLimit(1)
+                    Spacer()
+                    Button {
+                        self.attachedSyncFile = nil
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.top, 8)
+            }
+
             WeChatInputBar(
                 text: $textInput,
                 voiceInputEnabled: true,
@@ -309,8 +362,9 @@ struct SyncChatView: View {
                     let text = textInput
                     textInput = ""
                     isInputFocused = false
-                    viewModel.send(text, images: attachedSyncImages)
+                    viewModel.send(text, images: attachedSyncImages, file: attachedSyncFile)
                     attachedSyncImages = []
+                    attachedSyncFile = nil
                     selectedSyncPhotos = []
                 },
                 onHoldStart: { viewModel.startVoiceInput() },
@@ -325,8 +379,26 @@ struct SyncChatView: View {
                         appendTranscript(transcript)
                     }
                 },
-                onAddAttachment: { showSyncPhotosPicker = true }
+                onAddAttachment: { showSyncAttachmentMenu = true }
             )
+            .confirmationDialog("????", isPresented: $showSyncAttachmentMenu, titleVisibility: .visible) {
+                Button("??") { showSyncPhotosPicker = true }
+                Button("??") { showSyncFileImporter = true }
+                Button("??", role: .cancel) {}
+            }
+            .fileImporter(isPresented: $showSyncFileImporter, allowedContentTypes: SyncChatView.allowedFileTypes) { result in
+                switch result {
+                case .success(let url):
+                    loadSyncFile(from: url)
+                case .failure:
+                    break
+                }
+            }
+            .alert("????", isPresented: Binding(get: { syncFileAttachmentError != nil }, set: { if !$0 { syncFileAttachmentError = nil } })) {
+                Button("?", role: .cancel) {}
+            } message: {
+                Text(syncFileAttachmentError ?? "")
+            }
             .photosPicker(isPresented: $showSyncPhotosPicker,
                           selection: $selectedSyncPhotos,
                           maxSelectionCount: 8,

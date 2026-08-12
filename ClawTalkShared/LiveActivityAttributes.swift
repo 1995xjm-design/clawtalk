@@ -6,6 +6,8 @@ import Foundation
 struct ClawTalkLiveActivityAttributes: ActivityAttributes {
     struct ContentState: Codable, Hashable {
         var statusText: String
+        /// ?????LiveActivityStyle.rawValue????????????? nil?
+        var style: String?
     }
 
     var channelName: String

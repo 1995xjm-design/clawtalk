@@ -1,5 +1,6 @@
 import SwiftUI
 import PhotosUI
+import UniformTypeIdentifiers
 
 struct ChatView: View {
     @Bindable var viewModel: ChatViewModel
@@ -17,7 +18,10 @@ struct ChatView: View {
     @FocusState private var isInputFocused: Bool
     @State private var showSearch = false
     @State private var scrollTargetID: UUID?
-    @State private var dragOffset: CGFloat = 0
+    @State private var showAttachmentMenu = false
+    @State private var showFileImporter = false
+    @State private var attachedFile: ChatFileAttachment?
+    @State private var fileAttachmentError: String?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -32,7 +36,6 @@ struct ChatView: View {
             Divider().opacity(0.3)
             inputArea
         }
-        .offset(x: max(0, dragOffset))
         .background(Color(.systemBackground))
         .overlay(alignment: .top) {
             if showConversationHint {
@@ -191,8 +194,6 @@ struct ChatView: View {
             .simultaneousGesture(
                 TapGesture().onEnded { isInputFocused = false }
             )
-            // 自定义左缘右滑返回：仅拦截屏幕左缘 40pt 内开始的横向右滑
-            .simultaneousGesture(edgeSwipeBackGesture)
             .scrollDismissesKeyboard(.interactively)
             .scrollBounceBehavior(.basedOnSize)
             .overlay {
@@ -232,38 +233,6 @@ struct ChatView: View {
                 proxy.scrollTo(lastID, anchor: .bottom)
             }
         }
-    }
-
-    // 左缘右滑返回手势：从屏幕左缘约 40pt 内开始、横向为主且右移超过 60pt 时触发返回
-    private var edgeSwipeBackGesture: some Gesture {
-        DragGesture(minimumDistance: 12, coordinateSpace: .global)
-            .onChanged { value in
-                guard value.startLocation.x <= 40 else { return }
-                let dx = value.translation.width
-                let dy = value.translation.height
-                guard dx > 0, abs(dx) > abs(dy) else { return }
-                dragOffset = dx
-            }
-            .onEnded { value in
-                let dx = value.translation.width
-                let dy = value.translation.height
-                let screenWidth = UIScreen.main.bounds.width
-                let shouldPop = value.startLocation.x <= 40 && dx > 0 && abs(dx) > abs(dy) && dx > screenWidth / 3
-                if shouldPop {
-                    withAnimation(.easeOut(duration: 0.25)) {
-                        dragOffset = screenWidth
-                    }
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
-                        onBack?()
-                        dragOffset = 0
-                    }
-                } else {
-                    // 无论手势是否被中断/条件变化，未滑出一律回弹复位，避免页面偏移残留
-                    withAnimation(.easeOut(duration: 0.2)) {
-                        dragOffset = 0
-                    }
-                }
-            }
     }
 
     // MARK: - Input Area
@@ -334,6 +303,25 @@ struct ChatView: View {
                 .padding(.top, 4)
             }
 
+            if let attachedFile {
+                HStack(spacing: 8) {
+                    Image(systemName: "doc.fill")
+                        .foregroundStyle(.openClawRed)
+                    Text(attachedFile.filename)
+                        .font(.caption)
+                        .lineLimit(1)
+                    Spacer()
+                    Button {
+                        self.attachedFile = nil
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.top, 8)
+            }
+
             WeChatInputBar(
                 text: $textInput,
                 voiceInputEnabled: settingsStore.settings.voiceInputEnabled,
@@ -345,17 +333,36 @@ struct ChatView: View {
                     if settingsStore.settings.hapticsEnabled {
                         UIImpactFeedbackGenerator(style: .light).impactOccurred()
                     }
-                    viewModel.sendText(textInput, images: attachedImages)
+                    viewModel.sendText(textInput, images: attachedImages, file: attachedFile)
                     textInput = ""
                     attachedImages = []
+                    attachedFile = nil
                     selectedPhotos = []
                 },
                 onHoldStart: { viewModel.startVoiceMessageRecording() },
                 onHoldCancel: { viewModel.cancelVoiceMessageRecording() },
                 onHoldSendVoice: { viewModel.stopVoiceMessageRecordingAndSend() },
                 onHoldTranscribe: { viewModel.stopVoiceMessageRecordingAndSendTextOnly() },
-                onAddAttachment: { showPhotosPicker = true }
+                onAddAttachment: { showAttachmentMenu = true }
             )
+            .confirmationDialog("????", isPresented: $showAttachmentMenu, titleVisibility: .visible) {
+                Button("??") { showPhotosPicker = true }
+                Button("??") { showFileImporter = true }
+                Button("??", role: .cancel) {}
+            }
+            .fileImporter(isPresented: $showFileImporter, allowedContentTypes: Self.allowedFileTypes) { result in
+                switch result {
+                case .success(let url):
+                    loadPickedFile(from: url)
+                case .failure:
+                    break
+                }
+            }
+            .alert("????", isPresented: Binding(get: { fileAttachmentError != nil }, set: { if !$0 { fileAttachmentError = nil } })) {
+                Button("?", role: .cancel) {}
+            } message: {
+                Text(fileAttachmentError ?? "")
+            }
             .photosPicker(isPresented: $showPhotosPicker,
                           selection: $selectedPhotos,
                           maxSelectionCount: 8,
@@ -441,30 +448,6 @@ struct ChatView: View {
 
     @State private var showPhotosPicker = false
 
-    private var attachmentsMenu: some View {
-        Menu {
-            Button {
-                showPhotosPicker = true
-            } label: {
-                Label("照片", systemImage: "photo.on.rectangle")
-            }
-            // Future attachment types (files, camera, etc.) hang here.
-        } label: {
-            Image(systemName: "plus.circle.fill")
-                .font(.title2)
-                .foregroundStyle(.openClawRed)
-        }
-        .photosPicker(isPresented: $showPhotosPicker,
-                      selection: $selectedPhotos,
-                      maxSelectionCount: 8,
-                      matching: .images)
-        .onChange(of: selectedPhotos) {
-            Task { await loadSelectedPhotos() }
-        }
-        .disabled(viewModel.isConversationMode)
-        .opacity(viewModel.isConversationMode ? 0.5 : 1.0)
-    }
-
     private func toggleConversationMode() {
         if settingsStore.settings.hapticsEnabled {
             UIImpactFeedbackGenerator(style: .medium).impactOccurred()
@@ -517,6 +500,36 @@ struct ChatView: View {
             }
         }
         attachedImages = newImages
+    }
+
+    /// A3 ????????????? + PDF??? /v1/responses input_file ??????5MB??
+    private static let allowedFileTypes: [UTType] = [
+        .plainText, .delimitedText, .commaSeparatedText, .json, .html, .xml, .pdf, .markdown
+    ]
+
+    private func loadPickedFile(from url: URL) {
+        guard let data = try? Data(contentsOf: url) else {
+            LogCollector.record(module: "??", "?????????\(url.lastPathComponent)")
+            fileAttachmentError = "??????????"
+            return
+        }
+        guard data.count <= 5 * 1024 * 1024 else {
+            fileAttachmentError = "???? 5MB ??"
+            return
+        }
+        let mime: String
+        switch url.pathExtension.lowercased() {
+        case "txt": mime = "text/plain"
+        case "md", "markdown": mime = "text/markdown"
+        case "html", "htm": mime = "text/html"
+        case "csv": mime = "text/csv"
+        case "json": mime = "application/json"
+        case "pdf": mime = "application/pdf"
+        default:
+            fileAttachmentError = "?????????? txt/md/html/csv/json/pdf?"
+            return
+        }
+        attachedFile = ChatFileAttachment(filename: url.lastPathComponent, mimeType: mime, data: data)
     }
 }
 

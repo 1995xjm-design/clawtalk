@@ -143,6 +143,11 @@ final class VoiceAssistantViewModel {
         audioCapture.currentLevel
     }
 
+    /// 麦克风引擎是否在运行（对讲中为 true；空闲时引擎已停止，避免占麦与耗电）。
+    var isMicActive: Bool {
+        audioCapture.isRecording
+    }
+
     var isActive: Bool {
         state != .idle
     }

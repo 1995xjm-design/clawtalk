@@ -127,6 +127,7 @@ struct SettingsView: View {
                 Button("好", role: .cancel) {}
             } message: {
                 Text(previewErrorMessage ?? "")
+            }
             .alert("添加唤醒词", isPresented: $showAddWakeWord) {
                 TextField("唤醒词", text: $newWakeWord)
                 Button("添加") {
@@ -156,7 +157,6 @@ struct SettingsView: View {
                     onCancel: { showScanPairing = false }
                 )
                 .ignoresSafeArea()
-            }
             }
         }
     }
@@ -391,6 +391,17 @@ private var connectionSection: some View {
             .onChange(of: store.settings.liveActivityStyle) { _, _ in
                 refreshLiveActivityStyle()
             }
+            VStack(alignment: .leading, spacing: 6) {
+                Text("样式预览（\(store.settings.liveActivityStyle.displayName)）")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                LiveActivityPreviewCard(
+                    style: store.settings.liveActivityStyle,
+                    channelName: "语音助手",
+                    statusText: "正在聆听…"
+                )
+            }
+            .padding(.vertical, 4)
 
             Toggle("随 agent 切换", isOn: $store.settings.liveActivityFollowAgent)
                 .onChange(of: store.settings.liveActivityFollowAgent) { _, _ in
@@ -494,11 +505,15 @@ private var connectionSection: some View {
             case .edge:
                 Picker("音色", selection: $store.settings.edgeVoiceID) {
                     Text("晓晓（女）").tag("zh-CN-XiaoxiaoNeural")
-                    Text("小艺（女，替代已下线的晓墨）").tag("zh-CN-XiaoyiNeural")
+                    Text("小艺").tag("zh-CN-XiaoyiNeural")
                     Text("云希（男）").tag("zh-CN-YunxiNeural")
                     Text("云扬（男）").tag("zh-CN-YunyangNeural")
                     Text("云健（男）").tag("zh-CN-YunjianNeural")
                     Text("云夏（女）").tag("zh-CN-YunxiaNeural")
+                    Text("晓曼（粤语·女）").tag("zh-HK-HiuMaanNeural")
+                    Text("云龙（粤语·男）").tag("zh-HK-WanLungNeural")
+                    Text("晓佳（粤语·女）").tag("zh-HK-HiuGaaiNeural")
+                    Text("晓臻（台湾·女）").tag("zh-TW-HsiaoChenNeural")
                 }
                 Text("微软 Edge 免费接口，无需 API Key。晓墨（zh-CN-XiaomoNeural）已被微软移除（实测 Unsupported voice），用同为女声的「小艺」替代。")
                     .font(.caption)
@@ -997,5 +1012,50 @@ private var connectionSection: some View {
         } footer: {
             Text("网关多档案切换、自签证书信任、自动发现、连接诊断与远程命令终端/屏幕。")
         }
+    }
+}
+/// 灵动岛模拟预览卡：按当前风格渲染黑底胶囊卡片（简约/标准/详细）。
+private struct LiveActivityPreviewCard: View {
+    let style: LiveActivityStyle
+    let channelName: String
+    let statusText: String
+
+    var body: some View {
+        Group {
+            switch style {
+            case .minimal:
+                Text(statusText)
+                    .font(.headline)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+            case .standard:
+                Text("\(channelName) · \(statusText)")
+                    .font(.headline)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+            case .detailed:
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 6) {
+                        Text("💬")
+                        Text(channelName)
+                            .font(.headline)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
+                    }
+                    Text(statusText)
+                        .font(.subheadline)
+                        .foregroundStyle(.white.opacity(0.85))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                }
+            }
+        }
+        .foregroundStyle(.white)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 18)
+        .padding(.vertical, 12)
+        .background(Capsule().fill(Color.black))
+        .overlay(Capsule().strokeBorder(.white.opacity(0.14), lineWidth: 1))
+        .accessibilityLabel("灵动岛样式预览：\(style.displayName)")
     }
 }

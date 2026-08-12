@@ -72,3 +72,144 @@ enum VoiceSceneMode: String, CaseIterable, Identifiable, Codable {
 //
 // 并在 `init(from:)` 里用 `decodeIfPresent ?? .normal` 兼容旧数据、`encode(to:)` 里写出，
 // 设置页再补一个 Picker。接线完成前 VoiceAssistantViewModel.sceneMode 默认 .normal，由宿主页面直接赋值。
+
+// MARK: - 语音大卡主题（5 套）
+
+/// 语音大卡底部动态条样式。
+enum VoiceAssistantBarStyle: String, CaseIterable, Identifiable, Codable {
+    case waveform
+    case bars
+    case dots
+    case line
+    case spark
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .waveform: return "波浪"
+        case .bars: return "声柱"
+        case .dots: return "光点"
+        case .line: return "细线"
+        case .spark: return "星尘"
+        }
+    }
+}
+
+/// 语音大卡主题底色渐变 / 动态条样式 / 待机幅度 / 动画速度各不相同。
+/// 持久化：VoiceAssistantCardView 用 @AppStorage("voiceAssistant.theme") 保存 rawValue。
+enum VoiceAssistantTheme: String, CaseIterable, Identifiable, Codable {
+    case aurora
+    case ocean
+    case sunset
+    case forest
+    case mono
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .aurora: return "极光"
+        case .ocean: return "深海"
+        case .sunset: return "落日"
+        case .forest: return "森林"
+        case .mono: return "暗夜"
+        }
+    }
+
+    /// 整卡彩带渐变（SiriBackgroundLayer 主色带）。
+    var ribbonColors: [Color] {
+        switch self {
+        case .aurora:
+            return [
+                Color(red: 0.62, green: 0.10, blue: 0.22),
+                Color(red: 0.50, green: 0.10, blue: 0.62),
+                Color(red: 0.08, green: 0.28, blue: 0.62),
+                Color(red: 0.62, green: 0.10, blue: 0.22)
+            ]
+        case .ocean:
+            return [
+                Color(red: 0.05, green: 0.45, blue: 0.55),
+                Color(red: 0.10, green: 0.55, blue: 0.75),
+                Color(red: 0.05, green: 0.25, blue: 0.55),
+                Color(red: 0.05, green: 0.45, blue: 0.55)
+            ]
+        case .sunset:
+            return [
+                Color(red: 0.90, green: 0.45, blue: 0.15),
+                Color(red: 0.80, green: 0.25, blue: 0.45),
+                Color(red: 0.55, green: 0.15, blue: 0.55),
+                Color(red: 0.90, green: 0.45, blue: 0.15)
+            ]
+        case .forest:
+            return [
+                Color(red: 0.10, green: 0.45, blue: 0.25),
+                Color(red: 0.05, green: 0.55, blue: 0.45),
+                Color(red: 0.02, green: 0.25, blue: 0.30),
+                Color(red: 0.10, green: 0.45, blue: 0.25)
+            ]
+        case .mono:
+            return [
+                Color(red: 0.25, green: 0.27, blue: 0.32),
+                Color(red: 0.15, green: 0.17, blue: 0.22),
+                Color(red: 0.08, green: 0.09, blue: 0.12),
+                Color(red: 0.25, green: 0.27, blue: 0.32)
+            ]
+        }
+    }
+
+    /// 底部动态条样式。
+    var barStyle: VoiceAssistantBarStyle {
+        switch self {
+        case .aurora: return .waveform
+        case .ocean: return .bars
+        case .sunset: return .dots
+        case .forest: return .line
+        case .mono: return .spark
+        }
+    }
+
+    /// 待机（无麦克风引擎）时的低幅起伏幅度：0.0~1.0，越小越安静。
+    var idleAmplitude: Double {
+        switch self {
+        case .aurora: return 0.10
+        case .ocean: return 0.14
+        case .sunset: return 0.12
+        case .forest: return 0.08
+        case .mono: return 0.06
+        }
+    }
+
+    /// 待机动画速度（波浪/光点漂移的快慢）。
+    var idleSpeed: Double {
+        switch self {
+        case .aurora: return 0.9
+        case .ocean: return 1.2
+        case .sunset: return 1.0
+        case .forest: return 0.7
+        case .mono: return 1.4
+        }
+    }
+
+    /// 悬浮光点整体亮度系数（0.6~1.4，暗夜主题调低让彩带更沉）。
+    var particleOpacity: Double {
+        switch self {
+        case .aurora: return 1.0
+        case .ocean: return 1.1
+        case .sunset: return 1.0
+        case .forest: return 0.8
+        case .mono: return 0.6
+        }
+    }
+
+    /// 底部动态条白色透明度（暗夜主题更亮、更醒目）。
+    var barOpacity: Double {
+        switch self {
+        case .aurora: return 0.34
+        case .ocean: return 0.38
+        case .sunset: return 0.36
+        case .forest: return 0.30
+        case .mono: return 0.50
+        }
+    }
+}

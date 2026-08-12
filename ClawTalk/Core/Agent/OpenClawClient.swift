@@ -354,12 +354,15 @@ final class OpenClawClient {
         let lastUserIndex = messages.lastIndex(where: { $0.role == .user })
 
         let items = messages.enumerated().map { index, msg -> OpenResponsesRequest.Item in
-            if index == lastUserIndex, msg.hasImages, let images = msg.imageData {
+            if index == lastUserIndex, msg.hasImages || msg.hasFile {
                 var parts: [OpenResponsesRequest.ContentPart] = []
                 if !msg.content.isEmpty {
                     parts.append(.inputText(msg.content))
                 }
-                for imageData in images {
+                if let fa = msg.fileAttachment, fa.data.count <= 5 * 1024 * 1024 {
+                    parts.append(.inputFile(mediaType: fa.mimeType, base64Data: fa.data.base64EncodedString(), filename: fa.filename))
+                }
+                for imageData in msg.imageData ?? [] {
                     let base64 = imageData.base64EncodedString()
                     parts.append(.inputImage(mediaType: "image/jpeg", base64Data: base64))
                 }

@@ -25,7 +25,6 @@ struct ChannelListView: View {
     }
 
     var body: some View {
-        NavigationStack {
             VStack(spacing: 0) {
                 AgentStatusIndicator(gatewayConnection: gatewayConnection, settings: settingsStore)
                     .padding(.horizontal, 16)
@@ -232,7 +231,6 @@ struct ChannelListView: View {
             .sheet(item: $editingChannel) { channel in
                 EditChannelView(channelStore: channelStore, channel: channel)
             }
-        }
     }
 
     private var connectionDotColor: Color {
