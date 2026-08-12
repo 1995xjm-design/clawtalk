@@ -266,6 +266,15 @@ final class VoiceAssistantViewModel {
 
     /// 默认目标智能体：优先 settings 里「唤醒后进入的频道」（voiceWakeChannelID），
     /// 其次频道列表第一个频道；都没有则 "main"。
+
+    /// 是否属于「没听到声音」：正常事件，不做错误提示（避免日志刷屏）。
+    private static func isNoSpeechError(_ error: Error) -> Bool {
+        if let sttError = error as? AppleSTTError {
+            if case .noSpeech = sttError { return true }
+        }
+        let raw = error.localizedDescription.lowercased()
+        return raw.contains("no speech") || raw.contains("没有听到")
+    }
     private static func resolveDefaultAgentID(settings: SettingsStore) -> String {
         if let wakeChannelID = settings.settings.voiceWakeChannelID,
            let matched = ChannelStore.shared.channels.first(where: { $0.id.uuidString == wakeChannelID }) {
@@ -321,6 +330,11 @@ final class VoiceAssistantViewModel {
             } catch is CancellationError {
                 // 手动退出/打断取消：静默，不报错。
             } catch {
+                // 没听到声音是正常事件：不报错、不记日志，静默进入下一轮聆听。
+                if Self.isNoSpeechError(error) {
+                    resumeNextRound()
+                    return
+                }
                 errorMessage = "语音助手出错了：\(AppErrorText.localized(error.localizedDescription))"
                 // 单轮失败不结束会话，继续聆听下一句。
                 resumeNextRound()

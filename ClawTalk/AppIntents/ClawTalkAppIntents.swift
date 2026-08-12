@@ -16,7 +16,6 @@ enum ClawTalkIntentError: LocalizedError {
 }
 
 /// 向 ClawTalk 发送消息：调用网关 chat 让 OpenClaw 智能体回复并返回回复内容。
-@MainActor
 struct ClawTalkSendMessageIntent: AppIntent {
     static let title: LocalizedStringResource = "向 ClawTalk 发送消息"
     static let description = IntentDescription("把文本消息发给 ClawTalk 网关上的 OpenClaw 智能体，并返回回复。")
@@ -54,7 +53,6 @@ struct ClawTalkSendMessageIntent: AppIntent {
 }
 
 /// 查看 ClawTalk 状态：配置情况 + WebSocket 开关 + 网关可达性（真实 HTTP 探测）。
-@MainActor
 struct ClawTalkStatusIntent: AppIntent {
     static let title: LocalizedStringResource = "查看 ClawTalk 状态"
     static let description = IntentDescription("查看 ClawTalk 网关是否已配置、WebSocket 是否开启、网关是否可达。")

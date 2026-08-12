@@ -4,7 +4,7 @@ import SwiftUI
 ///
 /// 语音助手组实现本协议（内容本身是 View），并通过
 /// VoiceAssistantCardSlot(content:) 注入真实卡片内容；
-/// 未注入前由本组显示占位内容（麦克风图标 + 「点按说话」）。
+/// 未注入前由本组显示占位内容（波形图标 + 「点按说话」）。
 ///
 /// 槽位统一提供：渐变大卡外壳、空闲呼吸动画、圆角与阴影，
 /// 语音助手组只需实现内容与交互。
@@ -80,15 +80,9 @@ struct VoiceAssistantCardSlot: View {
 private struct VoiceAssistantCardPlaceholder: VoiceAssistantCardContent {
     var body: some View {
         VStack(spacing: 14) {
-            ZStack {
-                Circle()
-                    .fill(.white.opacity(0.18))
-                    .frame(width: 72, height: 72)
-
-                Image(systemName: "mic.fill")
-                    .font(.system(size: 30, weight: .semibold))
-                    .foregroundStyle(.white)
-            }
+            Image(systemName: "waveform")
+                .font(.system(size: 34, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.9))
 
             VStack(spacing: 4) {
                 Text(cardTitle)

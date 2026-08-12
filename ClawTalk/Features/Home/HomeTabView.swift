@@ -152,7 +152,7 @@ struct HomeTabView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
                     if let assistantViewModel {
-                        VoiceAssistantCardSlot(content: VoiceAssistantCardView(viewModel: assistantViewModel))
+                        VoiceAssistantCardSlot(content: VoiceAssistantCardView(viewModel: assistantViewModel, settingsStore: settings))
                             .padding(.horizontal, 16)
                     } else {
                         VoiceAssistantCardSlot()

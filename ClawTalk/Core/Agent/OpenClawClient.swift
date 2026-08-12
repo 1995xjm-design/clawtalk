@@ -637,16 +637,36 @@ extension OpenClawClient {
     /// token from the gateway (issued during WebSocket handshake), fall back
     /// to the user-provided settings token.
     static func resolveHTTPToken(settingsToken: String, gatewayURL: String) -> String {
+        // 优先用配对时网关下发的 device token（v035+ 配对会写入 settings.gatewayToken）
+        let trimmedSettingsToken = settingsToken.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmedSettingsToken.isEmpty {
+            return trimmedSettingsToken
+        }
         let identity = DeviceIdentityManager.loadOrCreate()
-        let host = URL(string: gatewayURL)?.host ?? gatewayURL
-        // 配对成功时设备令牌按网关返回的 role（node/operator/user）存储，这里逐一尝试取到即用
+        // 兼容历史配对：Keychain 中令牌按配对时 WS 地址的 host 存储，
+        // 这里对 host 做归一化，逐一尝试常见变体取到即用。
+        let rawHost = URL(string: gatewayURL)?.host ?? gatewayURL
+        let hosts = Self.hostCandidates(for: rawHost)
         for role in ["user", "node", "operator"] {
-            if let entry = DeviceAuthTokenStore.loadToken(
-                deviceId: identity.deviceId, role: role, gatewayHost: host
-            ) {
-                return entry.token
+            for host in hosts {
+                if let entry = DeviceAuthTokenStore.loadToken(
+                    deviceId: identity.deviceId, role: role, gatewayHost: host
+                ) {
+                    return entry.token
+                }
             }
         }
-        return settingsToken
+        return ""
+    }
+
+    /// host 归一化候选：去首尾空白、去尾部点、小写、去 "www." 前缀（storeKey 内部已小写）。
+    private static func hostCandidates(for host: String) -> [String] {
+        var base = host.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        while base.hasSuffix(".") { base.removeLast() }
+        var candidates = [base]
+        if base.hasPrefix("www.") {
+            candidates.append(String(base.dropFirst(4)))
+        }
+        return candidates
     }
 }

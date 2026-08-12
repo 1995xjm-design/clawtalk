@@ -102,6 +102,13 @@ final class AutomationViewModel {
         guard let client = gatewayClient else { return }
         isLoading = true
         errorMessage = nil
+        // 网关 cron REST 端点未接线（isEndpointReady 恒 false）：不发起请求，
+        // 避免对不存在的端点发请求拿到网页 HTML 触发 JSON 解析报错（历史日志「未能读取数据，因为它的格式不正确」）。
+        guard client.isEndpointReady else {
+            gatewayStatusText = "网关任务同步未接线（端点待网关侧确认）"
+            isLoading = false
+            return
+        }
         do {
             let remote = try await client.listCronTasks()
             mergeRemote(remote)

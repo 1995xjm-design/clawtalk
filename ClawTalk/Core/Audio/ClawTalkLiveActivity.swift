@@ -151,6 +151,41 @@ enum ClawTalkLiveActivity {
         update(statusText: status, icon: icon)
     }
 
+    // MARK: - 语音助手状态（语音大卡联动）
+
+    private static let voiceAssistantChannelName = "ClawTalk·语音助手"
+
+    /// 开启「语音助手」锁屏状态：优先复用/更新语音助手卡片；
+    /// 若正在显示聊天/唤醒卡片，先结束再创建语音助手卡片，避免文案互相覆盖。
+    static func startVoiceAssistant(status: String) {
+        guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
+        if let activity = Activity<ClawTalkLiveActivityAttributes>.activities.first {
+            if activity.attributes.channelName == voiceAssistantChannelName {
+                let content = ActivityContent(
+                    state: ClawTalkLiveActivityAttributes.ContentState(statusText: status),
+                    staleDate: nil
+                )
+                Task { await activity.update(content) }
+                return
+            }
+            Task {
+                await activity.end(nil, dismissalPolicy: .immediate)
+                createActivity(channelName: voiceAssistantChannelName, initialStatus: status)
+            }
+            return
+        }
+        createActivity(channelName: voiceAssistantChannelName, initialStatus: status)
+    }
+
+    /// 结束「语音助手」锁屏状态（只结束语音助手卡片开启的活动，不影响聊天/唤醒活动）。
+    static func endVoiceAssistant() {
+        Task {
+            for activity in Activity<ClawTalkLiveActivityAttributes>.activities
+            where activity.attributes.channelName == voiceAssistantChannelName {
+                await activity.end(nil, dismissalPolicy: .immediate)
+            }
+        }
+    }
     // MARK: - 风格与设置
 
     /// 从设置读取当前灵动岛风格；读不到时回退「标准」。

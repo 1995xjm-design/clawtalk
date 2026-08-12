@@ -1,5 +1,11 @@
 import SwiftUI
 
+/// 唤醒词编辑行：UUID 稳定 id（ForEach 删除/编辑不会因 index 越界崩溃）。
+private struct WakeWordEdit: Identifiable, Equatable {
+    let id = UUID()
+    var word: String
+}
+
 struct SettingsView: View {
     @Bindable var store: SettingsStore
     var gatewayConnection: GatewayConnection
@@ -17,7 +23,34 @@ struct SettingsView: View {
     @State private var gatewayProfileStore = GatewayProfileStore()
     @State private var showAddWakeWord = false
     @State private var newWakeWord = ""
+    @State private var wakeWordEdits: [WakeWordEdit] = []
 
+
+    // MARK: - 唤醒词编辑（本地 UUID 列表，避免 ForEach(id: \.offset) 删除/编辑越界崩溃）
+
+    private func syncWakeWordEdits() {
+        wakeWordEdits = store.settings.voiceWakeWords.map { WakeWordEdit(word: $0) }
+    }
+
+    private func commitWakeWords() {
+        store.settings.voiceWakeWords = wakeWordEdits.map(\.word)
+        store.save()
+    }
+
+    private func removeWakeWord(_ edit: WakeWordEdit) {
+        wakeWordEdits.removeAll { $0.id == edit.id }
+        commitWakeWords()
+    }
+
+    private func addWakeWord(_ word: String) {
+        wakeWordEdits.append(WakeWordEdit(word: word))
+        commitWakeWords()
+    }
+
+    private func resetWakeWords() {
+        wakeWordEdits = [WakeWordEdit(word: "你好小爪")]
+        commitWakeWords()
+    }
     enum ResetOption: String, CaseIterable, Identifiable {
         case onboarding = "仅重置新手引导"
         case gateway = "重置引导并清除网关配置"
@@ -83,7 +116,7 @@ struct SettingsView: View {
                 Button("添加") {
                     let word = newWakeWord.trimmingCharacters(in: .whitespacesAndNewlines)
                     if !word.isEmpty {
-                        store.settings.voiceWakeWords.append(word)
+                        addWakeWord(word)
                     }
                     newWakeWord = ""
                 }
@@ -239,13 +272,13 @@ private var connectionSection: some View {
                     }
                 }
                 VStack(alignment: .leading, spacing: 10) {
-                    ForEach(Array(store.settings.voiceWakeWords.enumerated()), id: \.offset) { index, _ in
+                    ForEach($wakeWordEdits) { $edit in
                         HStack(spacing: 8) {
-                            TextField("唤醒词 \(index + 1)", text: $store.settings.voiceWakeWords[index])
+                            TextField("唤醒词", text: $edit.word)
                                 .autocorrectionDisabled()
                                 .textInputAutocapitalization(.never)
                             Button {
-                                store.settings.voiceWakeWords.remove(at: index)
+                                removeWakeWord(edit)
                             } label: {
                                 Image(systemName: "minus.circle.fill")
                                     .foregroundStyle(.red)
@@ -260,10 +293,14 @@ private var connectionSection: some View {
                         }
                         Spacer()
                         Button("重置默认") {
-                            store.settings.voiceWakeWords = ["你好小爪"]
+                            resetWakeWords()
                         }
                     }
                     .font(.subheadline)
+                }
+                .onAppear(perform: syncWakeWordEdits)
+                .onChange(of: wakeWordEdits) { _, _ in
+                    commitWakeWords()
                 }
                 Text("每个词一行，任一唤醒词命中即进入免提对话；唤醒后进入你选的频道。")
                     .font(.caption)
