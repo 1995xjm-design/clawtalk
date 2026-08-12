@@ -128,6 +128,9 @@ struct ClawTalkApp: App {
                 }
             }
             .onOpenURL { url in
+                if EmergencyStore.handleSOSDeepLink(url) {
+                    return
+                }
                 handleDeepLink(url)
             }
             .overlay {

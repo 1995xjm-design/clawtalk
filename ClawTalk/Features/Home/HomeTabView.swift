@@ -90,6 +90,66 @@ struct HomeTabView: View {
                                     destination: AutomationListView(settings: settings)
                                 )
                             )
+
+                            // 语音记账卡
+                            ExpenseCardView(settings: settings)
+
+                            // 随手捕捉卡
+                            CaptureCardView(settings: settings)
+
+                            // 会议纪要卡
+                            MeetingCardView(settingsStore: settings)
+
+                            // 每日播报卡
+                            DailyBriefingCardView(settings: settings)
+
+                            // 文档口述卡
+                            DictationCardView(settingsStore: settings)
+
+                            // 家庭共享提醒卡
+                            FamilyShareCardView(settings: settings)
+
+                            // 健康周报卡
+                            HealthReportCardView(settings: settings)
+
+                            // 习惯打卡卡
+                            HabitCardView()
+
+                            // 到家/离开提醒卡
+                            GeofenceCardView()
+
+                            // 停车位置卡
+                            ParkingCardView()
+
+                            // 差旅管家卡
+                            TravelCardView()
+
+                            // 紧急求助卡
+                            EmergencyHomeCardView(store: EmergencyStore.shared)
+
+                            // 重要文件防丢卡
+                            FileVaultCardView()
+
+                            // 知识库问答卡
+                            KBCardView(settings: settings, gatewayConnection: gatewayConnection)
+
+                            // 周报月报卡
+                            ReportCardView(settings: settings)
+
+                            // 主动建议卡
+                            SuggestionHomeCard()
+
+                            // 长文摘要卡
+                            SummarizeCardView(settingsStore: settings)
+
+                            // 纪念日提醒卡
+                            AnniversaryCardView()
+
+                            // 语音写文章卡
+                            WritingCardView(settingsStore: settings)
+
+                            // 睡前陪伴卡
+                            WindDownCardView(settings: settings)
                         }
                     }
                     .padding(.horizontal, 16)
