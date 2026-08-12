@@ -299,7 +299,6 @@ struct SyncChatView: View {
         }
         .background(Color(.secondarySystemBackground))
     }
-}
 
     /// 麦克风按钮：按住说话 → 转文字填入输入框（与其他聊天页一致）。
     private var syncMicButton: some View {
@@ -332,6 +331,7 @@ struct SyncChatView: View {
         )
         .accessibilityLabel("按住说话输入")
     }
+}
 
 /// 查找聊天内容：基于已加载消息本地过滤，点结果滚动定位
 private struct SyncSearchView: View {
