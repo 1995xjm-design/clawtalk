@@ -504,7 +504,7 @@ struct ChatView: View {
 
     /// A3 附件文件类型白名单：文本类 + PDF（网关 /v1/responses input_file 支持范围，≤5MB）。
     private static let allowedFileTypes: [UTType] = [
-        .plainText, .delimitedText, .commaSeparatedText, .json, .html, .xml, .pdf, .markdown
+        .plainText, .delimitedText, .commaSeparatedText, .json, .html, .xml, .pdf
     ]
 
     private func loadPickedFile(from url: URL) {

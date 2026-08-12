@@ -73,7 +73,7 @@ struct SyncChatView: View {
 
     /// 相册多选 → 压缩后存入待发送图片。
     static let allowedFileTypes: [UTType] = [
-        .plainText, .delimitedText, .commaSeparatedText, .json, .html, .xml, .pdf, .markdown
+        .plainText, .delimitedText, .commaSeparatedText, .json, .html, .xml, .pdf
     ]
 
     private func loadSyncFile(from url: URL) {
