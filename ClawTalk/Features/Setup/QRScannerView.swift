@@ -11,6 +11,17 @@ struct QRScannerView: UIViewControllerRepresentable {
     var onScan: (String) -> Void
     /// 用户主动取消（点关闭按钮）。
     var onCancel: () -> Void
+    /// 无效扫码提示（非 nil 时在扫码页内显示并自动隐藏；用于「扫到无效码不退出、可继续扫」）。
+    var scanNotice: String? = nil
+    /// 复位令牌：外部解析失败时 +1，控制器复位并继续扫码。
+    var rescanToken: Int = 0
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
+
+    final class Coordinator {
+        var lastRescanToken = 0
+        var lastNotice: String?
+    }
 
     func makeUIViewController(context: Context) -> QRScannerViewController {
         let controller = QRScannerViewController()
@@ -19,7 +30,16 @@ struct QRScannerView: UIViewControllerRepresentable {
         return controller
     }
 
-    func updateUIViewController(_ uiViewController: QRScannerViewController, context: Context) {}
+    func updateUIViewController(_ uiViewController: QRScannerViewController, context: Context) {
+        if rescanToken != context.coordinator.lastRescanToken {
+            context.coordinator.lastRescanToken = rescanToken
+            uiViewController.resetForRescan()
+        }
+        if scanNotice != context.coordinator.lastNotice {
+            context.coordinator.lastNotice = scanNotice
+            uiViewController.apply(notice: scanNotice)
+        }
+    }
 
     static func dismantleUIViewController(_ uiViewController: QRScannerViewController, coordinator: ()) {
         uiViewController.stopSession()
@@ -40,6 +60,7 @@ final class QRScannerViewController: UIViewController, AVCaptureMetadataOutputOb
     private let photoButton = UIButton(type: .system)
     private let hintLabel = UILabel()
     private let errorLabel = UILabel()
+    private let noticeLabel = UILabel()
     private let overlayView = ScannerOverlayView()
 
     // MARK: - Lifecycle
@@ -183,6 +204,17 @@ final class QRScannerViewController: UIViewController, AVCaptureMetadataOutputOb
         errorLabel.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(errorLabel)
 
+        noticeLabel.textColor = .white
+        noticeLabel.font = .systemFont(ofSize: 15, weight: .medium)
+        noticeLabel.textAlignment = .center
+        noticeLabel.numberOfLines = 0
+        noticeLabel.backgroundColor = UIColor.black.withAlphaComponent(0.6)
+        noticeLabel.layer.cornerRadius = 12
+        noticeLabel.clipsToBounds = true
+        noticeLabel.isHidden = true
+        noticeLabel.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(noticeLabel)
+
         overlayView.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(overlayView)
 
@@ -214,7 +246,33 @@ final class QRScannerViewController: UIViewController, AVCaptureMetadataOutputOb
             overlayView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             overlayView.topAnchor.constraint(equalTo: view.topAnchor),
             overlayView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+
+            noticeLabel.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            noticeLabel.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 76),
+            noticeLabel.leadingAnchor.constraint(greaterThanOrEqualTo: view.leadingAnchor, constant: 40),
+            noticeLabel.trailingAnchor.constraint(lessThanOrEqualTo: view.trailingAnchor, constant: -40),
         ])
+    }
+
+    /// 复位并继续扫码（无效配对码场景：不清会话，重新开始识别）。
+    func resetForRescan() {
+        didRecognizeCode = false
+        noticeLabel.isHidden = true
+        startSession()
+    }
+
+    /// 显示/隐藏扫码页内提示（无效配对码等，2.5 秒后自动隐藏恢复取景提示）。
+    func apply(notice: String?) {
+        guard let notice, !notice.isEmpty else {
+            noticeLabel.isHidden = true
+            return
+        }
+        noticeLabel.text = notice
+        noticeLabel.isHidden = false
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { [weak self] in
+            guard let self else { return }
+            self.noticeLabel.isHidden = true
+        }
     }
 
     @objc private func closeTapped() {

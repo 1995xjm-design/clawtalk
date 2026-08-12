@@ -25,6 +25,8 @@ struct SettingsView: View {
     @State private var showAddWakeWord = false
     @State private var newWakeWord = ""
     @State private var showScanPairing = false
+    @State private var scanNotice: String?
+    @State private var rescanToken = 0
     @State private var pairingMessage: String?
     @State private var showPairingResult = false
     @State private var showThemePhotoPicker = false
@@ -43,19 +45,35 @@ struct SettingsView: View {
         store.save()
     }
 
+    /// 唤醒词列表变更且引擎正在监听时热更新（ClawTalkApp 只监听开关变化，词表变化需此处补齐）。
+    private func hotReloadVoiceWakeKeywords() {
+        guard store.settings.voiceWakeEnabled, VoiceWakeCapability.shared.isListening else { return }
+        let words = store.settings.voiceWakeWords
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        guard !words.isEmpty else { return }
+        Task { @MainActor in
+            VoiceWakeCapability.shared.stopListening()
+            _ = try? await VoiceWakeCapability.shared.setConfig(keywords: words, enabled: true, locale: "zh-CN")
+        }
+    }
+
     private func removeWakeWord(_ edit: WakeWordEdit) {
         wakeWordEdits.removeAll { $0.id == edit.id }
         commitWakeWords()
+        hotReloadVoiceWakeKeywords()
     }
 
     private func addWakeWord(_ word: String) {
         wakeWordEdits.append(WakeWordEdit(word: word))
         commitWakeWords()
+        hotReloadVoiceWakeKeywords()
     }
 
     private func resetWakeWords() {
         wakeWordEdits = [WakeWordEdit(word: "你好小爪")]
         commitWakeWords()
+        hotReloadVoiceWakeKeywords()
     }
     enum ResetOption: String, CaseIterable, Identifiable {
         case onboarding = "仅重置新手引导"
@@ -104,6 +122,7 @@ struct SettingsView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button {
+                        scanNotice = nil
                         showScanPairing = true
                     } label: {
                         Image(systemName: "qrcode.viewfinder")
@@ -115,6 +134,7 @@ struct SettingsView: View {
                     Button("完成") {
                             sanitizeVoiceWakeWords()
                             store.save()
+                            hotReloadVoiceWakeKeywords()
                             dismiss()
                         }
                         .fontWeight(.semibold)
@@ -151,10 +171,16 @@ struct SettingsView: View {
             .fullScreenCover(isPresented: $showScanPairing) {
                 QRScannerView(
                     onScan: { value in
-                        handlePairingCode(value)
-                        showScanPairing = false
+                        if handlePairingCode(value) {
+                            showScanPairing = false
+                        } else {
+                            rescanToken += 1
+                            scanNotice = "无法识别配对码，请重新扫描"
+                        }
                     },
-                    onCancel: { showScanPairing = false }
+                    onCancel: { showScanPairing = false },
+                    scanNotice: scanNotice,
+                    rescanToken: rescanToken
                 )
                 .ignoresSafeArea()
             }
@@ -163,11 +189,12 @@ struct SettingsView: View {
 
     // MARK: - 扫码配对（换电脑/换网关一键重新配对）
 
-    private func handlePairingCode(_ raw: String) {
+    @discardableResult
+    private func handlePairingCode(_ raw: String) -> Bool {
         guard let code = GatewaySetupCode.parse(raw) else {
             pairingMessage = "无法识别配对码，请重新扫码"
             showPairingResult = true
-            return
+            return false
         }
         let httpURL = GatewaySetupCode.httpForm(of: code.url)
         store.settings.gatewayURL = httpURL
@@ -177,6 +204,7 @@ struct SettingsView: View {
         Task { @MainActor in
             await testPairing(bootstrapToken: code.bootstrapToken)
         }
+        return true
     }
 
     @MainActor
@@ -214,10 +242,38 @@ struct SettingsView: View {
         Section("外观") {
             // 内置壁纸（横排缩略图，点选即应用）
             HStack(spacing: 12) {
+                // 无壁纸（默认纯色，跟随深浅色）
+                Button {
+                    store.settings.homeThemeSource = .noWallpaper
+                    store.settings.homeWallpaperID = 0
+                    store.settings.homeWallpaperChosen = false
+                    store.settings.customWallpaperPath = nil
+                    store.save()
+                } label: {
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(Color(.systemGroupedBackground))
+                        .frame(width: 54, height: 96)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                .strokeBorder(
+                                    store.settings.homeThemeSource == .noWallpaper
+                                        ? Color.accentColor : Color(.separator).opacity(0.5),
+                                    lineWidth: store.settings.homeThemeSource == .noWallpaper ? 2.5 : 1
+                                )
+                        )
+                        .overlay(
+                            Image(systemName: "rectangle.on.rectangle.slash")
+                                .font(.system(size: 16))
+                                .foregroundStyle(.secondary)
+                        )
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("无壁纸（默认纯色）")
                 ForEach(0..<HomeWallpaper.builtinCount, id: \.self) { id in
                     Button {
                         store.settings.homeThemeSource = .systemWallpaper
                         store.settings.homeWallpaperID = id
+                        store.settings.homeWallpaperChosen = true
                         store.save()
                     } label: {
                         if let image = HomeWallpaper.builtinImage(id: id, size: CGSize(width: 54, height: 96)) {
@@ -257,6 +313,7 @@ struct SettingsView: View {
                     if let path = HomeWallpaper.saveCustomPhoto(data) {
                         store.settings.customWallpaperPath = path
                         store.settings.homeThemeSource = .customPhoto
+                        store.settings.homeWallpaperChosen = true
                         store.save()
                     }
                 }
@@ -271,8 +328,9 @@ struct SettingsView: View {
                 store.save()
             }
             Button("恢复默认壁纸") {
-                store.settings.homeThemeSource = .systemWallpaper
+                store.settings.homeThemeSource = .noWallpaper
                 store.settings.homeWallpaperID = 0
+                store.settings.homeWallpaperChosen = false
                 store.settings.customWallpaperPath = nil
                 store.save()
             }

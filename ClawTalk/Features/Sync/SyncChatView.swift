@@ -356,6 +356,7 @@ struct SyncChatView: View {
                 voiceInputEnabled: true,
                 hapticsEnabled: true,
                 isSending: viewModel.isSending,
+                audioLevel: viewModel.audioLevel,
                 isConversationMode: false,
                 onToggleVoiceMode: {},
                 onSendText: {

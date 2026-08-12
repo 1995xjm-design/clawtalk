@@ -24,6 +24,7 @@ struct TerminalView: View {
     @State private var isRunning = false
     @State private var errorMessage: String?
     @FocusState private var commandFocused: Bool
+    @State private var runningTask: Task<Void, Never>?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -47,6 +48,12 @@ struct TerminalView: View {
                         .padding(12)
                     }
                     .onChange(of: entries.count) { _, _ in
+                        if let last = entries.last {
+                            proxy.scrollTo(last.id, anchor: .bottom)
+                        }
+                    }
+                    .onChange(of: entries.last?.output) { _, _ in
+                        // 流式输出过程中逐段跟随（不止在新增条目时滚动）
                         if let last = entries.last {
                             proxy.scrollTo(last.id, anchor: .bottom)
                         }
@@ -82,6 +89,25 @@ struct TerminalView: View {
         }
         .navigationTitle("远程终端")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                if isRunning {
+                    Button {
+                        stopRunning()
+                    } label: {
+                        Label("停止", systemImage: "stop.fill")
+                    }
+                    .accessibilityLabel("停止执行")
+                } else if !entries.isEmpty {
+                    Button {
+                        entries.removeAll()
+                    } label: {
+                        Label("清空", systemImage: "trash")
+                    }
+                    .accessibilityLabel("清空终端记录")
+                }
+            }
+        }
         .alert("命令执行失败", isPresented: Binding(
             get: { errorMessage != nil },
             set: { if !$0 { errorMessage = nil } }
@@ -147,7 +173,7 @@ struct TerminalView: View {
         let entry = TerminalEntry(command: trimmed, output: "", date: Date(), isError: false, isStreaming: true)
         entries.append(entry)
 
-        Task {
+        runningTask = Task {
             do {
                 let stream = OpenClawClient().stream(
                     messages: [Message(role: .user, content: instruction)],
@@ -159,6 +185,10 @@ struct TerminalView: View {
                 )
                 var output = ""
                 for try await event in stream {
+                    if Task.isCancelled {
+                        finalize(entry, output: output.isEmpty ? "（已手动停止）" : output + "\n\n（已手动停止）", isError: false)
+                        return
+                    }
                     switch event {
                     case .textDelta(let delta):
                         output += delta
@@ -176,7 +206,14 @@ struct TerminalView: View {
                 }
                 finalize(entry, output: output, isError: false)
                 command = ""
+            } catch is CancellationError {
+                finalize(entry, output: "（已手动停止）", isError: false)
             } catch {
+                // 手动停止可能以 URLError(.cancelled) 形式冒出来：不当作失败
+                if Task.isCancelled {
+                    finalize(entry, output: "（已手动停止）", isError: false)
+                    return
+                }
                 let message = "执行失败：\(AppErrorText.localized(error.localizedDescription))"
                 if let index = entries.lastIndex(where: { $0.id == entry.id }) {
                     let partial = entries[index].output
@@ -187,7 +224,15 @@ struct TerminalView: View {
                 LogCollector.record(module: "远程终端", message)
             }
             isRunning = false
+            runningTask = nil
         }
+    }
+
+    /// 停止正在执行的命令：取消流式任务，保留已回显内容并标注停止。
+    private func stopRunning() {
+        runningTask?.cancel()
+        runningTask = nil
+        isRunning = false
     }
 
     private func finalize(_ entry: TerminalEntry, output: String, isError: Bool) {

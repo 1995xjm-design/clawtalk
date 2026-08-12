@@ -17,6 +17,7 @@ struct HomeMergedCard: View {
     let careStore: CareReminderStore
     let habitStore: HabitStore
     let geofenceStore: GeofenceStore
+    let expenseStore: ExpenseStore
     let gatewayConnection: GatewayConnection?
     var badge: String?
 
@@ -28,6 +29,7 @@ struct HomeMergedCard: View {
                 careStore: careStore,
                 habitStore: habitStore,
                 geofenceStore: geofenceStore,
+                expenseStore: expenseStore,
                 gatewayConnection: gatewayConnection
             )
         } label: {
@@ -80,16 +82,27 @@ struct HomeMergedCard: View {
     }
 }
 
-/// 合并卡详情页：顶部全局语音输入大按钮 + 子功能分区列表。
+/// 合并卡详情页（N3 重构）：4 方形功能分区网格 + 底部悬浮圆麦。
+/// - 功能分区每格显示「名称 + 图标 + 最近记录摘要/数量」（有数据源的真实统计，无则诚实空态）；
+/// - 悬浮麦：按住短语音（≤60 秒），按住上滑切长录音（≤60 分钟），悬浮不挡内容滚动。
 struct HomeMergedCardPage: View {
     let kind: HomeCardKind
 
     @State private var careStore: CareReminderStore
     @State private var habitStore: HabitStore
     @State private var geofenceStore: GeofenceStore
+    @State private var expenseStore: ExpenseStore
+    /// 语音日记数据源（记录卡摘要；@MainActor，延迟在 .task 创建）
+    @State private var diaryViewModel: VoiceDiaryViewModel?
+    /// 健康数据源（异步加载；未授权/失败时为 nil，走诚实空态）
+    @State private var healthViewModel: HealthViewModel?
 
     private let settings: SettingsStore
     private let gatewayConnection: GatewayConnection?
+
+    private let tileColumns = [
+        GridItem(.adaptive(minimum: 150), spacing: 12)
+    ]
 
     init(
         kind: HomeCardKind,
@@ -97,6 +110,7 @@ struct HomeMergedCardPage: View {
         careStore: CareReminderStore,
         habitStore: HabitStore,
         geofenceStore: GeofenceStore,
+        expenseStore: ExpenseStore,
         gatewayConnection: GatewayConnection?
     ) {
         self.kind = kind
@@ -105,42 +119,122 @@ struct HomeMergedCardPage: View {
         _careStore = State(initialValue: careStore)
         _habitStore = State(initialValue: habitStore)
         _geofenceStore = State(initialValue: geofenceStore)
+        _expenseStore = State(initialValue: expenseStore)
     }
 
     var body: some View {
-        List {
-            Section {
-                GlobalVoiceInput(settingsStore: settings)
-                    .listRowBackground(Color.clear)
-            }
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("功能分区")
+                        .font(.headline)
+                        .foregroundStyle(.primary)
+                    Text("点卡片进入功能页；下方悬浮麦按住说话、上滑切长录音")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
 
-            Section("功能分区") {
-                ForEach(sections) { section in
-                    NavigationLink {
-                        section.destination
-                    } label: {
-                        Label {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(section.title)
-                                    .foregroundStyle(.primary)
-                                Text(section.subtitle)
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                        } icon: {
-                            Image(systemName: section.icon)
-                                .foregroundStyle(.white)
-                                .frame(width: 30, height: 30)
-                                .background(section.tint)
-                                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                LazyVGrid(columns: tileColumns, spacing: 12) {
+                    ForEach(sections) { section in
+                        NavigationLink {
+                            section.destination
+                        } label: {
+                            functionTile(section)
                         }
+                        .buttonStyle(.plain)
                     }
                 }
             }
+            .padding(16)
+            .padding(.bottom, 220)
         }
-        .listStyle(.insetGrouped)
         .navigationTitle(kind.title)
         .navigationBarTitleDisplayMode(.inline)
+        .overlay(alignment: .bottom) {
+            GlobalVoiceInputFloating(settingsStore: settings)
+                .padding(.bottom, 20)
+        }
+        .task {
+            if diaryViewModel == nil {
+                diaryViewModel = VoiceDiaryViewModel(settingsStore: settings)
+            }
+            if healthViewModel == nil {
+                let vm = HealthViewModel()
+                await vm.loadIfNeeded()
+                healthViewModel = vm
+            }
+        }
+    }
+
+    // MARK: - 4 方形功能格
+
+    private func functionTile(_ section: HomeSection) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top) {
+                Image(systemName: section.icon)
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: 36, height: 36)
+                    .background(section.tint)
+                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+
+                Spacer(minLength: 0)
+
+                Image(systemName: "chevron.right")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+            }
+
+            Spacer(minLength: 0)
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(section.title)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.primary)
+                Text(tileSummary(for: section.id) ?? section.subtitle)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, minHeight: 110, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Color(.secondarySystemGroupedBackground))
+        )
+    }
+
+    /// 功能格摘要：优先显示真实数据；无数据源/无记录时回落副标题（诚实空态）。
+    private func tileSummary(for sectionID: String) -> String? {
+        switch sectionID {
+        case "diary":
+            let count = diaryViewModel?.entries.count ?? 0
+            return count > 0 ? "\(count) 条日记" : "暂无日记"
+        case "reminders":
+            let count = careStore.todayReminderCount
+            return count > 0 ? "今日 \(count) 条" : "暂无今日提醒"
+        case "geofence":
+            let count = geofenceStore.regions.count
+            return count > 0 ? "\(count) 个区域" : "暂无区域"
+        case "habit":
+            let done = habitStore.todayCompletedCount
+            let due = habitStore.todayDueCount
+            return due > 0 ? "今日 \(done)/\(due) 已完成" : "暂无习惯"
+        case "health":
+            if let steps = healthViewModel?.todaySteps {
+                return "今日 \(steps) 步"
+            }
+            return nil
+        case "expense":
+            let summary = expenseStore.monthSummary()
+            if summary.expense > 0 { return "本月支出 ¥\(summary.expense.expenseAmountText)" }
+            if summary.income > 0 { return "本月收入 ¥\(summary.income.expenseAmountText)" }
+            return "暂无账目"
+        default:
+            return nil
+        }
     }
 
     /// 各卡的分区子功能（复用现有功能页，全部为真实页面）。

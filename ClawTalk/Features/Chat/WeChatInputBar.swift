@@ -12,6 +12,7 @@ struct WeChatInputBar: View {
     var voiceInputEnabled: Bool
     var hapticsEnabled: Bool
     var isSending: Bool
+    var audioLevel: Float = 0
     var isConversationMode: Bool
     var onToggleVoiceMode: () -> Void
     var onSendText: () -> Void
@@ -75,9 +76,9 @@ struct WeChatInputBar: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 12)
         .overlay(alignment: .top) {
-            if isVoiceMode && showActionLayer {
-                actionLayer
-                    .offset(y: -66)
+            if isVoiceMode && isRecording {
+                voiceRecordingOverlay
+                    .offset(y: -96)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
@@ -123,14 +124,24 @@ struct WeChatInputBar: View {
                     }
                     onHoldStart()
                 }
-                // 上滑 60pt 进入选择层；按 x 方向决定高亮项（左取消 / 右转文字）
-                if value.translation.height < -60 {
+                // 上滑 50pt 进入选择区；按 x 方向决定高亮项（左取消 / 右转文字）
+                if value.translation.height < -50 {
+                    let newAction: HoldAction = value.translation.width >= 0 ? .transcribe : .cancel
                     if !showActionLayer {
+                        // 进入选择区：中震动反馈
+                        if hapticsEnabled {
+                            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                        }
                         withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                             showActionLayer = true
                         }
+                    } else if newAction != selectedAction {
+                        // 左右切换：轻震动反馈
+                        if hapticsEnabled {
+                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                        }
                     }
-                    selectedAction = value.translation.width >= 0 ? .transcribe : .cancel
+                    selectedAction = newAction
                 }
             }
             .onEnded { value in
@@ -139,7 +150,7 @@ struct WeChatInputBar: View {
                 if hapticsEnabled {
                     UIImpactFeedbackGenerator(style: .light).impactOccurred()
                 }
-                if showActionLayer && value.translation.height < -60 {
+                if showActionLayer && value.translation.height < -50 {
                     switch selectedAction {
                     case .cancel:
                         onHoldCancel()
@@ -158,30 +169,76 @@ struct WeChatInputBar: View {
             }
     }
 
-    /// 上滑选择层：左「取消」/ 右「转文字」（微信式）
-    private var actionLayer: some View {
-        HStack(spacing: 28) {
-            actionItem("取消", icon: "xmark", tint: .red, action: .cancel)
-            actionItem("转文字", icon: "textformat", tint: .green, action: .transcribe)
+    /// 录音浮层：上方语音波形（手指上方约 100pt），下方上滑选择区（波形下方、不与波形重叠）。
+    private var voiceRecordingOverlay: some View {
+        VStack(spacing: 8) {
+            voiceWaveform
+            if showActionLayer {
+                actionLayer
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
         }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 12)
-        .background(Capsule().fill(Color(.systemBackground).opacity(0.95)))
-        .shadow(color: .black.opacity(0.15), radius: 10, y: 2)
     }
 
-    private func actionItem(_ title: String, icon: String, tint: Color, action: HoldAction) -> some View {
-        HStack(spacing: 6) {
+    /// 语音波形：实时音量频谱条（EQ 样式），高度随 audioLevel 起伏。
+    private var voiceWaveform: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { timeline in
+            let time = timeline.date.timeIntervalSinceReferenceDate
+            HStack(spacing: 3) {
+                ForEach(0..<22, id: \.self) { index in
+                    RoundedRectangle(cornerRadius: 2, style: .continuous)
+                        .fill(Color.openClawRed.opacity(0.85))
+                        .frame(width: 4, height: waveformBarHeight(index: index, time: time))
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.horizontal, 18)
+            .padding(.vertical, 10)
+            .background(Capsule().fill(Color(.systemBackground).opacity(0.92)))
+            .shadow(color: .black.opacity(0.15), radius: 10, y: 2)
+        }
+    }
+
+    /// 频谱条高度：基线 + 时间相位起伏 + 实时音量（audioLevel 0~1）。
+    private func waveformBarHeight(index: Int, time: TimeInterval) -> CGFloat {
+        let level = min(max(audioLevel, 0.02), 1)
+        let phase = Double(index) * 0.6
+        let wave = (sin(time * 2.8 + phase) + 1) / 2
+        let base = 8 + Double(index % 6) * 1.8
+        let height = base + wave * 16 + Double(level) * 24
+        return CGFloat(min(max(height, 4), 40))
+    }
+
+    /// 上滑选择区：左「取消」/ 右「滑到这里转文字」，大区域（约 112pt 高、约 80% 宽）。
+    private var actionLayer: some View {
+        HStack(spacing: 12) {
+            actionZoneItem("取消", icon: "xmark", tint: .red, action: .cancel)
+            actionZoneItem("滑到这里转文字", icon: "textformat", tint: .green, action: .transcribe)
+        }
+        .padding(.horizontal, 28)
+        .frame(height: 112)
+        .background(
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .fill(.regularMaterial)
+                .shadow(color: .black.opacity(0.18), radius: 14, y: 4)
+        )
+    }
+
+    private func actionZoneItem(_ title: String, icon: String, tint: Color, action: HoldAction) -> some View {
+        let isSelected = selectedAction == action
+        return VStack(spacing: 6) {
             Image(systemName: icon)
-                .font(.system(size: 15, weight: .semibold))
+                .font(.system(size: 24, weight: .semibold))
             Text(title)
-                .font(.system(size: 14, weight: .semibold))
+                .font(.system(size: 15, weight: .semibold))
         }
         .foregroundStyle(.white)
-        .padding(.horizontal, 14)
-        .padding(.vertical, 9)
-        .background(Capsule().fill(selectedAction == action ? tint : tint.opacity(0.45)))
-        .scaleEffect(selectedAction == action ? 1.08 : 1.0)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(tint.opacity(isSelected ? 0.95 : 0.45))
+        )
+        .scaleEffect(isSelected ? 1.04 : 1.0)
         .animation(.easeOut(duration: 0.12), value: selectedAction)
     }
 

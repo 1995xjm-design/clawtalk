@@ -27,6 +27,7 @@ struct ScreenStreamView: View {
     @State private var lastUpdated: Date?
     @State private var isFetching = false
     @State private var errorMessage: String?
+    @State private var frameCount = 0
 
     private let pollInterval: Duration = .seconds(4)
     private let sessionKey = "agent:main:clawtalk-user:screen-stream"
@@ -45,6 +46,18 @@ struct ScreenStreamView: View {
         }
         .navigationTitle("远程屏幕")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                if mode == .auto {
+                    Button {
+                        stopPolling()
+                    } label: {
+                        Label("停止轮询", systemImage: "stop.circle")
+                    }
+                    .accessibilityLabel("停止轮询")
+                }
+            }
+        }
         .task(id: mode) {
             guard mode == .auto else { return }
             while !Task.isCancelled {
@@ -64,6 +77,9 @@ struct ScreenStreamView: View {
                 }
             }
             .pickerStyle(.segmented)
+            .onChange(of: source) { _, _ in
+                stopPolling()
+            }
 
             HStack(spacing: 6) {
                 Circle()
@@ -87,10 +103,18 @@ struct ScreenStreamView: View {
                 .disabled(isFetching)
             }
 
-            if let lastUpdated {
-                Text("最近更新 \(lastUpdated.formatted(date: .omitted, time: .standard))")
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
+            HStack(spacing: 12) {
+                if let lastUpdated {
+                    Text("最近更新 \(lastUpdated.formatted(date: .omitted, time: .standard))")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
+                if frameCount > 0 {
+                    Text("已获取 \(frameCount) 帧")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
+                Spacer()
             }
             if let errorMessage {
                 Text(errorMessage)
@@ -186,6 +210,7 @@ struct ScreenStreamView: View {
             }
             frame = image
             lastUpdated = Date()
+            frameCount += 1
             errorMessage = nil
         } catch {
             let message = "获取截图失败：\(AppErrorText.localized(error.localizedDescription))"
@@ -198,6 +223,11 @@ struct ScreenStreamView: View {
             }
             LogCollector.record(module: "远程屏幕", message)
         }
+    }
+
+    /// 停止轮询：切回 idle，task(id: mode) 自动取消循环。
+    private func stopPolling() {
+        mode = .idle
     }
 
     /// 经网关 agent 会话让电脑端截屏并回传 base64（与工具页桌面截图同一思路）。

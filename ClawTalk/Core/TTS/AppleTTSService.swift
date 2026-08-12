@@ -1,9 +1,9 @@
 import Foundation
 import AVFoundation
 
-/// Apple ?? TTS?AVSpeechSynthesizer??
-/// ??????????????????????"??????"?
-/// ?????????????????? voice??????????????
+/// Apple 系统 TTS：AVSpeechSynthesizer 朗读。
+/// 支持打断/继续；被打断后再次朗读会自动复位（见 streamSpeech）。
+/// 音色/语速/音调由设置传入，跟随系统语音。
 final class AppleTTSService: NSObject, SpeechService, AVSpeechSynthesizerDelegate {
     private let synthesizer = AVSpeechSynthesizer()
     private let speed: Int
@@ -27,6 +27,8 @@ final class AppleTTSService: NSObject, SpeechService, AVSpeechSynthesizerDelegat
     }
 
     func streamSpeech(text: String) -> AsyncThrowingStream<Data, Error> {
+        // 复位粘滞标记：被打断后再次朗读必须能出声（S6 发现）
+        stopped = false
         AsyncThrowingStream { continuation in
             let utterance = AVSpeechUtterance(string: text)
             utterance.rate = Float(min(max(0.5 + Double(speed) / 100.0, 0.1), 1.0))

@@ -49,6 +49,20 @@ struct ToolsView: View {
                         Label("能力面板", systemImage: "square.stack.3d.up")
                             .foregroundStyle(Color.openClawRed)
                     }
+
+                    NavigationLink {
+                        CloneTalkView(settingsStore: settings)
+                    } label: {
+                        Label("AI 分身", systemImage: "person.crop.circle.badge.clock")
+                            .foregroundStyle(Color.openClawRed)
+                    }
+
+                    NavigationLink {
+                        CastPlayView()
+                    } label: {
+                        Label("投屏控制", systemImage: "airplayvideo")
+                            .foregroundStyle(Color.openClawRed)
+                    }
                 } header: {
                     Text("网关信息")
                 } footer: {

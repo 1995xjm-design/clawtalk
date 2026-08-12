@@ -21,6 +21,7 @@ struct ClawTalkApp: App {
     @State private var nodeConnection = NodeConnection()
     @State private var ackSynthesizer: AVSpeechSynthesizer?
     @State private var showGatewaySessions = false
+    @State private var showHomeTools = false
     @State private var gatewaySessionsViewModel: ToolsViewModel?
     @State private var widgetSnapshot: WidgetSnapshot?
     @State private var syncedChannelsSignature: String?
@@ -85,6 +86,7 @@ struct ClawTalkApp: App {
                     onDeleteChannel: deleteCurrentChannel
                 )
                 .toolbar(.hidden, for: .navigationBar)
+                .background(EnableSwipeBack())
                 .onChange(of: vm.isConversationMode) { _, isOn in
                     if isOn {
                         stopVoiceWake()
@@ -100,10 +102,12 @@ struct ClawTalkApp: App {
             if let syncVM = syncChatViewModel, selectedSyncChannel != nil {
                 SyncChatView(viewModel: syncVM, onBack: goBack, onDeleteChannel: deleteCurrentChannel)
                     .toolbar(.hidden, for: .navigationBar)
+                    .background(EnableSwipeBack())
             }
         case .fileTransfer:
             FileTransferChannelView(settings: settingsStore, onBack: goBack)
                 .toolbar(.hidden, for: .navigationBar)
+                .background(EnableSwipeBack())
         }
     }
     // MARK: - 主界面 TabView（频道列表 + 主页 Tab）
@@ -121,12 +125,45 @@ struct ClawTalkApp: App {
             HomeTabView(
                 settings: settingsStore,
                 gatewayConnection: gatewayConnection,
-                chatViewModel: chatViewModel
+                chatViewModel: chatViewModel,
+                onOpenTools: { showHomeTools = true }
             )
+            .sheet(isPresented: $showHomeTools) {
+                ToolsView(settings: settingsStore, gatewayConnection: gatewayConnection, nodeConnection: nodeConnection)
+            }
             .tabItem {
                 Label("主页", systemImage: "square.grid.2x2")
             }
             .tag(1)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: LogCollector.autoUploadNotification)) { _ in
+            uploadLogsAutomatically()
+        }
+    }
+
+    /// C1：日志累 20 条自动发电脑 inbound（手动发送保留在日志诊断页）。
+    private func uploadLogsAutomatically() {
+        let text = LogCollector.exportText()
+        guard !text.isEmpty else {
+            LogCollector.resetPendingUploadCount()
+            return
+        }
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyyMMdd-HHmmss"
+        let name = "clawtalk-logs-auto-\(formatter.string(from: Date())).txt"
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(name)
+        do {
+            try text.write(to: url, atomically: true, encoding: .utf8)
+        } catch {
+            LogCollector.resetPendingUploadCount()
+            return
+        }
+        Task {
+            let ok = await FileTransferViewModel().uploadFile(fileURL: url, suggestedName: name)
+            LogCollector.resetPendingUploadCount()
+            if !ok {
+                LogCollector.record(module: "日志上报", "自动上传日志失败：\(name)")
+            }
         }
     }
 
@@ -818,4 +855,23 @@ struct ClawTalkApp: App {
             updateWidgetIfNeeded()
         }
     }
+
+// MARK: - 侧滑返回兜底（N5）
+
+/// iOS 17 TabView 内 NavigationStack push 后 interactive pop 偶发失效，
+/// 用隐藏 UIViewController 强制启用 UINavigationController 的返回手势。
+private struct EnableSwipeBack: UIViewControllerRepresentable {
+    func makeUIViewController(context: Context) -> UIViewController {
+        let controller = UIViewController()
+        controller.view.isHidden = true
+        DispatchQueue.main.async {
+            if let nav = controller.navigationController {
+                nav.interactivePopGestureRecognizer?.isEnabled = true
+                nav.interactivePopGestureRecognizer?.delegate = nil
+            }
+        }
+        return controller
+    }
+    func updateUIViewController(_ uiViewController: UIViewController, context: Context) {}
+}
 }

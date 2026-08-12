@@ -222,6 +222,10 @@ final class SyncChatViewModel {
 
     private let audioCapture = AudioCaptureManager()
     private(set) var isRecordingVoiceInput = false
+    /// 当前录音电平（按住说话波形用）。
+    var audioLevel: Float {
+        audioCapture.currentLevel
+    }
     private(set) var isTranscribingVoice = false
     var voiceInputError: String?
 

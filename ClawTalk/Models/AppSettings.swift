@@ -52,6 +52,7 @@ enum Appearance: String, Codable, CaseIterable, Identifiable {
 }
 
 enum HomeThemeSource: String, Codable {
+    case noWallpaper = "none"
     case systemWallpaper
     case customPhoto
 }
@@ -113,6 +114,8 @@ struct AppSettings: Codable {
     // 主页主题（苹果主屏式背景）
     var homeThemeSource: HomeThemeSource
     var homeWallpaperID: Int
+    /// 是否主动选择过壁纸（区分旧版「默认 systemWallpaper+id0=无壁纸」与新版「内置壁纸 0」）
+    var homeWallpaperChosen: Bool
     var customWallpaperPath: String?
     var homeBlurStrength: Double
 
@@ -143,8 +146,9 @@ struct AppSettings: Codable {
         liveActivityStyle: .standard,
         liveActivityFollowAgent: false,
         voiceAssistantShowTranscript: true,
-        homeThemeSource: .systemWallpaper,
+        homeThemeSource: .noWallpaper,
         homeWallpaperID: 0,
+        homeWallpaperChosen: false,
         customWallpaperPath: nil,
         homeBlurStrength: 0.55
     )
@@ -203,8 +207,9 @@ struct AppSettings: Codable {
         liveActivityStyle: LiveActivityStyle = .standard,
         liveActivityFollowAgent: Bool = false,
         voiceAssistantShowTranscript: Bool = true,
-        homeThemeSource: HomeThemeSource = .systemWallpaper,
+        homeThemeSource: HomeThemeSource = .noWallpaper,
         homeWallpaperID: Int = 0,
+        homeWallpaperChosen: Bool = false,
         customWallpaperPath: String? = nil,
         homeBlurStrength: Double = 0.55
     ) {
@@ -238,6 +243,7 @@ struct AppSettings: Codable {
         self.voiceAssistantShowTranscript = voiceAssistantShowTranscript
         self.homeThemeSource = homeThemeSource
         self.homeWallpaperID = homeWallpaperID
+        self.homeWallpaperChosen = homeWallpaperChosen
         self.customWallpaperPath = customWallpaperPath
         self.homeBlurStrength = homeBlurStrength
     }
@@ -282,9 +288,15 @@ struct AppSettings: Codable {
         liveActivityStyle = try container.decodeIfPresent(LiveActivityStyle.self, forKey: .liveActivityStyle) ?? .standard
         liveActivityFollowAgent = try container.decodeIfPresent(Bool.self, forKey: .liveActivityFollowAgent) ?? false
         voiceAssistantShowTranscript = try container.decodeIfPresent(Bool.self, forKey: .voiceAssistantShowTranscript) ?? true
-        homeThemeSource = (try? container.decodeIfPresent(HomeThemeSource.self, forKey: .homeThemeSource)) ?? .systemWallpaper
+        homeWallpaperChosen = try container.decodeIfPresent(Bool.self, forKey: .homeWallpaperChosen) ?? false
         homeWallpaperID = try container.decodeIfPresent(Int.self, forKey: .homeWallpaperID) ?? 0
         customWallpaperPath = try container.decodeIfPresent(String.self, forKey: .customWallpaperPath)
+        var themeSource = (try? container.decodeIfPresent(HomeThemeSource.self, forKey: .homeThemeSource)) ?? .noWallpaper
+        // 旧数据迁移：旧版「默认」= systemWallpaper + id 0（未主动选择壁纸）→ 新语义「无壁纸」
+        if !homeWallpaperChosen, themeSource == .systemWallpaper, homeWallpaperID == 0 {
+            themeSource = .noWallpaper
+        }
+        homeThemeSource = themeSource
         homeBlurStrength = try container.decodeIfPresent(Double.self, forKey: .homeBlurStrength) ?? 0.55
 
         // Migrate legacy webSocketPort -> webSocketPath
@@ -313,7 +325,7 @@ struct AppSettings: Codable {
         case liveActivityStyle
         case liveActivityFollowAgent
         case voiceAssistantShowTranscript
-        case homeThemeSource, homeWallpaperID, customWallpaperPath, homeBlurStrength
+        case homeThemeSource, homeWallpaperID, homeWallpaperChosen, customWallpaperPath, homeBlurStrength
     }
 
     func encode(to encoder: Encoder) throws {
@@ -349,6 +361,7 @@ struct AppSettings: Codable {
         try container.encode(voiceAssistantShowTranscript, forKey: .voiceAssistantShowTranscript)
         try container.encode(homeThemeSource, forKey: .homeThemeSource)
         try container.encode(homeWallpaperID, forKey: .homeWallpaperID)
+        try container.encode(homeWallpaperChosen, forKey: .homeWallpaperChosen)
         try container.encodeIfPresent(customWallpaperPath, forKey: .customWallpaperPath)
         try container.encode(homeBlurStrength, forKey: .homeBlurStrength)
         // webSocketPort intentionally not encoded - legacy only

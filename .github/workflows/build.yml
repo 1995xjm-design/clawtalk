@@ -36,6 +36,10 @@ jobs:
       - name: Install xcodegen
         run: brew install xcodegen
 
+      - name: Auto-increment build number (CURRENT_PROJECT_VERSION)
+        run: |
+          python3 -c "import re,io; p='project.yml'; s=io.open(p,encoding='utf-8').read(); s=re.sub(r'(CURRENT_PROJECT_VERSION:\s*)(\d+)', lambda m: m.group(1)+str(int(m.group(2))+1), s); io.open(p,'w',encoding='utf-8',newline='').write(s)"
+
       - name: Generate project (xcodegen)
         run: xcodegen generate
 

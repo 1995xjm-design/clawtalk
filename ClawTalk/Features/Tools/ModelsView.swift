@@ -35,6 +35,7 @@ struct ModelsView: View {
             connectionSection
             currentUsageSection
             modelsSection
+            supportScopeSection
         }
         .listStyle(.insetGrouped)
         .navigationTitle("模型")
@@ -127,6 +128,19 @@ struct ModelsView: View {
         }
     }
 
+    // MARK: - 支持范围说明
+
+    private var supportScopeSection: some View {
+        Section {
+            LabeledContent("模型选择", value: "由网关与频道决定")
+            LabeledContent("路由方式", value: "openclaw:<agentId>")
+            Text("ClawTalk 通过智能体路由调用网关，不直接指定模型。网关返回的模型列表用于了解当前可用范围；网关不可达时展示的本地参考清单仅为参考，不代表网关实际可用模型。")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        } header: {
+            Text("支持范围说明")
+        }
+    }
     // MARK: - 可用模型
 
     @ViewBuilder

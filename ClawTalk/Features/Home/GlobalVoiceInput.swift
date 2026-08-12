@@ -21,8 +21,8 @@ enum GlobalVoiceInputMode: String, CaseIterable, Identifiable {
 
     var hint: String {
         switch self {
-        case .short: return "按住说话，松开识别（1–30 秒）"
-        case .long: return "点按开始/结束，长录音 2–10 分钟，支持切后台继续"
+        case .short: return "按住说话，松开识别（最长 60 秒）"
+        case .long: return "点按开始/结束，长录音最长 60 分钟，支持切后台继续"
         }
     }
 }
@@ -38,8 +38,8 @@ enum GlobalVoiceInputState: Equatable {
 // MARK: - ViewModel
 
 /// 全局语音输入 ViewModel（D1 底座）：
-/// - 短语音：按住说话（AudioCaptureManager，30 秒自动截断）
-/// - 长录音：点按开始/结束（LongAudioRecorder，AVAudioFile 流式写盘不堆内存，可切后台）
+/// - 短语音：按住说话（AudioCaptureManager，60 秒自动截断）
+/// - 长录音：点按开始/结束（LongAudioRecorder，AVAudioFile 流式写盘不堆内存，可切后台，最长 60 分钟）
 /// - 转写：复用现有 STT 栈（Apple / 豆包，跟随设置）；长录音按 50 秒分段拼接
 @MainActor
 @Observable
@@ -51,6 +51,8 @@ final class GlobalVoiceInputViewModel {
     private var levelTimer: Timer?
     private var recordingStart: Date?
     private var backgroundTaskID: UIBackgroundTaskIdentifier = .invalid
+    /// 短语音上滑切长录音时保留已录短样本，拼到长录音开头（N3 悬浮麦切换不丢内容）。
+    private var pendingShortSamples: [Float] = []
 
     var mode: GlobalVoiceInputMode = .short
     private(set) var state: GlobalVoiceInputState = .idle
@@ -98,6 +100,33 @@ final class GlobalVoiceInputViewModel {
         transcribe(samples, chunked: false)
     }
 
+    // MARK: - 短语音 → 长录音切换（按住上滑，N3 悬浮麦）
+
+    /// 按住说话时上滑切长录音：收下已录短样本，启动流式写盘的长录音；
+    /// 松开手指后录音继续（锁定模式），点按按钮或 60 分钟上限时结束。
+    func switchToLongMode() {
+        guard state == .recording, mode == .short else { return }
+        stopTimers()
+        let shortSamples = audioCapture.stopRecording()
+        if !shortSamples.isEmpty {
+            pendingShortSamples = shortSamples
+        }
+        let recorder = LongAudioRecorder()
+        do {
+            try recorder.start()
+            longRecorder = recorder
+            recordingStart = Date()
+            mode = .long
+            waveformLevels = []
+            state = .recording
+            startTimers()
+        } catch {
+            errorMessage = "麦克风访问失败：\(AppErrorText.localized(error.localizedDescription))"
+            state = .idle
+            endSession()
+        }
+    }
+
     // MARK: - 长录音（点按开始/结束）
 
     func startLongRecording() {
@@ -120,13 +149,18 @@ final class GlobalVoiceInputViewModel {
     func stopLongRecording() {
         guard state == .recording, let recorder = longRecorder else { return }
         stopTimers()
-        let samples = recorder.stop()
+        var samples = recorder.stop()
         longRecorder = nil
+        if !pendingShortSamples.isEmpty {
+            samples = pendingShortSamples + samples
+            pendingShortSamples = []
+        }
+        mode = .short
         let duration = Date().timeIntervalSince(recordingStart ?? Date())
         recordingStart = nil
         guard duration >= 2, !samples.isEmpty else {
             if duration < 2 {
-                errorMessage = "录音太短（少于 2 秒），长录音建议录足 2–10 分钟"
+                errorMessage = "录音太短（少于 2 秒），长录音最长可录 60 分钟"
             }
             state = .idle
             endSession()
@@ -139,6 +173,7 @@ final class GlobalVoiceInputViewModel {
     /// 页面退出时丢弃未完成的录音（不转写、不保存）。
     func discard() {
         stopTimers()
+        pendingShortSamples = []
         if state == .recording {
             if longRecorder != nil {
                 _ = longRecorder?.stop()
@@ -245,10 +280,10 @@ final class GlobalVoiceInputViewModel {
                 guard let start = self.recordingStart, self.state == .recording else { return }
                 let elapsed = Date().timeIntervalSince(start)
                 self.durationText = Self.formatDuration(elapsed)
-                if self.mode == .short, elapsed > 30 {
+                if self.mode == .short, elapsed > 60 {
                     self.stopShortRecording()
                 }
-                if self.mode == .long, elapsed > 600 {
+                if self.mode == .long, elapsed > 3600 {
                     self.stopLongRecording()
                 }
             }
@@ -635,5 +670,294 @@ struct GlobalVoiceInput: View {
         }
         .frame(height: 40)
         .animation(.linear(duration: 0.1), value: viewModel.waveformLevels)
+    }
+}
+
+// MARK: - 悬浮圆麦组件（N3）
+
+/// 主页小卡页面统一的悬浮麦克风：屏幕下方偏上、居中悬浮，不挡内容滚动。
+/// - 按住 = 短语音（最长 60 秒），松开识别；
+/// - 按住后上滑 = 切换到长录音（最长 60 分钟），松开继续录（锁定），点按结束；
+/// - 空闲呼吸 / 录音波纹 / 触觉反馈 / 手指上方波形提示。
+struct GlobalVoiceInputFloating: View {
+    @State private var viewModel: GlobalVoiceInputViewModel
+    @State private var isPressed = false
+    @State private var holdTask: Task<Void, Never>?
+    @State private var didSwitchToLong = false
+    @State private var isBreathing = false
+
+    private let buttonSize: CGFloat = 64
+    private let holdThreshold: UInt64 = 250_000_000
+    private let swipeUpThreshold: CGFloat = -70
+
+    init(settingsStore: SettingsStore, onTranscript: ((String, GlobalVoiceInputMode) -> Void)? = nil) {
+        let vm = GlobalVoiceInputViewModel(settingsStore: settingsStore)
+        vm.onTranscript = onTranscript
+        _viewModel = State(initialValue: vm)
+    }
+
+    var body: some View {
+        VStack(spacing: 16) {
+            statusPanel
+            recordButton
+        }
+        .onAppear {
+            withAnimation(.easeInOut(duration: 1.8).repeatForever(autoreverses: true)) {
+                isBreathing = true
+            }
+        }
+        .onDisappear {
+            holdTask?.cancel()
+            holdTask = nil
+            viewModel.discard()
+        }
+    }
+
+    // MARK: - 录音按钮
+
+    private var recordButton: some View {
+        ZStack {
+            if viewModel.state == .idle {
+                Circle()
+                    .fill(Color.openClawRed.opacity(0.25))
+                    .frame(
+                        width: buttonSize + (isBreathing ? 20 : 6),
+                        height: buttonSize + (isBreathing ? 20 : 6)
+                    )
+                    .animation(.easeInOut(duration: 1.8).repeatForever(autoreverses: true), value: isBreathing)
+            }
+
+            if viewModel.state == .recording {
+                if viewModel.mode == .long {
+                    Circle()
+                        .trim(from: 0, to: 0.7)
+                        .stroke(Color.openClawRed.opacity(0.6), style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
+                        .frame(width: buttonSize + 12, height: buttonSize + 12)
+                        .rotationEffect(.degrees(recordingRingAngle))
+                        .animation(.linear(duration: 1.0).repeatForever(autoreverses: false), value: recordingRingAngle)
+                } else {
+                    Circle()
+                        .stroke(Color.openClawRed.opacity(0.3), lineWidth: 3)
+                        .frame(
+                            width: buttonSize + 14 + CGFloat(viewModel.audioLevel * 52),
+                            height: buttonSize + 14 + CGFloat(viewModel.audioLevel * 52)
+                        )
+                        .animation(.easeOut(duration: 0.08), value: viewModel.audioLevel)
+                }
+            }
+
+            Circle()
+                .fill(buttonColor)
+                .frame(width: buttonSize, height: buttonSize)
+                .shadow(color: buttonColor.opacity(0.45), radius: isPressed ? 4 : 10, y: isPressed ? 2 : 6)
+                .scaleEffect(isPressed ? 0.88 : 1.0)
+                .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isPressed)
+
+            buttonIcon
+                .font(.system(size: 26, weight: .semibold))
+                .foregroundStyle(.white)
+        }
+        .frame(width: buttonSize + 80, height: buttonSize + 80)
+        .contentShape(Circle())
+        .gesture(recordGesture)
+        .disabled(viewModel.state == .transcribing)
+        .accessibilityLabel(accessibilityLabel)
+    }
+
+    private var recordingRingAngle: Double {
+        viewModel.state == .recording ? 360 : 0
+    }
+
+    private var buttonColor: Color {
+        switch viewModel.state {
+        case .idle: return .openClawRed
+        case .recording: return viewModel.mode == .long ? Color(red: 0.82, green: 0.16, blue: 0.2) : .red
+        case .transcribing: return .openClawRed.opacity(0.5)
+        }
+    }
+
+    @ViewBuilder
+    private var buttonIcon: some View {
+        switch viewModel.state {
+        case .idle:
+            Image(systemName: "mic.fill")
+        case .recording:
+            Image(systemName: viewModel.mode == .long ? "stop.fill" : "mic.fill")
+                .symbolEffect(.pulse)
+        case .transcribing:
+            Image(systemName: "waveform")
+        }
+    }
+
+    private var accessibilityLabel: String {
+        switch viewModel.state {
+        case .idle: return "按住说话，上滑切长录音"
+        case .recording: return viewModel.mode == .long ? "长录音中，点按结束" : "正在录音，松开结束"
+        case .transcribing: return "正在转写"
+        }
+    }
+
+    // MARK: - 手势（按住说话 / 上滑切长录音 / 长录音点按结束）
+
+    private var recordGesture: some Gesture {
+        DragGesture(minimumDistance: 0)
+            .onChanged { value in
+                switch viewModel.state {
+                case .idle:
+                    guard viewModel.mode == .short, !isPressed else { return }
+                    isPressed = true
+                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                    holdTask = Task { @MainActor in
+                        try? await Task.sleep(nanoseconds: holdThreshold)
+                        guard !Task.isCancelled, isPressed, viewModel.state == .idle else { return }
+                        viewModel.startShortRecording()
+                    }
+                case .recording:
+                    if viewModel.mode == .short,
+                       value.translation.height < swipeUpThreshold,
+                       !didSwitchToLong {
+                        didSwitchToLong = true
+                        UINotificationFeedbackGenerator().notificationOccurred(.success)
+                        viewModel.switchToLongMode()
+                    }
+                case .transcribing:
+                    break
+                }
+            }
+            .onEnded { _ in
+                holdTask?.cancel()
+                holdTask = nil
+                isPressed = false
+                // 已上滑切长录音：松开不停止（锁定继续录），点按才结束
+                if didSwitchToLong {
+                    didSwitchToLong = false
+                    return
+                }
+                switch viewModel.mode {
+                case .short:
+                    if viewModel.state == .recording {
+                        viewModel.stopShortRecording()
+                    }
+                case .long:
+                    if viewModel.state == .recording {
+                        viewModel.stopLongRecording()
+                    }
+                }
+            }
+    }
+
+    // MARK: - 手指上方状态区（不遮挡按钮）
+
+    @ViewBuilder
+    private var statusPanel: some View {
+        VStack(spacing: 8) {
+            if let errorMessage = viewModel.errorMessage {
+                Text(errorMessage)
+                    .font(.caption2)
+                    .foregroundStyle(.red)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(Capsule().fill(.black.opacity(0.55)))
+            }
+
+            if !viewModel.transcript.isEmpty {
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack {
+                        Text("识别结果")
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(.white.opacity(0.7))
+                        Spacer()
+                        Button("清空") {
+                            viewModel.transcript = ""
+                        }
+                        .font(.caption2)
+                        .foregroundStyle(.white.opacity(0.8))
+                    }
+                    Text(viewModel.transcript)
+                        .font(.caption)
+                        .foregroundStyle(.white)
+                        .lineLimit(3)
+                        .multilineTextAlignment(.leading)
+                }
+                .padding(10)
+                .frame(maxWidth: 280)
+                .background(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(.black.opacity(0.6))
+                )
+            }
+
+            stateIndicator
+        }
+    }
+
+    @ViewBuilder
+    private var stateIndicator: some View {
+        switch viewModel.state {
+        case .idle:
+            Text("按住说话 · 上滑切长录音")
+                .font(.caption.weight(.medium))
+                .foregroundStyle(.white)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(Capsule().fill(.black.opacity(0.55)))
+        case .recording:
+            VStack(spacing: 6) {
+                HStack(spacing: 8) {
+                    Circle()
+                        .fill(Color.red)
+                        .frame(width: 8, height: 8)
+                    Text(viewModel.mode == .long
+                         ? "长录音中 · \(viewModel.durationText)（点按结束）"
+                         : "正在录音… 松开结束")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.white)
+                }
+                miniWaveform
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(.black.opacity(0.6))
+            )
+        case .transcribing:
+            HStack(spacing: 8) {
+                ProgressView()
+                    .controlSize(.small)
+                    .tint(.white)
+                Text("转写中…")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.white)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(.black.opacity(0.6))
+            )
+        }
+    }
+
+    /// 迷你频谱条：随真实录音电平起伏（手指上方可见，不被手指遮挡）。
+    private var miniWaveform: some View {
+        HStack(spacing: 3) {
+            ForEach(0..<7, id: \.self) { index in
+                Capsule()
+                    .fill(.white.opacity(0.9))
+                    .frame(width: 3, height: barHeight(index: index))
+            }
+        }
+        .frame(height: 22)
+        .animation(.easeOut(duration: 0.1), value: viewModel.audioLevel)
+    }
+
+    private func barHeight(index: Int) -> CGFloat {
+        let seeds: [CGFloat] = [0.5, 1.0, 0.7, 1.2, 0.8, 1.1, 0.6]
+        let seed = seeds[index % seeds.count]
+        let level = max(0.06, CGFloat(viewModel.audioLevel) * 18)
+        let wave = CGFloat(sin(Date().timeIntervalSince1970 * 6 + Double(index) * 0.9))
+        return max(4, min(20, level * seed + wave * 2 + 3))
     }
 }

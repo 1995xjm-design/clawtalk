@@ -17,6 +17,8 @@ struct CapabilityEntry: Identifiable, Equatable {
     let name: String
     let icon: String
     let commandCount: Int
+    /// 命令清单（远程来源无元数据时为空数组）
+    let commands: [String]
     let detail: String
     let source: Source
     let statusNote: String
@@ -66,6 +68,7 @@ final class CapabilitiesViewModel {
                     name: meta?.title ?? name,
                     icon: meta?.icon ?? "square.grid.2x2",
                     commandCount: meta?.commands.count ?? 0,
+                    commands: meta?.commands ?? [],
                     detail: meta?.detail ?? "网关提供的能力",
                     source: .remote,
                     statusNote: "网关返回"
@@ -88,12 +91,42 @@ final class CapabilitiesViewModel {
                 name: capability.title,
                 icon: capability.icon,
                 commandCount: capability.commands.count,
+                commands: capability.commands,
                 detail: capability.detail,
                 source: .local,
                 statusNote: nodeConnected ? "已连接 · 网关可调用" : "已声明 · 网关可调用（HTTP）"
             )
         }
     }
+
+    /// 命令用途说明（25 条本地命令全覆盖；未知命令回退通用文案）。
+    static let commandDescriptions: [String: String] = [
+        "device.status": "读取设备型号、系统版本与电量状态",
+        "device.info": "读取设备详细信息",
+        "system.notify": "向 iPhone 发送本地通知",
+        "location.get": "获取当前定位（需定位权限）",
+        "contacts.search": "按关键词搜索联系人（需通讯录权限）",
+        "contacts.add": "添加联系人（需通讯录权限）",
+        "calendar.events": "读取日历事件（需日历权限）",
+        "calendar.add": "创建日历事件（需日历权限）",
+        "reminders.list": "列出提醒事项（需提醒权限）",
+        "reminders.add": "添加提醒事项（需提醒权限）",
+        "motion.activity": "读取活动记录（需运动权限）",
+        "motion.pedometer": "读取计步器步数（需运动权限）",
+        "photos.latest": "读取最近照片（需照片权限）",
+        "camera.list": "列出相机照片（需相机权限）",
+        "camera.snap": "拍照并回传（需相机权限）",
+        "screen.snapshot": "截取屏幕并回传",
+        "canvas.present": "展示网页画布",
+        "canvas.navigate": "画布页面导航",
+        "canvas.evalJS": "在画布中执行 JavaScript",
+        "canvas.snapshot": "截取画布画面",
+        "canvas.reset": "重置画布",
+        "voicewake.set": "设置语音唤醒词",
+        "voicewake.get": "获取当前唤醒词配置",
+        "health.steps": "读取健康步数（需健康权限）",
+        "media.list": "列出最近媒体文件",
+    ]
 
     /// 尽力探测网关 capabilities 接口；返回能力名数组；无接口或解析失败返回 nil。
     static func fetchRemoteCapabilities(base: String, token: String) async -> [String]? {
@@ -187,33 +220,37 @@ struct CapabilitiesView: View {
                         .foregroundStyle(.secondary)
                 } else {
                     ForEach(model.entries) { entry in
-                        HStack(spacing: 12) {
-                            Image(systemName: entry.icon)
-                                .foregroundStyle(Color.openClawRed)
-                                .frame(width: 26)
-                            VStack(alignment: .leading, spacing: 2) {
-                                HStack(spacing: 6) {
-                                    Text(entry.name)
-                                        .font(.subheadline.weight(.semibold))
-                                    Text(entry.statusNote)
-                                        .font(.caption2)
+                        NavigationLink {
+                            CapabilityDetailView(entry: entry)
+                        } label: {
+                            HStack(spacing: 12) {
+                                Image(systemName: entry.icon)
+                                    .foregroundStyle(Color.openClawRed)
+                                    .frame(width: 26)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    HStack(spacing: 6) {
+                                        Text(entry.name)
+                                            .font(.subheadline.weight(.semibold))
+                                        Text(entry.statusNote)
+                                            .font(.caption2)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                    Text(entry.detail)
+                                        .font(.caption)
                                         .foregroundStyle(.secondary)
                                 }
-                                Text(entry.detail)
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
+                                Spacer()
+                                if entry.source == .local {
+                                    Text("\(entry.commandCount) 命令")
+                                        .font(.caption2)
+                                        .foregroundStyle(.tertiary)
+                                } else {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .foregroundStyle(.green)
+                                }
                             }
-                            Spacer()
-                            if entry.source == .local {
-                                Text("\(entry.commandCount) 命令")
-                                    .font(.caption2)
-                                    .foregroundStyle(.tertiary)
-                            } else {
-                                Image(systemName: "checkmark.circle.fill")
-                                    .foregroundStyle(.green)
-                            }
+                            .padding(.vertical, 2)
                         }
-                        .padding(.vertical, 2)
                     }
                 }
             } header: {
@@ -249,5 +286,82 @@ struct CapabilitiesView: View {
             wsConnected = false
         }
         await model.load(settings: settings, nodeConnected: wsConnected)
+    }
+}
+
+// MARK: - 能力详情页（N6）
+
+/// 能力详情：说明 / 命令清单（含用途）/ 可用性，点击能力列表项进入。
+private struct CapabilityDetailView: View {
+    let entry: CapabilityEntry
+
+    var body: some View {
+        List {
+            Section {
+                HStack(spacing: 14) {
+                    Image(systemName: entry.icon)
+                        .font(.system(size: 30))
+                        .foregroundStyle(Color.openClawRed)
+                        .frame(width: 56, height: 56)
+                        .background(Color.openClawRed.opacity(0.1), in: RoundedRectangle(cornerRadius: 14))
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(entry.name)
+                            .font(.headline)
+                        Label(entry.statusNote, systemImage: entry.source == .remote ? "antenna.radiowaves.left.and.right" : "iphone")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .padding(.vertical, 4)
+            }
+
+            Section("说明") {
+                Text(entry.detail)
+                LabeledContent("数据来源", value: entry.source == .remote ? "网关返回" : "本地清单")
+            }
+
+            Section("命令（\(entry.commands.count)）") {
+                if entry.commands.isEmpty {
+                    Text("网关未返回该能力的命令清单。")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(entry.commands, id: \.self) { command in
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(command)
+                                .font(.system(.body, design: .monospaced))
+                            Text(Self.commandDescription(for: command))
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding(.vertical, 2)
+                    }
+                }
+            }
+
+            Section("可用性") {
+                LabeledContent("权限要求", value: availabilityNote)
+            } footer: {
+                Text("能力是否可调用以网关连接回执为准；需要权限的能力请先在系统设置中授权。")
+            }
+        }
+        .navigationTitle(entry.name)
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private var availabilityNote: String {
+        switch entry.id {
+        case "device", "notifications", "screen", "canvas", "voice", "media":
+            return "无需额外系统权限"
+        case "location", "contacts", "calendar", "reminders", "motion", "photos", "camera", "health":
+            return "需在系统设置中授予对应权限"
+        default:
+            return "以网关连接回执为准"
+        }
+    }
+
+    private static func commandDescription(for command: String) -> String {
+        CapabilitiesViewModel.commandDescriptions[command]
+            ?? "该命令的用途以网关实现为准"
     }
 }

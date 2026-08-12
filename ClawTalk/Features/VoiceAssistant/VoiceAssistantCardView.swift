@@ -36,6 +36,8 @@ struct VoiceAssistantCardView: View, VoiceAssistantCardContent {
     @State private var showQuickSettings = false
     // 大卡主题（AppStorage 持久化，齿轮设置里切换）
     @AppStorage("voiceAssistant.theme") private var themeRawValue = VoiceAssistantTheme.aurora.rawValue
+    // 对话记录入口
+    @State private var showTranscript = false
 
     private let cardHeight: CGFloat = 250
     private let firstUseDefaultsKey = "voiceAssistant.didShowFirstUseGuide"
@@ -54,17 +56,13 @@ struct VoiceAssistantCardView: View, VoiceAssistantCardContent {
         ZStack {
             // 整卡流动彩带（Siri 风，四态共用一套背景，速度/亮度随状态变化）
             SiriBackgroundLayer(state: viewModel.state, theme: theme)
-            // 底部动态条（待机微澜 / 对讲随真实麦克风音量起伏）
-            IdleWaveLayer(
+            // 主题动画层：每套主题完全不同的动画效果（频谱条/呼吸光带/星尘/水波/极光流）
+            ThemeAnimationLayer(
                 state: viewModel.state,
                 theme: theme,
                 micLevel: viewModel.audioLevel,
                 micActive: viewModel.isMicActive
             )
-            // 悬浮光点（整卡漂浮）
-            ParticleLayer(theme: theme)
-            // 状态特效：聆听波纹扩散 / 思考旋转光点 / 播报整卡脉动
-            StateEffectLayer(state: viewModel.state)
 
             contentOverlay
         }
@@ -84,6 +82,9 @@ struct VoiceAssistantCardView: View, VoiceAssistantCardContent {
                 settingsStore: settingsStore,
                 themeRawValue: $themeRawValue
             )
+        }
+        .sheet(isPresented: $showTranscript) {
+            VoiceAssistantTranscriptSheet(viewModel: viewModel)
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel("随身语音助手，\(statusText)。轻点开始或结束对话，长按退出，右上角切换场景与语音设置。")
@@ -208,6 +209,17 @@ struct VoiceAssistantCardView: View, VoiceAssistantCardContent {
                     .transition(.opacity.combined(with: .scale(scale: 0.9)))
             }
             Spacer()
+            Button {
+                showTranscript = true
+            } label: {
+                Image(systemName: "clock.arrow.circlepath")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: 30, height: 30)
+                    .background(Circle().fill(.white.opacity(0.18)))
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("对话记录")
             Button {
                 showQuickSettings = true
             } label: {
@@ -430,6 +442,8 @@ private struct SiriBackgroundLayer: View {
             let speed = speedFactor
             // 整卡呼吸透明度（待机也有「活」感，0.82 ↔ 1.0）
             let breathing = 0.82 + 0.18 * abs(sin(t * 1.3))
+            // 极光流主题让彩带成为主角；其余主题压暗彩带，突出各自动画层。
+            let intensity = theme.style == .auroraFlow ? 1.0 : 0.55
             GeometryReader { geo in
                 ZStack {
                     // 主色带：环形渐变绕中心旋转（Siri 绸缎流动感）
@@ -440,6 +454,7 @@ private struct SiriBackgroundLayer: View {
                     )
                     .blur(radius: 70)
                     .scaleEffect(1.25)
+                    .opacity(intensity)
 
                     // 反向慢速微光带（叠加发光，交叉处自然提亮）
                     AngularGradient(
@@ -454,6 +469,7 @@ private struct SiriBackgroundLayer: View {
                     )
                     .blur(radius: 60)
                     .scaleEffect(1.3)
+                    .opacity(intensity * 0.9)
 
                     // 中央高亮（Siri 的光聚在中间）
                     RadialGradient(
@@ -488,214 +504,312 @@ private struct SiriBackgroundLayer: View {
         }
     }
 }
-// MARK: - 悬浮光点（整卡漂浮）
 
-private struct ParticleLayer: View {
-    let theme: VoiceAssistantTheme
-    private let count = 14
+// MARK: - 主题动画层（每套主题完全不同的动画效果）
 
-    var body: some View {
-        GeometryReader { geo in
-            TimelineView(.animation(minimumInterval: 1.0 / 24.0)) { context in
-                let t = context.date.timeIntervalSinceReferenceDate
-                ZStack {
-                    ForEach(0..<count, id: \.self) { index in
-                        let phase = Double(index) * 0.85
-                        let x = geo.size.width * (0.10 + 0.80 * (Double(index % 5) / 4.0))
-                            + CGFloat(12 * sin(t * 0.5 + phase))
-                        let y = geo.size.height * (0.14 + 0.72 * (Double(index / 5) / 2.0))
-                            + CGFloat(9 * cos(t * 0.6 + phase))
-                        Circle()
-                            .fill(.white.opacity(theme.particleOpacity * (0.08 + 0.10 * abs(sin(t * 0.7 + phase)))))
-                            .frame(width: 3.5 + CGFloat(index % 3) * 1.5)
-                            .position(x: x, y: y)
-                    }
-                    // 流星：两道细光轮流划过（Siri 标志性细节）
-                    ForEach(0..<2, id: \.self) { index in
-                        let phase = Double(index) * 0.5
-                        let progress = (t * 0.12 + phase).truncatingRemainder(dividingBy: 1.0)
-                        let x = geo.size.width * (progress * 1.35 - 0.18)
-                        let y = geo.size.height * (0.18 + progress * 0.55)
-                        Capsule()
-                            .fill(.white.opacity(theme.particleOpacity * 0.28 * (1 - progress)))
-                            .frame(width: 46, height: 1.5)
-                            .rotationEffect(.degrees(-35))
-                            .position(x: x, y: y)
-                    }
-                }
-            }
-        }
-        .allowsHitTesting(false)
-    }
-}
-// MARK: - 状态特效（聆听波纹 / 思考光点 / 播报脉动）
-
-private struct StateEffectLayer: View {
-    let state: VoiceAssistantState
-    @State private var ripple = false
-
-    var body: some View {
-        GeometryReader { geo in
-            ZStack {
-                switch state {
-                case .idle:
-                    EmptyView()
-                case .listening:
-                    // 中央波纹扩散到整卡（Siri 听感）
-                    ForEach(0..<3, id: \.self) { index in
-                        Circle()
-                            .stroke(Color.white.opacity(0.28), lineWidth: 1.5)
-                            .frame(width: 60, height: 60)
-                            .scaleEffect(ripple ? 1.0 + CGFloat(index + 1) * 2.8 : 1.0)
-                            .opacity(ripple ? 0 : 0.55)
-                            .animation(
-                                .easeOut(duration: 2.0)
-                                    .repeatForever(autoreverses: false)
-                                    .delay(Double(index) * 0.6),
-                                value: ripple
-                            )
-                    }
-                case .thinking:
-                    // 中央旋转光点
-                    ThinkingOrbitView(color: .white, size: 84)
-                case .speaking:
-                    // 整卡快速脉动光罩
-                    Circle()
-                        .fill(.white.opacity(0.05))
-                        .frame(width: geo.size.width * 0.92)
-                        .blur(radius: 44)
-                        .scaleEffect(ripple ? 1.12 : 0.9)
-                        .opacity(ripple ? 0.10 : 0.03)
-                        .animation(
-                            .easeInOut(duration: 0.8).repeatForever(autoreverses: true),
-                            value: ripple
-                        )
-                }
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-        }
-        .allowsHitTesting(false)
-        .onAppear { startRipple() }
-        .onChange(of: state) { _, _ in
-            // 状态切换时重开动画，避免旧动画延续
-            ripple = false
-            Task { @MainActor in
-                try? await Task.sleep(nanoseconds: 60_000_000)
-                startRipple()
-            }
-        }
-    }
-
-    private func startRipple() {
-        withAnimation(.easeInOut(duration: 0.2)) {
-            ripple = true
-        }
-    }
-}
-
-// MARK: - 思考：旋转光点
-
-private struct ThinkingOrbitView: View {
-    let color: Color
-    let size: CGFloat
-
-    @State private var spinning = false
-
-    var body: some View {
-        ZStack {
-            ForEach(0..<4, id: \.self) { index in
-                Circle()
-                    .fill(color)
-                    .frame(width: 9, height: 9)
-                    .shadow(color: color.opacity(0.9), radius: 4)
-                    .offset(y: -size * 0.42)
-                    .rotationEffect(.degrees(Double(index) * 90 + (spinning ? 360 : 0)))
-            }
-        }
-        .frame(width: size, height: size)
-        .onAppear {
-            spinning = false
-            withAnimation(.linear(duration: 1.1).repeatForever(autoreverses: false)) {
-                spinning = true
-            }
-        }
-    }
-}
-
-// MARK: - 底部动态条（待机微澜 / 对讲随真实音量）
-
-/// 大卡底部动态条：
-/// - 待机（麦克风引擎未运行）：低幅平滑随机微澜。诚实实现——空闲时不启动麦克风引擎
-///   （省电、不占麦、与语音唤醒不抢资源），无法实时采集环境音量，因此用 TimelineView
-///   确定性伪随机公式模拟起伏感（同一时刻同一根条位置稳定，无闪烁）；
-/// - 对讲中（聆听/播报，麦克风引擎在跑）：竖条幅度跟随真实麦克风 RMS 音量起伏。
-private struct IdleWaveLayer: View {
+/// 按主题风格渲染整套动画：频谱条 / 呼吸光带 / 粒子星尘 / 同心水波 / 极光流。
+/// 每套风格都是独立实现（不只是换底色），待机/聆听/思考/播报四态各自有不同的动态。
+private struct ThemeAnimationLayer: View {
     let state: VoiceAssistantState
     let theme: VoiceAssistantTheme
     let micLevel: Float
     let micActive: Bool
 
-    private let barCount = 26
+    var body: some View {
+        switch theme.style {
+        case .spectrum:
+            SpectrumBarsView(state: state, theme: theme, micLevel: micLevel, micActive: micActive)
+        case .breathingBand:
+            BreathingBandView(state: state, theme: theme, micLevel: micLevel, micActive: micActive)
+        case .stardust:
+            StardustView(state: state, theme: theme, micLevel: micLevel, micActive: micActive)
+        case .ripple:
+            RippleRingsView(state: state, theme: theme, micLevel: micLevel, micActive: micActive)
+        case .auroraFlow:
+            AuroraFlowLayer(state: state, theme: theme, micLevel: micLevel, micActive: micActive)
+        }
+    }
+}
+
+/// 当前「音量幅度」：对讲中（麦克风引擎在跑）= 真实麦克风 RMS（上限 1.0）；
+/// 待机（引擎已停，诚实实现）= 主题低幅伪随机微澜，同一时刻同一相位稳定不闪烁。
+private func ambientLevel(
+    state: VoiceAssistantState,
+    theme: VoiceAssistantTheme,
+    micLevel: Float,
+    micActive: Bool,
+    t: TimeInterval,
+    phase: Double
+) -> Double {
+    if state != .idle && micActive {
+        return Double(min(micLevel * 6.0, 1.0))
+    }
+    return theme.idleAmplitude * (0.40 + 0.60 * abs(sin(t * 1.3 + phase * 1.7)))
+}
+
+// MARK: - 主题1：频谱条（EQ 竖条随音量跳动）
+
+/// 音箱 EQ 频谱：14 根粗圆头竖条 + 底部镜像倒影，中央条更活跃；
+/// 对讲中跟随真实麦克风音量跳动，待机低幅微澜。
+private struct SpectrumBarsView: View {
+    let state: VoiceAssistantState
+    let theme: VoiceAssistantTheme
+    let micLevel: Float
+    let micActive: Bool
+
+    private let barCount = 14
 
     var body: some View {
         TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { context in
             let t = context.date.timeIntervalSinceReferenceDate
             GeometryReader { geo in
+                let centerX = geo.size.width / 2
+                let barWidth = min(9.0, geo.size.width * 0.045)
+                let gap = barWidth * 0.55
+                let totalWidth = CGFloat(barCount) * barWidth + CGFloat(barCount - 1) * gap
+                let startX = centerX - totalWidth / 2 + barWidth / 2
+                let baseY = geo.size.height * 0.76
+                let maxHeight = geo.size.height * 0.32
                 ZStack {
                     ForEach(0..<barCount, id: \.self) { index in
-                        barView(index: index, t: t, size: geo.size)
+                        let level = spectrumLevel(index: index, t: t)
+                        let height = max(4.0, maxHeight * level)
+                        let x = startX + CGFloat(index) * (barWidth + gap)
+                        Capsule()
+                            .fill(
+                                LinearGradient(
+                                    colors: [
+                                        theme.accentColor.opacity(0.95),
+                                        .white.opacity(0.8)
+                                    ],
+                                    startPoint: .bottom,
+                                    endPoint: .top
+                                )
+                            )
+                            .frame(width: barWidth, height: height)
+                            .shadow(color: theme.accentColor.opacity(0.5), radius: 3)
+                            .position(x: x, y: baseY - height / 2)
+                        Capsule()
+                            .fill(theme.accentColor.opacity(0.20))
+                            .frame(width: barWidth, height: height * 0.42)
+                            .position(x: x, y: baseY + height * 0.21)
                     }
                 }
-                .frame(width: geo.size.width, height: geo.size.height)
+                .opacity(state == .idle ? 0.95 : 0.85)
             }
         }
         .allowsHitTesting(false)
-        .opacity(state == .idle ? 0.95 : 0.7)
     }
 
-    /// 单根动态条：高度/位移由「待机伪随机 或 真实麦克风音量」驱动，按主题样式渲染。
-    @ViewBuilder
-    private func barView(index: Int, t: TimeInterval, size: CGSize) -> some View {
-        let phase = Double(index) * 0.55
-        let sway = sin(t * theme.idleSpeed + phase)
-        let x = size.width * (CGFloat(index) + 0.5) / CGFloat(barCount)
-        let baseY = size.height * 0.66
-
-        // 对讲中=真实麦克风 RMS；待机=确定性伪随机微澜（诚实实现，见结构注释）。
-        let ambient: Double = (state != .idle && micActive)
-            ? Double(min(micLevel * 6.0, 1.0))
-            : theme.idleAmplitude * (0.40 + 0.60 * abs(sin(t * 1.3 + phase * 1.7)))
-        let column = 0.35 + 0.65 * abs(sin(Double(index) * 0.42 + t * 0.8))
-        let height = size.height * (0.05 + 0.32 * ambient) * (0.45 + 0.55 * column)
-        let color = Color.white.opacity(theme.barOpacity * (0.7 + 0.3 * abs(sway)))
-
-        switch theme.barStyle {
-        case .waveform:
-            Capsule()
-                .fill(color)
-                .frame(width: 2.6, height: max(3, height * 0.55))
-                .position(x: x, y: baseY + CGFloat(sway) * height * 0.45)
-        case .bars:
-            Capsule()
-                .fill(color)
-                .frame(width: 3.2, height: max(3, height))
-                .position(x: x, y: baseY)
-        case .dots:
-            Circle()
-                .fill(color)
-                .frame(width: max(2.5, height * 0.32))
-                .position(x: x, y: baseY + CGFloat(sway) * height * 0.6)
-        case .line:
-            Capsule()
-                .fill(color)
-                .frame(width: 4.0, height: max(1.6, height * 0.22))
-                .position(x: x, y: baseY + CGFloat(sway) * height * 0.5)
-        case .spark:
-            Circle()
-                .fill(color)
-                .frame(width: max(1.8, height * 0.20))
-                .position(x: x + CGFloat(2.5 * sin(t * 1.1 + phase)), y: baseY + CGFloat(sway) * height * 0.7)
+    /// 单根频谱条高度：对讲中 = 麦克风幅度 × 抖动 + 中央偏置；待机 = 确定性微澜。
+    private func spectrumLevel(index: Int, t: TimeInterval) -> Double {
+        let phase = Double(index) * 0.53
+        let centerBias = 0.72 + 0.28 * cos(Double(index - barCount / 2) * 0.55)
+        if state != .idle && micActive {
+            let amp = ambientLevel(state: state, theme: theme, micLevel: micLevel, micActive: micActive, t: t, phase: phase)
+            let wobble = 0.5 + 0.5 * abs(sin(t * 3.4 + phase))
+            return min(1.0, amp * 1.35 * wobble * centerBias + 0.05)
         }
+        let sweep = abs(sin(t * 0.9 + Double(index) * 0.34))
+        let idle = theme.idleAmplitude * (0.35 + 0.65 * sweep) * centerBias
+        return max(0.05, min(0.5, idle))
+    }
+}
+
+// MARK: - 主题2：呼吸光带（整条光带呼吸 + 高光流动）
+
+/// 深海风格：一条横向渐变光带呼吸明暗，白色高光在带内来回流动；
+/// 聆听/播报时光带更亮、高光更快，待机缓慢呼吸。
+private struct BreathingBandView: View {
+    let state: VoiceAssistantState
+    let theme: VoiceAssistantTheme
+    let micLevel: Float
+    let micActive: Bool
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { context in
+            let t = context.date.timeIntervalSinceReferenceDate
+            GeometryReader { geo in
+                let bandWidth = geo.size.width * 0.66
+                let bandHeight: CGFloat = state == .idle ? 10 : 15
+                let amp = ambientLevel(state: state, theme: theme, micLevel: micLevel, micActive: micActive, t: t, phase: 0)
+                let breathe = 0.35 + 0.65 * abs(sin(t * theme.idleSpeed * 1.6))
+                let boost = state == .idle ? 1.0 : (0.85 + 0.15 * amp)
+                let centerX = geo.size.width / 2
+                let y = geo.size.height * 0.76
+                let highlightOffset = bandWidth * 0.30 * sin(t * theme.idleSpeed * 0.9)
+                ZStack {
+                    Capsule()
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    theme.accentColor.opacity(0.22),
+                                    theme.accentColor.opacity(0.78 * breathe * boost),
+                                    theme.accentColor.opacity(0.22)
+                                ],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                        .frame(width: bandWidth, height: bandHeight)
+                        .blur(radius: 2)
+                        .shadow(color: theme.accentColor.opacity(0.35 * boost), radius: 8)
+                        .position(x: centerX, y: y)
+                    Capsule()
+                        .fill(.white.opacity(0.55 * breathe * boost))
+                        .frame(width: bandWidth * 0.24, height: bandHeight * 0.45)
+                        .blur(radius: 4)
+                        .position(x: centerX + highlightOffset, y: y)
+                }
+            }
+        }
+        .allowsHitTesting(false)
+    }
+}
+
+// MARK: - 主题3：粒子星尘（漂浮粒子随音量聚散）
+
+/// 暗夜风格：星尘粒子群，聆听/播报时向中心聚拢变亮（随音量增强），
+/// 待机缓慢散开漂浮；中心带随音量浮现的柔光。
+private struct StardustView: View {
+    let state: VoiceAssistantState
+    let theme: VoiceAssistantTheme
+    let micLevel: Float
+    let micActive: Bool
+
+    private let count = 18
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { context in
+            let t = context.date.timeIntervalSinceReferenceDate
+            GeometryReader { geo in
+                let amp = ambientLevel(state: state, theme: theme, micLevel: micLevel, micActive: micActive, t: t, phase: 0.4)
+                let gather = state == .idle ? 0.10 : 0.35 + 0.55 * amp
+                let spread = 1.0 - gather * 0.85
+                let centerX = geo.size.width / 2
+                let baseY = geo.size.height * 0.68
+                ZStack {
+                    Circle()
+                        .fill(
+                            RadialGradient(
+                                colors: [theme.accentColor.opacity(0.30 * gather), .clear],
+                                center: .center,
+                                startRadius: 0,
+                                endRadius: geo.size.width * 0.30
+                            )
+                        )
+                        .frame(width: geo.size.width * 0.6, height: geo.size.height * 0.5)
+                        .position(x: centerX, y: baseY)
+                    ForEach(0..<count, id: \.self) { index in
+                        let phase = Double(index) * 1.7
+                        let anchorX = Double(index % 6) / 5.0 - 0.5
+                        let anchorY = Double(index / 6) / 2.0 - 0.5
+                        let driftX = sin(t * theme.idleSpeed * 0.6 + phase) * 0.30
+                        let driftY = cos(t * theme.idleSpeed * 0.5 + phase * 0.8) * 0.18
+                        let x = centerX + CGFloat((anchorX * 0.42 + driftX) * spread) * geo.size.width
+                        let y = baseY + CGFloat((anchorY * 0.10 + driftY * 0.08)) * geo.size.height
+                        let twinkle = 0.5 + 0.5 * sin(t * 2.0 + phase)
+                        Circle()
+                            .fill(.white.opacity(theme.particleOpacity * (0.22 + 0.50 * twinkle * (0.4 + amp))))
+                            .frame(width: 3.5 + CGFloat(index % 3) * 1.8 + CGFloat(amp * 3.0))
+                            .position(x: x, y: y)
+                    }
+                }
+            }
+        }
+        .allowsHitTesting(false)
+    }
+}
+
+// MARK: - 主题4：同心水波（从中心连续扩散的圆环）
+
+/// 落日风格：从中心连续扩散的同心圆环，聆听时发射更快、更亮，
+/// 中心亮核随音量放大；待机缓慢涟漪。
+private struct RippleRingsView: View {
+    let state: VoiceAssistantState
+    let theme: VoiceAssistantTheme
+    let micLevel: Float
+    let micActive: Bool
+
+    private let ringCount = 4
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { context in
+            let t = context.date.timeIntervalSinceReferenceDate
+            GeometryReader { geo in
+                let amp = ambientLevel(state: state, theme: theme, micLevel: micLevel, micActive: micActive, t: t, phase: 0)
+                let centerX = geo.size.width / 2
+                let centerY = geo.size.height * 0.60
+                let maxRadius = geo.size.height * 0.52
+                let speed = (state == .idle ? 0.30 : (state == .speaking ? 0.80 : 0.55)) + amp * 0.35
+                ZStack {
+                    ForEach(0..<ringCount, id: \.self) { index in
+                        let progress = (t * speed * 0.9 + Double(index) * 0.25).truncatingRemainder(dividingBy: 1.0)
+                        let radius = maxRadius * progress
+                        let opacity = (1.0 - progress) * (state == .idle ? 0.26 : 0.42)
+                        Circle()
+                            .stroke(theme.accentColor.opacity(opacity), lineWidth: progress < 0.15 ? 2.5 : 1.6)
+                            .frame(width: radius * 2, height: radius * 2)
+                            .position(x: centerX, y: centerY)
+                    }
+                    Circle()
+                        .fill(theme.accentColor.opacity(0.5 + amp * 0.4))
+                        .frame(width: 8 + amp * 6, height: 8 + amp * 6)
+                        .blur(radius: 2)
+                        .position(x: centerX, y: centerY)
+                }
+            }
+        }
+        .allowsHitTesting(false)
+    }
+}
+
+// MARK: - 主题5：极光流（彩色渐变帘流动扫过）
+
+/// 极光风格：在彩带基础上叠两道对角流动的极光帘 + 中央光晕，
+/// 聆听/播报时流速加快、更亮；待机舒缓流动。
+private struct AuroraFlowLayer: View {
+    let state: VoiceAssistantState
+    let theme: VoiceAssistantTheme
+    let micLevel: Float
+    let micActive: Bool
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { context in
+            let t = context.date.timeIntervalSinceReferenceDate
+            GeometryReader { geo in
+                let amp = ambientLevel(state: state, theme: theme, micLevel: micLevel, micActive: micActive, t: t, phase: 0.2)
+                let speed = (state == .idle ? 0.8 : (state == .speaking ? 2.0 : 1.4)) + amp * 0.8
+                let brightness = 0.6 + amp
+                let sweep = (t * speed * 0.12).truncatingRemainder(dividingBy: 1.0)
+                let sweep2 = (t * speed * 0.07 + 0.5).truncatingRemainder(dividingBy: 1.0)
+                ZStack {
+                    LinearGradient(
+                        colors: [
+                            .clear,
+                            theme.accentColor.opacity(0.22 * brightness),
+                            .white.opacity(0.14 * brightness),
+                            .clear
+                        ],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                    .frame(width: geo.size.width * 0.55, height: geo.size.height)
+                    .blur(radius: 26)
+                    .rotationEffect(.degrees(-12))
+                    .offset(x: geo.size.width * (sweep * 1.6 - 0.8), y: 0)
+                    RadialGradient(
+                        colors: [.white.opacity(0.10 * brightness), .clear],
+                        center: .center,
+                        startRadius: 0,
+                        endRadius: geo.size.width * 0.5
+                    )
+                    .frame(width: geo.size.width * 0.7, height: geo.size.height * 0.8)
+                    .offset(x: geo.size.width * (sweep2 * 1.4 - 0.7), y: 0)
+                }
+            }
+        }
+        .allowsHitTesting(false)
     }
 }
 // MARK: - 语音快捷设置（齿轮入口）
@@ -1011,5 +1125,86 @@ struct VoiceAssistantQuickSettingsSheet: View {
         previewPlayback = nil
         previewService = nil
         isPreviewing = false
+    }
+}
+
+// MARK: - 语音大卡「记录」（历史对话记录）
+
+/// 大卡右上角「记录」入口弹出的历史对话列表：真实对讲流水
+/// （每轮「用户转写 + 智能体回复」由 ViewModel 落盘），非假数据；
+/// 空记录显示诚实空态。
+struct VoiceAssistantTranscriptSheet: View {
+    @Bindable var viewModel: VoiceAssistantViewModel
+    @Environment(\.dismiss) private var dismiss
+    @State private var entries: [VoiceAssistantTranscriptEntry] = []
+    @State private var confirmClear = false
+
+    var body: some View {
+        NavigationStack {
+            Group {
+                if entries.isEmpty {
+                    ContentUnavailableView(
+                        "暂无对话记录",
+                        systemImage: "mic.badge.ellipsis",
+                        description: Text("开始对讲后，每轮「你说 + 助手答」会自动记录在这里。")
+                    )
+                } else {
+                    List {
+                        ForEach(entries) { entry in
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text(entry.date.formatted(date: .abbreviated, time: .shortened))
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                                HStack(alignment: .top, spacing: 8) {
+                                    Text("我")
+                                        .font(.caption.bold())
+                                        .foregroundStyle(.white)
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 3)
+                                        .background(Capsule().fill(.blue.opacity(0.8)))
+                                    Text(entry.userText)
+                                        .font(.subheadline)
+                                }
+                                HStack(alignment: .top, spacing: 8) {
+                                    Text("助手")
+                                        .font(.caption.bold())
+                                        .foregroundStyle(.white)
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 3)
+                                        .background(Capsule().fill(.openClawRed))
+                                    Text(entry.replyText)
+                                        .font(.subheadline)
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                            .padding(.vertical, 4)
+                        }
+                    }
+                    .listStyle(.plain)
+                }
+            }
+            .navigationTitle("对话记录")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("完成") { dismiss() }
+                }
+                ToolbarItem(placement: .destructiveAction) {
+                    Button("清空", role: .destructive) { confirmClear = true }
+                        .disabled(entries.isEmpty)
+                }
+            }
+            .confirmationDialog("清空全部对话记录？", isPresented: $confirmClear, titleVisibility: .visible) {
+                Button("清空", role: .destructive) {
+                    viewModel.clearTranscript()
+                    entries = []
+                }
+                Button("取消", role: .cancel) {}
+            }
+        }
+        .onAppear {
+            entries = viewModel.transcriptEntries
+        }
+        .presentationDetents([.medium, .large])
     }
 }

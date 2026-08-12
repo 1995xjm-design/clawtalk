@@ -75,29 +75,36 @@ enum VoiceSceneMode: String, CaseIterable, Identifiable, Codable {
 
 // MARK: - 语音大卡主题（5 套）
 
-/// 语音大卡底部动态条样式。
-enum VoiceAssistantBarStyle: String, CaseIterable, Identifiable, Codable {
-    case waveform
-    case bars
-    case dots
-    case line
-    case spark
+/// 语音大卡主题动画风格：5 套主题各自「完全不同」的动画效果。
+///
+/// - spectrum（频谱条）：EQ 竖条随音量跳动，对讲中跟随真实麦克风音量
+/// - breathingBand（呼吸光带）：整条光带呼吸 + 高光流动
+/// - stardust（粒子星尘）：漂浮粒子随音量聚散
+/// - ripple（同心水波）：从中心连续扩散的圆环
+/// - auroraFlow（极光流）：彩色渐变帘流动扫过（强化彩带）
+enum VoiceAssistantAnimationStyle: String, CaseIterable, Identifiable, Codable {
+    case spectrum
+    case breathingBand
+    case stardust
+    case ripple
+    case auroraFlow
 
     var id: String { rawValue }
 
     var displayName: String {
         switch self {
-        case .waveform: return "波浪"
-        case .bars: return "声柱"
-        case .dots: return "光点"
-        case .line: return "细线"
-        case .spark: return "星尘"
+        case .spectrum: return "频谱"
+        case .breathingBand: return "呼吸光带"
+        case .stardust: return "星尘"
+        case .ripple: return "水波"
+        case .auroraFlow: return "极光流"
         }
     }
 }
 
-/// 语音大卡主题底色渐变 / 动态条样式 / 待机幅度 / 动画速度各不相同。
+/// 语音大卡主题：底色渐变 / 动画风格 / 待机幅度 / 动画速度各不相同。
 /// 持久化：VoiceAssistantCardView 用 @AppStorage("voiceAssistant.theme") 保存 rawValue。
+/// 每套主题映射一种 `VoiceAssistantAnimationStyle`，动画实现完全不同。
 enum VoiceAssistantTheme: String, CaseIterable, Identifiable, Codable {
     case aurora
     case ocean
@@ -158,14 +165,25 @@ enum VoiceAssistantTheme: String, CaseIterable, Identifiable, Codable {
         }
     }
 
-    /// 底部动态条样式。
-    var barStyle: VoiceAssistantBarStyle {
+    /// 主题动画风格（每套主题动画效果完全不同）。
+    var style: VoiceAssistantAnimationStyle {
         switch self {
-        case .aurora: return .waveform
-        case .ocean: return .bars
-        case .sunset: return .dots
-        case .forest: return .line
-        case .mono: return .spark
+        case .aurora: return .auroraFlow
+        case .ocean: return .breathingBand
+        case .sunset: return .ripple
+        case .forest: return .spectrum
+        case .mono: return .stardust
+        }
+    }
+
+    /// 主题强调色（动画主体 / 光晕 / 频谱条着色用）。
+    var accentColor: Color {
+        switch self {
+        case .aurora: return Color(red: 0.62, green: 0.35, blue: 0.95)
+        case .ocean: return Color(red: 0.30, green: 0.80, blue: 0.95)
+        case .sunset: return Color(red: 1.00, green: 0.55, blue: 0.25)
+        case .forest: return Color(red: 0.35, green: 0.85, blue: 0.55)
+        case .mono: return Color(red: 0.80, green: 0.82, blue: 0.88)
         }
     }
 
@@ -202,7 +220,7 @@ enum VoiceAssistantTheme: String, CaseIterable, Identifiable, Codable {
         }
     }
 
-    /// 底部动态条白色透明度（暗夜主题更亮、更醒目）。
+    /// 动画主体白色透明度（暗夜主题更亮、更醒目）。
     var barOpacity: Double {
         switch self {
         case .aurora: return 0.34

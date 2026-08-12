@@ -8,6 +8,8 @@ struct HomeTabView: View {
     private let settings: SettingsStore
     private let gatewayConnection: GatewayConnection?
     private let chatViewModel: ChatViewModel?
+    /// N0：主页空白处长按 → 工具页（由 App 层接线弹 ToolsView）。
+    private let onOpenTools: (() -> Void)?
 
     private let columns = [
         GridItem(.adaptive(minimum: 150), spacing: 12)
@@ -40,10 +42,16 @@ struct HomeTabView: View {
     /// RemindersCapability 读系统待办，或接日记组待办联动），就绪后替换。
     @State private var todayTodoCount = 0
 
-    init(settings: SettingsStore, gatewayConnection: GatewayConnection? = nil, chatViewModel: ChatViewModel? = nil) {
+    init(
+        settings: SettingsStore,
+        gatewayConnection: GatewayConnection? = nil,
+        chatViewModel: ChatViewModel? = nil,
+        onOpenTools: (() -> Void)? = nil
+    ) {
         self.settings = settings
         self.gatewayConnection = gatewayConnection
         self.chatViewModel = chatViewModel
+        self.onOpenTools = onOpenTools
         _careStore = State(initialValue: CareReminderStore())
         _habitStore = State(initialValue: HabitStore())
         _geofenceStore = State(initialValue: GeofenceStore())
@@ -82,6 +90,7 @@ struct HomeTabView: View {
                             careStore: careStore,
                             habitStore: habitStore,
                             geofenceStore: geofenceStore,
+                            expenseStore: expenseStore,
                             gatewayConnection: gatewayConnection,
                             badge: badgeText(for: kind)
                         )
@@ -113,6 +122,9 @@ struct HomeTabView: View {
                                 .padding(.horizontal, 16)
                         }
 
+                        MemoryHubCardView(settings: settings, gatewayConnection: gatewayConnection)
+                            .padding(.horizontal, 16)
+
                         todayOverviewSection
 
                         VStack(alignment: .leading, spacing: 12) {
@@ -134,6 +146,9 @@ struct HomeTabView: View {
                 .toolbarBackground(.hidden, for: .navigationBar)
                 .navigationTitle("主页")
                 .navigationBarTitleDisplayMode(.inline)
+                .onLongPressGesture(minimumDuration: 0.6) {
+                    onOpenTools?()
+                }
                 .onAppear {
                     configureAssistantIfNeeded()
                     configureOverviewIfNeeded()

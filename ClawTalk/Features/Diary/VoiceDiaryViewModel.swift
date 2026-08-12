@@ -1,6 +1,8 @@
 import Foundation
 import SwiftUI
 import UserNotifications
+import Photos
+import UIKit
 
 /// 语音日记录音状态。
 enum DiaryRecordingState: Equatable {
@@ -52,6 +54,8 @@ final class VoiceDiaryViewModel {
 
     /// 联动提示（如通知未授权导致提醒不响铃），显示在日记列表顶部；nil = 无提示
     private(set) var linkageNotice: String?
+    /// 配图提示（如相册未授权导致自动配图跳过），显示在日记列表顶部；nil = 无提示
+    private(set) var photoNotice: String?
 
     // MARK: - 记忆沉淀接口
 
@@ -143,6 +147,8 @@ final class VoiceDiaryViewModel {
                 state = .idle
                 // 第 4 层联动：待办 → 提醒；灵感 → 记忆中心档案
                 await performLinkage(for: entry)
+                // F3：条目生成后按日期相近自动从相册挑图配图（未授权时诚实提示，不阻塞）
+                autoAttachPhotoIfPossible(to: entry)
             } catch {
                 errorMessage = "转写失败：\(AppErrorText.localized(error.localizedDescription))"
                 state = .idle
@@ -157,6 +163,86 @@ final class VoiceDiaryViewModel {
         _ = audioCapture.stopRecording()
         state = .idle
         restoreWakeListening()
+    }
+
+    // MARK: - 配图（F3：日记自动配图）
+
+    /// 手动配图：压缩后落盘到 DiaryImageStore，并回写条目。
+    func attachImage(data: Data, to entry: DiaryEntry) {
+        guard let image = UIImage(data: data) else {
+            LogCollector.record(module: "日记配图", "图片数据无法解码")
+            return
+        }
+        let resized = image.resizedToFit(maxDimension: 1280)
+        guard let jpeg = resized.jpegData(compressionQuality: 0.8) else { return }
+        applyImage(data: jpeg, to: entry)
+    }
+
+    /// 移除配图：删文件并清空条目字段。
+    func removeImage(from entry: DiaryEntry) {
+        guard let index = entries.firstIndex(where: { $0.id == entry.id }) else { return }
+        if let filename = entries[index].imagePath {
+            DiaryImageStore.delete(filename: filename)
+            entries[index].imagePath = nil
+            persist()
+        }
+    }
+
+    /// 自动配图：相册已授权（或有限访问）时，取录音日 ±1 天内最近一张照片配图；
+    /// 未授权诚实提示；未决定时不打扰（条目上保留手动配图按钮）。
+    func autoAttachPhotoIfPossible(to entry: DiaryEntry) {
+        let status = PHPhotoLibrary.authorizationStatus(for: .readWrite)
+        switch status {
+        case .authorized, .limited:
+            break
+        case .denied, .restricted:
+            photoNotice = "相册权限未开启，未自动配图；可在条目上手动选择图片"
+            return
+        case .notDetermined:
+            return
+        @unknown default:
+            return
+        }
+
+        guard entry.imagePath == nil else { return }
+
+        let calendar = Calendar.current
+        let start = calendar.date(byAdding: .day, value: -1, to: entry.date) ?? entry.date
+        let end = calendar.date(byAdding: .day, value: 1, to: entry.date) ?? entry.date
+        let options = PHFetchOptions()
+        options.predicate = NSPredicate(
+            format: "creationDate >= %@ AND creationDate <= %@",
+            start as NSDate, end as NSDate
+        )
+        options.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: false)]
+        let fetch = PHAsset.fetchAssets(with: .image, options: options)
+        guard let asset = fetch.firstObject else { return }
+
+        let manager = PHImageManager.default()
+        let target = CGSize(width: 1280, height: 1280)
+        manager.requestImage(
+            for: asset,
+            targetSize: target,
+            contentMode: .aspectFit,
+            options: nil
+        ) { image, _ in
+            guard let image, let jpeg = image.jpegData(compressionQuality: 0.8) else { return }
+            Task { @MainActor in
+                self.applyImage(data: jpeg, to: entry)
+            }
+        }
+    }
+
+    /// 落盘 + 回写条目（主线程统一入口）。
+    private func applyImage(data: Data, to entry: DiaryEntry) {
+        guard let index = entries.firstIndex(where: { $0.id == entry.id }) else { return }
+        if let old = entries[index].imagePath {
+            DiaryImageStore.delete(filename: old)
+        }
+        if let filename = DiaryImageStore.save(data, for: entry.id) {
+            entries[index].imagePath = filename
+            persist()
+        }
     }
 
     // MARK: - 记忆沉淀

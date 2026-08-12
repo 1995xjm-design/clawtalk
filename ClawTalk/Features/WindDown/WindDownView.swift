@@ -33,6 +33,54 @@ struct WindDownView: View {
     @State private var speechTask: Task<Void, Never>?
     @State private var speechService: (any SpeechService)?
     @State private var audioPlayback = AudioPlaybackManager()
+    @StateObject private var noisePlayer = WindDownNoisePlayer()
+
+
+    // MARK: - 白噪音
+
+    private var noiseSection: some View {
+        Section {
+            Toggle(isOn: Binding(
+                get: { noisePlayer.isPlaying },
+                set: { newValue in
+                    if newValue {
+                        noisePlayer.start()
+                    } else {
+                        noisePlayer.stop()
+                    }
+                }
+            )) {
+                Label("播放白噪音", systemImage: "speaker.wave.2.fill")
+            }
+            .tint(.indigo)
+
+            if noisePlayer.isPlaying {
+                HStack {
+                    ForEach([15, 30, 60], id: \.self) { minutes in
+                        Button {
+                            noisePlayer.startTimed(minutes: minutes)
+                        } label: {
+                            Text(minutes == 15 ? "15 分钟" : (minutes == 30 ? "30 分钟" : "60 分钟"))
+                                .font(.caption.weight(.semibold))
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 6)
+                                .background(Color.indigo.opacity(0.14), in: Capsule())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                if let remaining = noisePlayer.remainingMinutes {
+                    Text("定时停止：还剩 \(remaining) 分钟")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        } header: {
+            Label("白噪音", systemImage: "moon.zzz.fill")
+        } footer: {
+            Text("纯代码生成的轻柔白噪音循环，可定时停止；与「说晚安」朗读互不影响。")
+        }
+    }
 
     // MARK: - 每日定时睡前提醒（可选）
 
@@ -89,6 +137,7 @@ struct WindDownView: View {
                 todaySection(content)
                 tomorrowSection(content)
                 breathingSection
+                noiseSection
                 nightlyReminderSection
                 skippedSection(content)
             }
@@ -103,7 +152,10 @@ struct WindDownView: View {
         }
         .task { await load() }
         .refreshable { await load() }
-        .onDisappear { stopSpeaking() }
+        .onDisappear {
+            stopSpeaking()
+            noisePlayer.stop()
+        }
     }
 
     // MARK: - 说晚安（TTS 温柔朗读）
@@ -337,6 +389,9 @@ struct WindDownView: View {
                 .foregroundStyle(.tertiary)
         }
     }
+
+
+
 
     // MARK: - 每日定时睡前提醒（可选）
 

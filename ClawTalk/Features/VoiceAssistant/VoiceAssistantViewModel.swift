@@ -27,6 +27,14 @@ enum VoiceAssistantError: LocalizedError {
     }
 }
 
+/// 语音大卡「记录」条目：一轮完整对讲（用户转写 + 智能体回复）。
+struct VoiceAssistantTranscriptEntry: Identifiable, Codable, Equatable {
+    var id: UUID
+    var date: Date
+    var userText: String
+    var replyText: String
+}
+
 /// 随身语音助手「连续对讲」会话管理器。
 ///
 /// 状态机（一轮连续对讲）：
@@ -124,6 +132,8 @@ final class VoiceAssistantViewModel {
         self.agentId = agentId ?? Self.resolveDefaultAgentID(settings: settings)
         self.chatViewModel = chatViewModel
         self.sceneMode = Self.loadSceneMode()
+        // 自建服务兜底：App 层未注入（主页独立创建路径）时按设置自建 STT/TTS，避免「只聆听不回复」。
+        bootstrapServicesIfNeeded()
     }
 
     /// 兼容旧调用方：仅传入 ChatViewModel（聊天页内嵌场景）。
@@ -136,6 +146,47 @@ final class VoiceAssistantViewModel {
     func configure(transcription: (any TranscriptionService)?, speech: any SpeechService) {
         transcriptionService = transcription
         speechService = speech
+    }
+
+    /// 按当前设置自建 STT/TTS（与 ClawTalkApp.configureServices 同逻辑）；已注入则不覆盖。
+    private func bootstrapServicesIfNeeded() {
+        guard speechService == nil || transcriptionService == nil else { return }
+        let secure = SecureStorage.shared
+        let s = settings.settings
+        if transcriptionService == nil {
+            let stt: (any TranscriptionService)?
+            if !s.voiceInputEnabled {
+                stt = nil
+            } else {
+                switch s.sttProvider {
+                case .apple:
+                    stt = AppleSTTService(language: s.whisperLanguage)
+                case .doubao:
+                    if let key = secure.doubaoAPIKey, !key.isEmpty {
+                        stt = DoubaoSTTService(apiKey: key, language: s.whisperLanguage)
+                    } else {
+                        stt = AppleSTTService(language: s.whisperLanguage)
+                    }
+                }
+            }
+            transcriptionService = stt
+        }
+        if speechService == nil {
+            let tts: any SpeechService = {
+                switch s.ttsProvider {
+                case .apple:
+                    return AppleTTSService(speed: s.ttsSpeed, pitch: s.ttsPitch)
+                case .doubao:
+                    if let key = secure.doubaoAPIKey, !key.isEmpty {
+                        return DoubaoTTSService(apiKey: key, voiceID: s.doubaoVoiceID)
+                    }
+                    return AppleTTSService(speed: s.ttsSpeed, pitch: s.ttsPitch)
+                case .edge:
+                    return EdgeTTSService(voiceID: s.edgeVoiceID, speed: s.ttsSpeed, pitch: s.ttsPitch)
+                }
+            }()
+            speechService = tts
+        }
     }
 
     /// 当前输入音量（VAD 平滑 RMS），供「说话」声波动画使用。
@@ -156,6 +207,57 @@ final class VoiceAssistantViewModel {
     var voiceAssistantShowTranscript: Bool {
         settings.settings.voiceAssistantShowTranscript
     }
+    // MARK: - 对话记录（大卡「记录」入口数据源）
+
+    /// 对话记录存储 key（UserDefaults 落盘，真实对讲流水，非假数据）。
+    private static let transcriptDefaultsKey = "clawtalk.voiceAssistant.transcript"
+    /// 记录条数上限：超出丢弃最旧，避免无限增长。
+    private static let transcriptMaxCount = 100
+
+    /// 历史对话记录（最新在前）。
+    var transcriptEntries: [VoiceAssistantTranscriptEntry] {
+        Self.loadTranscript()
+    }
+
+    /// 当前记录条数（供卡片角标）。
+    var transcriptCount: Int {
+        transcriptEntries.count
+    }
+
+    /// 追加一轮对话记录（转写与回复均非空才记）。
+    func recordTranscript(userText: String, replyText: String) {
+        let trimmedUser = userText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedReply = replyText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedUser.isEmpty, !trimmedReply.isEmpty else { return }
+        var entries = Self.loadTranscript()
+        entries.insert(
+            VoiceAssistantTranscriptEntry(id: UUID(), date: Date(), userText: trimmedUser, replyText: trimmedReply),
+            at: 0
+        )
+        if entries.count > Self.transcriptMaxCount {
+            entries = Array(entries.prefix(Self.transcriptMaxCount))
+        }
+        Self.saveTranscript(entries)
+    }
+
+    /// 清空全部对话记录。
+    func clearTranscript() {
+        UserDefaults.standard.removeObject(forKey: Self.transcriptDefaultsKey)
+    }
+
+    private static func loadTranscript() -> [VoiceAssistantTranscriptEntry] {
+        guard let data = UserDefaults.standard.data(forKey: transcriptDefaultsKey),
+              let entries = try? JSONDecoder().decode([VoiceAssistantTranscriptEntry].self, from: data) else {
+            return []
+        }
+        return entries
+    }
+
+    private static func saveTranscript(_ entries: [VoiceAssistantTranscriptEntry]) {
+        guard let data = try? JSONEncoder().encode(entries) else { return }
+        UserDefaults.standard.set(data, forKey: transcriptDefaultsKey)
+    }
+
 
     // MARK: - 生命周期
 
@@ -316,6 +418,9 @@ final class VoiceAssistantViewModel {
                     return
                 }
                 lastReply = reply
+
+                // 记录本轮对话（真实流水，供大卡「记录」入口查看）。
+                recordTranscript(userText: transcript, replyText: reply)
 
                 let finishedSpeaking = await speak(reply)
                 try Task.checkCancellation()

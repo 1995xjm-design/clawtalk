@@ -223,4 +223,5 @@ struct VoiceWakeSetParams: Decodable {
 extension Notification.Name {
     static let clawTalkWakeWordDetected = Notification.Name("ClawTalkWakeWordDetected")
     static let clawTalkWakeRestartRequested = Notification.Name("ClawTalkWakeRestartRequested")
+    static let clawTalkWatchTextReceived = Notification.Name("ClawTalkWatchTextReceived")
 }

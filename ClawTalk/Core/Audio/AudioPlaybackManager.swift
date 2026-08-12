@@ -125,15 +125,39 @@ final class AudioPlaybackManager: @unchecked Sendable {
 
     /// Wait until all enqueued audio has finished playing.
     func waitUntilFinished() async {
-        // 兜底超时：避免播放完成回调丢失/无音频入队时永久卡死（卡死会阻塞整个发送流程）
-        let deadline = Date().addingTimeInterval(60)
-        while Date() < deadline {
+        // 修复「朗读到一段就断」：旧实现带 60s 硬上限，长回复朗读超过 60s 会被强停截断。
+        // 现在不设时长上限，只在两种异常情况兜底退出，避免永久卡死：
+        //  ① 从未入队任何音频（TTS 失败/空结果）——等首包最多 20s；
+        //  ② 播放中 30s 无进展（播放器卡死/被系统中断）——退出等待。
+        let firstPacketDeadline = Date().addingTimeInterval(20)
+        var lastEnqueued = -1
+        var lastCompleted = -1
+        var lastProgress = Date()
+        while true {
+            var enqueued = 0
+            var completed = 0
+            var finished = false
             lock.lock()
-            let enqueued = buffersEnqueued
-            let done = streamingDone && enqueued > 0 && buffersCompleted >= enqueued
-            let empty = streamingDone && enqueued == 0
+            enqueued = buffersEnqueued
+            completed = buffersCompleted
+            finished = streamingDone
             lock.unlock()
-            if done || empty { break }
+
+            if finished {
+                if enqueued == 0 || completed >= enqueued { break }
+            }
+
+            if enqueued == 0 {
+                // 等首包（TTS 合成中）：20s 内应出现
+                if Date() >= firstPacketDeadline { break }
+            } else if enqueued != lastEnqueued || completed != lastCompleted {
+                lastEnqueued = enqueued
+                lastCompleted = completed
+                lastProgress = Date()
+            } else if Date().timeIntervalSince(lastProgress) >= 30 {
+                // 有音频但 30s 无进展：判定卡死，退出避免永久等待
+                break
+            }
             try? await Task.sleep(nanoseconds: 100_000_000)
         }
         // Small grace period for audio output to flush

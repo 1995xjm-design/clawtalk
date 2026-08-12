@@ -32,6 +32,36 @@ struct ReminderListView: View {
             } header: {
                 Text(isVoiceRecording ? "正在录音，松手识别" : "按住说话，松手识别")
             }
+            Section {
+                ForEach(CareReminderStore.defaultTemplates) { template in
+                    Button {
+                        applyTemplate(template)
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: templateIcon(template.category))
+                                .font(.system(size: 17, weight: .semibold))
+                                .foregroundStyle(Color.openClawRed)
+                                .frame(width: 28)
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(template.title)
+                                    .font(.body)
+                                    .foregroundStyle(.primary)
+                                Text("默认 \(timeText(template.defaultTime)) · \(template.repeatType.displayName)，点按可改时间")
+                                    .font(.caption2)
+                                    .foregroundStyle(.tertiary)
+                            }
+                            Spacer(minLength: 8)
+                            Image(systemName: "plus.circle.fill")
+                                .foregroundStyle(Color.openClawRed)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                }
+            } header: {
+                Label("快速添加模板", systemImage: "bolt.fill")
+            } footer: {
+                Text("久坐 / 喝水 / 用药三类常用提醒，点按预填内容与时间，可在弹窗里调整后保存。")
+            }
 
             if store.reminders.isEmpty {
                 ContentUnavailableView {
@@ -166,7 +196,25 @@ struct ReminderListView: View {
         )
     }
 
-    // MARK: - 按住说话新建提醒
+
+    // MARK: - 快速添加模板
+
+    private func applyTemplate(_ template: CareReminderTemplate) {
+        draftTitle = template.title
+        draftTime = template.defaultTime
+        draftCategory = template.category
+        draftRepeat = template.repeatType
+        showAdd = true
+    }
+
+    private func templateIcon(_ category: CareReminderCategory) -> String {
+        switch category {
+        case .sedentary: return "figure.walk"
+        case .water: return "drop.fill"
+        case .medication: return "pills.fill"
+        case .custom: return "bell.fill"
+        }
+    }    // MARK: - 按住说话新建提醒
 
     private var holdToTalkRow: some View {
         Button {} label: {

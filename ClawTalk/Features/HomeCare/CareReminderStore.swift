@@ -233,3 +233,52 @@ final class CareReminderStore {
         return (2...6).contains(weekday)
     }
 }
+/// 一键添加的默认提醒模板（久坐 / 喝水 / 用药）。
+/// 默认时间仅为预填，用户点选后可在新建弹窗里调整再保存。
+struct CareReminderTemplate: Identifiable, Equatable {
+    let id: String
+    let category: CareReminderCategory
+    /// 模板标题（预填到提醒标题）
+    let title: String
+    /// 默认时/分（24 小时制）
+    let hour: Int
+    let minute: Int
+    /// 默认重复方式
+    let repeatType: CareReminderRepeat
+
+    var defaultTime: Date {
+        let calendar = Calendar.current
+        let now = Date()
+        return calendar.date(bySettingHour: hour, minute: minute, second: 0, of: now) ?? now
+    }
+}
+
+extension CareReminderStore {
+    /// 三类内置默认模板：久坐（工作日上午 10 点）、喝水（每天上午 10:30）、用药（每天早 8 点）。
+    static let defaultTemplates: [CareReminderTemplate] = [
+        CareReminderTemplate(
+            id: "template-sedentary",
+            category: .sedentary,
+            title: "起身活动一下（久坐提醒）",
+            hour: 10,
+            minute: 0,
+            repeatType: .workday
+        ),
+        CareReminderTemplate(
+            id: "template-water",
+            category: .water,
+            title: "喝杯水",
+            hour: 10,
+            minute: 30,
+            repeatType: .daily
+        ),
+        CareReminderTemplate(
+            id: "template-medication",
+            category: .medication,
+            title: "记得服药",
+            hour: 8,
+            minute: 0,
+            repeatType: .daily
+        )
+    ]
+}

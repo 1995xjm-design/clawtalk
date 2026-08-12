@@ -1,4 +1,6 @@
 import SwiftUI
+import PhotosUI
+import UIKit
 
 /// 语音日记页：按日期分组的日记列表 + 底部按住说话录音按钮。
 /// - 按住底部按钮说话，松开后自动转写并分类（待办/灵感/日记）
@@ -95,11 +97,23 @@ struct VoiceDiaryView: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
+            if let notice = viewModel.photoNotice {
+                Section {
+                    Label(notice, systemImage: "photo.on.rectangle.angled")
+                        .font(.footnote)
+                        .foregroundStyle(.orange)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
             ForEach(dayKeys, id: \.self) { day in
                 let dayEntries = (grouped[day] ?? []).sorted { $0.createdAt > $1.createdAt }
                 Section(header: Text(Self.dayHeader(for: day))) {
                     ForEach(dayEntries) { entry in
-                        DiaryEntryRow(entry: entry)
+                        DiaryEntryRow(
+                            entry: entry,
+                            onAttachImage: { data in viewModel.attachImage(data: data, to: entry) },
+                            onRemoveImage: { viewModel.removeImage(from: entry) }
+                        )
                     }
                 }
             }
@@ -326,6 +340,11 @@ struct VoiceDiaryView: View {
 /// 日记列表行：类别徽章 + 时间 + 正文。
 private struct DiaryEntryRow: View {
     let entry: DiaryEntry
+    /// 手动配图回调（由页面承接保存）
+    var onAttachImage: ((Data) -> Void)?
+    /// 移除配图回调
+    var onRemoveImage: (() -> Void)?
+    @State private var selectedItem: PhotosPickerItem?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -349,6 +368,32 @@ private struct DiaryEntryRow: View {
             Text(entry.text)
                 .font(.body)
                 .fixedSize(horizontal: false, vertical: true)
+
+            // 配图区：有图显示缩略图 + 移除；无图显示手动配图按钮
+            if let imagePath = entry.imagePath {
+                DiaryImageThumb(filename: imagePath)
+                Button("移除配图", role: .destructive) {
+                    onRemoveImage?()
+                }
+                .font(.caption)
+            } else {
+                PhotosPicker(selection: $selectedItem, matching: .images) {
+                    Label("配图", systemImage: "photo.badge.plus")
+                        .font(.caption)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(Color(.systemGray5), in: Capsule())
+                }
+                .onChange(of: selectedItem) { _, newValue in
+                    guard let newValue else { return }
+                    Task {
+                        if let data = try? await newValue.loadTransferable(type: Data.self) {
+                            onAttachImage?(data)
+                        }
+                    }
+                    selectedItem = nil
+                }
+            }
         }
         .padding(.vertical, 4)
     }
@@ -358,5 +403,25 @@ private struct DiaryEntryRow: View {
         formatter.locale = Locale(identifier: "zh_CN")
         formatter.dateFormat = "HH:mm"
         return formatter.string(from: entry.createdAt)
+    }
+}
+
+/// 日记配图缩略图：从 Documents/DiaryImages 直接读取展示。
+private struct DiaryImageThumb: View {
+    let filename: String
+
+    var body: some View {
+        if let image = UIImage(contentsOfFile: DiaryImageStore.imageURL(filename: filename).path) {
+            Image(uiImage: image)
+                .resizable()
+                .scaledToFill()
+                .frame(maxWidth: .infinity)
+                .frame(height: 170)
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10)
+                        .stroke(Color(.systemGray4), lineWidth: 0.5)
+                )
+        }
     }
 }

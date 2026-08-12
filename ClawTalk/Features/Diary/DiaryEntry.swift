@@ -56,6 +56,9 @@ struct DiaryEntry: Identifiable, Codable, Equatable {
     var linkedReminderID: String?
     /// 灵感联动：是否已作为档案条目写入 MemoryProfileStore（nil/缺省 = 未沉淀）。
     var linkedToMemory: Bool?
+    /// 配图文件名（Documents/DiaryImages 下，见 DiaryImageStore）；nil = 未配图。
+    /// 可选字段：老数据解码缺省为 nil，兼容已有本地暂存。
+    var imagePath: String?
 
     init(
         id: UUID = UUID(),
@@ -64,7 +67,8 @@ struct DiaryEntry: Identifiable, Codable, Equatable {
         category: DiaryCategory,
         createdAt: Date = Date(),
         linkedReminderID: String? = nil,
-        linkedToMemory: Bool? = nil
+        linkedToMemory: Bool? = nil,
+        imagePath: String? = nil
     ) {
         self.id = id
         self.date = date
@@ -73,5 +77,6 @@ struct DiaryEntry: Identifiable, Codable, Equatable {
         self.createdAt = createdAt
         self.linkedReminderID = linkedReminderID
         self.linkedToMemory = linkedToMemory
+        self.imagePath = imagePath
     }
 }

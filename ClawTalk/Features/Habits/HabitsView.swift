@@ -35,8 +35,13 @@ struct HabitsView: View {
         List {
             Section {
                 holdToTalkRow
+
             } header: {
                 Text(isVoiceRecording ? "正在录音，松手识别" : "按住说话打卡，松手识别")
+            }
+
+            if !store.habits.isEmpty {
+                monthSection
             }
 
             if store.habits.isEmpty {
@@ -155,13 +160,16 @@ struct HabitsView: View {
     }
 
     private func subtitle(for habit: Habit) -> String {
+        let base: String
         if !habit.isDue(on: Date()) {
-            return "\(habit.repeatSummary) · 今日休息"
+            base = "\(habit.repeatSummary) · 今日休息"
+        } else if habit.isChecked(on: Date()) {
+            base = "\(habit.repeatSummary) · 今日已打卡"
+        } else {
+            base = "\(habit.repeatSummary) · 今日待打卡"
         }
-        if habit.isChecked(on: Date()) {
-            return "\(habit.repeatSummary) · 今日已打卡"
-        }
-        return "\(habit.repeatSummary) · 今日待打卡"
+        let stats = store.monthStats(for: habit)
+        return "\(base) · 本月 \(stats.checked)/\(stats.due) 天"
     }
 
     @ViewBuilder
@@ -191,7 +199,26 @@ struct HabitsView: View {
         }
     }
 
-    // MARK: - 按住说话打卡
+
+    // MARK: - 本月坚持
+
+    private var monthSection: some View {
+        let overview = store.monthOverview()
+        return Section {
+            LabeledContent("本月打卡", value: "\(overview.checked) / \(overview.due) 天")
+            LabeledContent("完成率", value: percentText(overview))
+        } header: {
+            Label("本月坚持", systemImage: "calendar")
+        } footer: {
+            Text("按今天为止的应打卡日统计（休息日不计入）；今天的进度会实时变化。")
+        }
+    }
+
+    private func percentText(_ overview: (checked: Int, due: Int)) -> String {
+        guard overview.due > 0 else { return "—" }
+        let pct = Int((Double(overview.checked) / Double(overview.due) * 100).rounded())
+        return "\(pct)%"
+    }    // MARK: - 按住说话打卡
 
     private var holdToTalkRow: some View {
         Button {} label: {

@@ -327,6 +327,7 @@ struct ChatView: View {
                 voiceInputEnabled: settingsStore.settings.voiceInputEnabled,
                 hapticsEnabled: settingsStore.settings.hapticsEnabled,
                 isSending: viewModel.state == .transcribing || viewModel.state == .thinking,
+                audioLevel: viewModel.audioLevel,
                 isConversationMode: viewModel.isConversationMode,
                 onToggleVoiceMode: {},
                 onSendText: {

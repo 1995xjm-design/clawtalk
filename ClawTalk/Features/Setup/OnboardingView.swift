@@ -10,6 +10,8 @@ struct OnboardingView: View {
     @State private var gatewayToken = ""
     @State private var connectionState: ConnectionTestState = .idle
     @State private var showScanner = false
+    @State private var scanNotice: String?
+    @State private var rescanToken = 0
     @State private var showManual = false
     @State private var copiedCommand = false
 
@@ -162,6 +164,7 @@ struct OnboardingView: View {
                 .padding(.horizontal, 24)
 
             primaryButton("扫描二维码") {
+                scanNotice = nil
                 showScanner = true
             }
             .padding(.top, 4)
@@ -230,7 +233,9 @@ struct OnboardingView: View {
                 },
                 onCancel: {
                     showScanner = false
-                }
+                },
+                scanNotice: scanNotice,
+                rescanToken: rescanToken
             )
             .ignoresSafeArea()
         }
@@ -354,11 +359,15 @@ struct OnboardingView: View {
     }
 
     private func handleScannedCode(_ raw: String) {
-        showScanner = false
         guard let code = GatewaySetupCode.parse(raw) else {
+            // 无效配对码：不退出扫码页，显示提示并复位继续扫码
+            rescanToken += 1
+            scanNotice = "无法识别配对码，请重新扫描"
             connectionState = .failed("无法识别配对码，请重新扫码")
             return
         }
+        scanNotice = nil
+        showScanner = false
         applySetupCode(code)
     }
 

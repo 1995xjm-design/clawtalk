@@ -238,7 +238,8 @@ struct DiagnosticsView: View {
 
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyyMMdd-HHmmss"
-        let name = "clawtalk-logs-\(formatter.string(from: Date())).txt"
+        let version = LogCollector.currentVersion.isEmpty ? "" : "\(LogCollector.currentVersion)-"
+            let name = "clawtalk-logs-\(version)\(formatter.string(from: Date())).txt"
         let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(name)
         let text = logText.isEmpty ? "（暂无日志）" : logText
         do {

@@ -384,6 +384,9 @@ final class ChatViewModel {
         audioCapture.pauseListening()
         state = .transcribing
 
+        // 打断正在进行的回复：取消旧发送任务，避免新旧任务并发写消息列表
+        sendTask?.cancel()
+
         sendTask = Task {
             do {
                 guard let stt = transcriptionService else {
@@ -928,8 +931,14 @@ final class ChatViewModel {
         speechService?.stop()
         audioPlayback.stop()
         if state == .speaking {
-            // Keep streaming text, just stop audio
-            state = .streaming
+            if isConversationMode {
+                // 免提对话：手动打断朗读后立即回到聆听，等待用户下一句
+                audioCapture.resumeListening()
+                state = .recording
+            } else {
+                // 普通聊天：保持文本流式输出，只停朗读
+                state = .streaming
+            }
         }
     }
 

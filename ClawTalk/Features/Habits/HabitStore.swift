@@ -270,6 +270,45 @@ final class HabitStore {
         careReminderStore.update(reminder)
     }
 
+
+    // MARK: - 月度坚持
+
+    /// 单个习惯本月打卡天数与应打卡天数（应打卡 = 到今天为止 repeatDays 命中的天数）。
+    func monthStats(for habit: Habit, asOf date: Date = Date()) -> (checked: Int, due: Int) {
+        let calendar = Calendar.current
+        guard let monthStart = calendar.date(from: calendar.dateComponents([.year, .month], from: date)),
+              let monthRange = calendar.range(of: .day, in: .month, for: monthStart),
+              let nextMonth = calendar.date(byAdding: .month, value: 1, to: monthStart) else {
+            return (0, 0)
+        }
+        let checked = habit.checkIns.keys.filter { key in
+            guard let day = Self.parseCheckInKey(key) else { return false }
+            return day >= monthStart && day < nextMonth
+        }.count
+        var due = 0
+        for offset in 0..<monthRange.count {
+            guard let day = calendar.date(byAdding: .day, value: offset, to: monthStart) else { break }
+            if day > date { break }
+            if habit.isDue(on: day) { due += 1 }
+        }
+        return (checked, due)
+    }
+
+    /// 全部习惯本月汇总（打卡天数合计 / 应打卡天天数合计）。
+    func monthOverview(asOf date: Date = Date()) -> (checked: Int, due: Int) {
+        habits.reduce((0, 0)) { partial, habit in
+            let stats = monthStats(for: habit, asOf: date)
+            return (partial.checked + stats.checked, partial.due + stats.due)
+        }
+    }
+
+    private static func parseCheckInKey(_ key: String) -> Date? {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "yyyy-MM-dd"
+        formatter.timeZone = .current
+        return formatter.date(from: key)
+    }
     // MARK: - 持久化
 
     private func load() {
