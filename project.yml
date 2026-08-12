@@ -46,8 +46,8 @@ targets:
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         PRODUCT_BUNDLE_IDENTIFIER: app.lgm.7517
         PROVISIONING_PROFILE_SPECIFIER: 7517
-        MARKETING_VERSION: "1.1.0"
-        CURRENT_PROJECT_VERSION: 2
+        MARKETING_VERSION: "1.2.0"
+        CURRENT_PROJECT_VERSION: 3
         TARGETED_DEVICE_FAMILY: "1,2"
     info:
       path: ClawTalk/Resources/Info.plist
@@ -197,8 +197,8 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: app.lgm.7517.watchapp
         PROVISIONING_PROFILE_SPECIFIER: 7517ext
         TARGETED_DEVICE_FAMILY: "4"
-        MARKETING_VERSION: "1.1.0"
-        CURRENT_PROJECT_VERSION: 2
+        MARKETING_VERSION: "1.2.0"
+        CURRENT_PROJECT_VERSION: 3
     info:
       path: ClawTalkWatchApp/Resources/Info.plist
       properties:
@@ -221,8 +221,8 @@ targets:
         PROVISIONING_PROFILE_SPECIFIER: 7517ext
         CODE_SIGN_ENTITLEMENTS: ClawTalkWatchApp/ClawTalkWatch.entitlements
         TARGETED_DEVICE_FAMILY: "4"
-        MARKETING_VERSION: "1.1.0"
-        CURRENT_PROJECT_VERSION: 2
+        MARKETING_VERSION: "1.2.0"
+        CURRENT_PROJECT_VERSION: 3
     info:
       path: ClawTalkWatchApp/Resources/Extension-Info.plist
       properties:
