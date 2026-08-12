@@ -316,24 +316,36 @@ struct FileTransferChannelView: View {
     }
 
     private var chatFileList: some View {
-        ScrollView {
-            LazyVStack(spacing: 10) {
+        List {
+            Section {
                 uploadBar
+                    .listRowInsets(EdgeInsets(top: 8, leading: 12, bottom: 8, trailing: 12))
+                    .listRowBackground(Color.clear)
+            }
 
-                Text("电脑端 OpenClaw 成果文件（media/outbound）")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 5)
-                    .background(Color(.systemGray5))
-                    .clipShape(Capsule())
-                    .padding(.top, 8)
+            Section {
+                HStack {
+                    Spacer()
+                    Text("电脑端 OpenClaw 成果文件（media/outbound）")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(Color(.systemGray5))
+                        .clipShape(Capsule())
+                    Spacer()
+                }
+                .listRowBackground(Color.clear)
+                .listRowInsets(EdgeInsets(top: 8, leading: 0, bottom: 4, trailing: 0))
+            }
 
-                if viewModel.remoteFiles.isEmpty {
+            if viewModel.remoteFiles.isEmpty {
+                Section {
                     if viewModel.isLoadingFiles {
                         ProgressView("正在加载文件列表…")
                             .frame(maxWidth: .infinity)
                             .padding(.top, 60)
+                            .padding(.bottom, 60)
                     } else {
                         VStack(spacing: 10) {
                             Image(systemName: "tray")
@@ -348,26 +360,75 @@ struct FileTransferChannelView: View {
                         }
                         .frame(maxWidth: .infinity)
                         .padding(.top, 60)
+                        .padding(.bottom, 60)
                     }
-                } else {
+                }
+                .listRowBackground(Color.clear)
+            } else {
+                Section {
                     ForEach(viewModel.remoteFiles) { file in
                         remoteFileCard(file)
+                            .listRowInsets(EdgeInsets(top: 6, leading: 12, bottom: 6, trailing: 12))
+                            .listRowBackground(Color.clear)
+                            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                                if let local = viewModel.localFile(named: file.name) {
+                                    Button(role: .destructive) {
+                                        viewModel.deleteDownloadedFile(local)
+                                    } label: {
+                                        Label("删除", systemImage: "trash")
+                                    }
+                                } else {
+                                    Button {
+                                        startDownload(file)
+                                    } label: {
+                                        Label("下载", systemImage: "arrow.down")
+                                    }
+                                    .tint(.openClawRed)
+                                }
+                            }
+                            .swipeActions(edge: .leading, allowsFullSwipe: false) {
+                                if let local = viewModel.localFile(named: file.name) {
+                                    ShareLink(item: local.url) {
+                                        Label("分享", systemImage: "square.and.arrow.up")
+                                    }
+                                    .tint(.green)
+                                }
+                            }
                     }
+                }
+                .listRowBackground(Color.clear)
 
-                    if !orphanLocalFiles.isEmpty {
+                if !orphanLocalFiles.isEmpty {
+                    Section {
                         Text("已下载（电脑端已删除）")
                             .font(.caption2)
                             .foregroundStyle(.secondary)
-                            .padding(.top, 8)
+                            .listRowBackground(Color.clear)
                         ForEach(orphanLocalFiles) { file in
                             localFileCard(file)
+                                .listRowInsets(EdgeInsets(top: 6, leading: 12, bottom: 6, trailing: 12))
+                                .listRowBackground(Color.clear)
+                                .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                                    Button(role: .destructive) {
+                                        viewModel.deleteDownloadedFile(file)
+                                    } label: {
+                                        Label("删除", systemImage: "trash")
+                                    }
+                                }
+                                .swipeActions(edge: .leading, allowsFullSwipe: false) {
+                                    ShareLink(item: file.url) {
+                                        Label("分享", systemImage: "square.and.arrow.up")
+                                    }
+                                    .tint(.green)
+                                }
                         }
                     }
+                    .listRowBackground(Color.clear)
                 }
             }
-            .padding(.horizontal, 12)
-            .padding(.bottom, 16)
         }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
         .overlay {
             if let name = viewModel.downloadingFileName {
                 VStack(spacing: 10) {

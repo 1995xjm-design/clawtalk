@@ -53,6 +53,21 @@ struct SyncChatView: View {
         }
     }
 
+    /// 同步消息内容渲染防护：超长文本截断、剥离可能导致 MarkdownUI 崩溃的控制字符。
+    static func sanitizedContent(_ raw: String) -> String {
+        var text = raw
+        // 控制字符（除 \n \t）剥离：部分桥写入的内容可能携带异常控制符
+        text = text.unicodeScalars.filter { scalar in
+            let c = scalar.value
+            if c == 10 || c == 9 || c == 13 { return true } // LF / TAB / CR
+            return c >= 32
+        }.map(String.init).joined()
+        // 超长单条（> 20000 字符）截断，避免极端内容导致渲染/内存问题
+        if text.count > 20000 {
+            text = String(text.prefix(20000)) + "\n\n…（内容过长已截断）"
+        }
+        return text
+    }
     // MARK: - 导航栏
 
     private var navBar: some View {
@@ -411,7 +426,9 @@ private struct SyncBubble: View {
                 .font(.body)
                 .foregroundStyle(.white)
         } else {
-            Markdown(message.content)
+            // 防御：超长/畸形内容截断后再交给 MarkdownUI，避免极端内容触发渲染崩溃
+            let safeContent = SyncChatView.sanitizedContent(message.content)
+            Markdown(safeContent)
                 .markdownTheme(.openClaw)
                 .textSelection(.enabled)
         }

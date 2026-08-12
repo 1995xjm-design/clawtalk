@@ -77,8 +77,11 @@ final class AudioPlaybackManager: @unchecked Sendable {
             self.buffersCompleted += 1
             self.lock.unlock()
         }
-        // 首个 buffer 到达即播放（首音快）；后续靠服务端稳定帧流保证连续
-        if shouldStart {
+        // 首个 buffer 到达即播放（首音快）。
+        // TTS 合成慢于播放时，播放队列可能出现空窗导致 AVAudioPlayerNode 停止，
+        // 之后入队的 buffer 不会自动续播 → 表现为「朗读到一段就断」。
+        // 因此每次入队都检查：已不在播放则立即恢复。
+        if shouldStart || !player.isPlaying {
             player.play()
         }
     }

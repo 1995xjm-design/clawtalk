@@ -138,6 +138,15 @@ final class VoiceAssistantViewModel {
         errorMessage = nil
         interruptedDuringSpeaking = false
 
+        // 必须先启动录音引擎（麦克风采集 + VAD），再 enableVAD 接管；
+        // 漏掉 startRecording 会导致引擎不跑：听不到说话、打断检测也失效。
+        do {
+            try audioCapture.startRecording()
+        } catch {
+            errorMessage = "麦克风访问失败：\(AppErrorText.localized(error.localizedDescription))"
+            return
+        }
+
         audioCapture.enableVAD(
             onUtterance: { [weak self] samples in
                 Task { @MainActor in
