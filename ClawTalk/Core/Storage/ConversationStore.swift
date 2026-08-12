@@ -67,7 +67,7 @@ final class ConversationStore {
         }
         do {
             let data = try encoder.encode(completed)
-            try data.write(to: fileURL(for: channelId), options: [.atomic, .completeFileProtection])
+            try data.write(to: fileURL(for: channelId), options: [.atomic, .completeFileProtectionUnlessOpen])
         } catch {
             Logger(subsystem: "com.openclaw.clawtalk", category: "storage")
                 .error("Failed to save conversation \(channelId): \(error.localizedDescription)")

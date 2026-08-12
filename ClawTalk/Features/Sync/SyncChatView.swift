@@ -167,10 +167,10 @@ struct SyncChatView: View {
             // 进入界面、布局稳定后定位到最新消息
             .onAppear { scrollToBottom(using: proxy) }
             // 轮询新增消息后滚到底部
-            .onChange(of: viewModel.messages.count) {
+            .onChange(of: viewModel.messages.count) { _, _ in
                 scrollToBottom(using: proxy)
             }
-            .onChange(of: viewModel.messages.last?.content) {
+            .onChange(of: viewModel.messages.last?.content) { _, _ in
                 scrollToBottom(using: proxy)
             }
             // 查找聊天内容：点结果后滚动定位到对应消息
