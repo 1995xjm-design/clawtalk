@@ -863,7 +863,7 @@ private var connectionSection: some View {
                 if isPreviewing { isPreviewing = false }
             }
         default:
-            // ?? TTS ?? PCM ??
+            // 非 Apple TTS 走 PCM 播放
             let playback = AudioPlaybackManager()
             previewPlayback = playback
 

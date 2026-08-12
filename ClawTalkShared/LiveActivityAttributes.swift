@@ -6,7 +6,7 @@ import Foundation
 struct ClawTalkLiveActivityAttributes: ActivityAttributes {
     struct ContentState: Codable, Hashable {
         var statusText: String
-        /// ?????LiveActivityStyle.rawValue????????????? nil?
+        /// 卡片风格（LiveActivityStyle.rawValue）；旧活动实例无此字段时为 nil。
         var style: String?
     }
 

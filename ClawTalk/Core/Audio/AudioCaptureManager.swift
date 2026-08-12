@@ -137,15 +137,15 @@ final class AudioCaptureManager {
             log.error("voice processing unavailable: \(error.localizedDescription, privacy: .public)")
             LogCollector.record(module: "语音对话", "语音处理（回声消除/降噪）不可用：\(AppErrorText.localized(error.localizedDescription))")
         }
-var format = inputNode.outputFormat(forBus: 0)
+        var format = inputNode.outputFormat(forBus: 0)
 
-        // SIGABRT ???2026-08-12 ?? IsFormatSampleRateAndChannelCountValid false??
-        // ????/??/??????? inputNode ? outputFormat ??????????
-        // ?? installTap + engine.start() ??? coreaudio NSException ???
-        // ????????? 44.1kHz ??????tap ?????????
+        // SIGABRT 防护（2026-08-12 日志 IsFormatSampleRateAndChannelCountValid false）：
+        // 部分设备/蓝牙/无输入权限场景 inputNode 的 outputFormat 采样率或声道数无效，
+        // 直接 installTap + engine.start() 会触发 coreaudio NSException 崩溃；
+        // 校验不通过时用标准 44.1kHz 单声道兜底（tap 时引擎自动转换）。
         if format.sampleRate <= 0 || format.channelCount == 0 {
             log.error("invalid input format sampleRate=\(format.sampleRate) channels=\(format.channelCount); fallback 44.1kHz mono")
-            LogCollector.record(module: "????", "????????????\(format.sampleRate)/??\(format.channelCount)??????????")
+            LogCollector.record(module: "语音对话", "录音输入格式异常（采样率\(format.sampleRate)/声道\(format.channelCount)），已用标准格式兜底")
             if let fallback = AVAudioFormat(standardFormatWithSampleRate: 44100, channels: 1) {
                 format = fallback
             }

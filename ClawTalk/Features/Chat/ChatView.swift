@@ -345,10 +345,10 @@ struct ChatView: View {
                 onHoldTranscribe: { viewModel.stopVoiceMessageRecordingAndSendTextOnly() },
                 onAddAttachment: { showAttachmentMenu = true }
             )
-            .confirmationDialog("????", isPresented: $showAttachmentMenu, titleVisibility: .visible) {
-                Button("??") { showPhotosPicker = true }
-                Button("??") { showFileImporter = true }
-                Button("??", role: .cancel) {}
+            .confirmationDialog("添加附件", isPresented: $showAttachmentMenu, titleVisibility: .visible) {
+                Button("照片") { showPhotosPicker = true }
+                Button("文件") { showFileImporter = true }
+                Button("取消", role: .cancel) {}
             }
             .fileImporter(isPresented: $showFileImporter, allowedContentTypes: Self.allowedFileTypes) { result in
                 switch result {
@@ -358,7 +358,7 @@ struct ChatView: View {
                     break
                 }
             }
-            .alert("????", isPresented: Binding(get: { fileAttachmentError != nil }, set: { if !$0 { fileAttachmentError = nil } })) {
+            .alert("附件提示", isPresented: Binding(get: { fileAttachmentError != nil }, set: { if !$0 { fileAttachmentError = nil } })) {
                 Button("?", role: .cancel) {}
             } message: {
                 Text(fileAttachmentError ?? "")
@@ -502,19 +502,19 @@ struct ChatView: View {
         attachedImages = newImages
     }
 
-    /// A3 ????????????? + PDF??? /v1/responses input_file ??????5MB??
+    /// A3 附件文件类型白名单：文本类 + PDF（网关 /v1/responses input_file 支持范围，≤5MB）。
     private static let allowedFileTypes: [UTType] = [
         .plainText, .delimitedText, .commaSeparatedText, .json, .html, .xml, .pdf, .markdown
     ]
 
     private func loadPickedFile(from url: URL) {
         guard let data = try? Data(contentsOf: url) else {
-            LogCollector.record(module: "??", "?????????\(url.lastPathComponent)")
-            fileAttachmentError = "??????????"
+            LogCollector.record(module: "附件", "读取所选文件失败：\(url.lastPathComponent)")
+            fileAttachmentError = "读取文件失败，请重试"
             return
         }
         guard data.count <= 5 * 1024 * 1024 else {
-            fileAttachmentError = "???? 5MB ??"
+            fileAttachmentError = "文件超过 5MB 限制"
             return
         }
         let mime: String
@@ -526,7 +526,7 @@ struct ChatView: View {
         case "json": mime = "application/json"
         case "pdf": mime = "application/pdf"
         default:
-            fileAttachmentError = "?????????? txt/md/html/csv/json/pdf?"
+            fileAttachmentError = "暂不支持该类型（支持 txt/md/html/csv/json/pdf）"
             return
         }
         attachedFile = ChatFileAttachment(filename: url.lastPathComponent, mimeType: mime, data: data)

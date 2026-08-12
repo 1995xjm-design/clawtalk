@@ -78,12 +78,12 @@ struct SyncChatView: View {
 
     private func loadSyncFile(from url: URL) {
         guard let data = try? Data(contentsOf: url) else {
-            LogCollector.record(module: "??", "???????????\(url.lastPathComponent)")
-            syncFileAttachmentError = "??????????"
+            LogCollector.record(module: "附件", "同步聊天读取文件失败：\(url.lastPathComponent)")
+            syncFileAttachmentError = "读取文件失败，请重试"
             return
         }
         guard data.count <= 5 * 1024 * 1024 else {
-            syncFileAttachmentError = "???? 5MB ??"
+            syncFileAttachmentError = "文件超过 5MB 限制"
             return
         }
         let mime: String
@@ -95,7 +95,7 @@ struct SyncChatView: View {
         case "json": mime = "application/json"
         case "pdf": mime = "application/pdf"
         default:
-            syncFileAttachmentError = "?????????? txt/md/html/csv/json/pdf?"
+            syncFileAttachmentError = "暂不支持该类型（支持 txt/md/html/csv/json/pdf）"
             return
         }
         attachedSyncFile = ChatFileAttachment(filename: url.lastPathComponent, mimeType: mime, data: data)
@@ -381,10 +381,10 @@ struct SyncChatView: View {
                 },
                 onAddAttachment: { showSyncAttachmentMenu = true }
             )
-            .confirmationDialog("????", isPresented: $showSyncAttachmentMenu, titleVisibility: .visible) {
-                Button("??") { showSyncPhotosPicker = true }
-                Button("??") { showSyncFileImporter = true }
-                Button("??", role: .cancel) {}
+            .confirmationDialog("添加附件", isPresented: $showSyncAttachmentMenu, titleVisibility: .visible) {
+                Button("照片") { showSyncPhotosPicker = true }
+                Button("文件") { showSyncFileImporter = true }
+                Button("取消", role: .cancel) {}
             }
             .fileImporter(isPresented: $showSyncFileImporter, allowedContentTypes: SyncChatView.allowedFileTypes) { result in
                 switch result {
@@ -394,8 +394,8 @@ struct SyncChatView: View {
                     break
                 }
             }
-            .alert("????", isPresented: Binding(get: { syncFileAttachmentError != nil }, set: { if !$0 { syncFileAttachmentError = nil } })) {
-                Button("?", role: .cancel) {}
+            .alert("附件提示", isPresented: Binding(get: { syncFileAttachmentError != nil }, set: { if !$0 { syncFileAttachmentError = nil } })) {
+                Button("好", role: .cancel) {}
             } message: {
                 Text(syncFileAttachmentError ?? "")
             }

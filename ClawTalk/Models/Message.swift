@@ -5,7 +5,7 @@ enum MessageRole: String, Codable {
     case assistant
 }
 
-/// ????????? B???? /v1/responses input_file????/PDF ?5MB??
+/// 聊天文件附件（方案 B：走网关 /v1/responses input_file，文本类/PDF ≤5MB）。
 struct ChatFileAttachment: Codable, Equatable {
     let filename: String
     let mimeType: String

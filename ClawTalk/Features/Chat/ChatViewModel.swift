@@ -1190,7 +1190,7 @@ final class TTSConcurrency {
                 await sequencer.finish(seq: seq, playback: playback)
             } catch {
                 LogCollector.record(module: "朗读", "TTS 合成失败（重试前）：\(AppErrorText.localized(error.localizedDescription))")
-                // ?? TTS ????????????????"???????"
+                // 第三方 TTS 重试一次（重试前短暂等待，避免瞬时失败）
                 if !Task.isCancelled {
                     try? await Task.sleep(nanoseconds: 150_000_000)
                     if Task.isCancelled { return }
@@ -1202,7 +1202,7 @@ final class TTSConcurrency {
                         await sequencer.finish(seq: seq, playback: playback)
                     } catch {
                         LogCollector.record(module: "朗读", "TTS 合成失败（重试后仍失败）：\(AppErrorText.localized(error.localizedDescription))")
-                        // ??????????
+                        // 重试后仍失败：正常收尾，不中断朗读流程
                         await sequencer.finish(seq: seq, playback: playback)
                     }
                 } else {
