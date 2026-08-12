@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import UIKit
 
 /// 语音助手四种会话状态（对应卡片四种动画）。
 enum VoiceAssistantState: Equatable {
@@ -40,8 +41,13 @@ enum VoiceAssistantError: LocalizedError {
 /// 说明：
 /// - 「3 秒无新声音自动结束说话」由 AudioCaptureManager 的 VAD 实现
 ///   （内部 silenceDuration=0.5s + 最少 12000 采样），本类直接复用，不重复造轮子。
-/// - 朗读（TTS）由本类自己驱动（场景音量/打断需要），
-///   智能体发送复用 ChatViewModel 公开 API（详见 requestAgentReply 的 TODO）。
+/// - 朗读（TTS）由本类自己驱动（场景音量/打断需要）；
+/// - 发送链路双模式：
+///   - 独立路径（默认）：本类自己持有 OpenClawClient，走网关流式发送
+///     （OpenClawClient.stream + model "openclaw:<agentId>"，与 SyncChatViewModel.send 同链路），
+///     主页不依赖聊天页，没进过聊天也能用；
+///   - 兼容路径（宿主注入了 chatViewModel）：复用 ChatViewModel 的 sendText + messages 轮询，
+///     并持续抑制其自带朗读（详见 requestAgentReply）。
 @Observable
 @MainActor
 final class VoiceAssistantViewModel {
@@ -60,8 +66,9 @@ final class VoiceAssistantViewModel {
         }
     }
 
-    /// 当前场景模式：接线方（副主页/设置页）直接赋值；
-    /// 持久化字段见 VoiceSceneMode.swift 底部 TODO（需主智能体在 AppSettings 加）。
+    /// 当前场景模式：卡片右上角按钮循环切换（normal/driving/night）。
+    /// 本类用 UserDefaults 兜底持久化（voiceAssistant.sceneMode）；
+    /// 若后续主智能体在 AppSettings 增加 voiceAssistantScene 字段，可改由设置存储承载。
     var sceneMode: VoiceSceneMode = .normal
 
     /// 已完成轮数（被打断不计入）。
@@ -83,13 +90,46 @@ final class VoiceAssistantViewModel {
     private let audioPlayback = AudioPlaybackManager()
     private var transcriptionService: (any TranscriptionService)?
     private var speechService: (any SpeechService)?
-    private let chatViewModel: ChatViewModel
+    /// 设置存储：独立发送时读取网关地址/令牌/API 模式。
+    private let settings: SettingsStore
+    /// 兼容路径：宿主（主页/聊天页）可注入 ChatViewModel，走原有 sendText + 轮询发送。
+    private var chatViewModel: ChatViewModel?
+    /// 网关连接（可选）：当前独立发送走 OpenClawClient HTTP 流式，与 SyncChatViewModel.send
+    /// 一致；保留该引用供后续 WebSocket 直连扩展。
+    private let gatewayConnection: GatewayConnection?
+    /// 目标智能体 ID：默认 "main"，或 settings 里的默认频道（唤醒频道/首个频道）的 agentId。
+    private let agentId: String
+    /// 独立发送链路持有的 OpenClawClient（与 SyncChatViewModel 同模式）。
+    private let openClaw = OpenClawClient()
+    /// 连续对讲内的上下文历史（独立路径；每轮结束后保留，最多 20 条）。
+    private var conversationHistory: [Message] = []
 
     private var sessionTask: Task<Void, Never>?
     private var interruptedDuringSpeaking = false
 
-    init(chatViewModel: ChatViewModel) {
+    /// 主初始化：不依赖 ChatViewModel，语音助手可独立于聊天页工作。
+    /// - Parameters:
+    ///   - settings: 设置存储（网关地址/令牌/API 模式/STT 语言/TTS 参数）
+    ///   - gatewayConnection: 可选网关连接（保留给后续 WebSocket 直连）
+    ///   - agentId: 目标智能体 ID；传 nil 时取 settings 里的默认频道，兜底 "main"
+    ///   - chatViewModel: 兼容路径：传入时复用原 sendText + 轮询发送链路
+    init(
+        settings: SettingsStore,
+        gatewayConnection: GatewayConnection? = nil,
+        agentId: String? = nil,
+        chatViewModel: ChatViewModel? = nil
+    ) {
+        self.settings = settings
+        self.gatewayConnection = gatewayConnection
+        self.agentId = agentId ?? Self.resolveDefaultAgentID(settings: settings)
         self.chatViewModel = chatViewModel
+        self.sceneMode = Self.loadSceneMode()
+    }
+
+    /// 兼容旧调用方：仅传入 ChatViewModel（聊天页内嵌场景）。
+    @available(*, deprecated, message: "请改用 init(settings:gatewayConnection:agentId:chatViewModel:)")
+    convenience init(chatViewModel: ChatViewModel) {
+        self.init(settings: SettingsStore(), chatViewModel: chatViewModel)
     }
 
     /// 由 App 层接线（与 ChatViewModel.configure 同模式），传入 STT/TTS 服务。
@@ -125,7 +165,7 @@ final class VoiceAssistantViewModel {
             errorMessage = "语音转文字服务未配置，请在设置中开启语音输入。"
             return
         }
-        guard !chatViewModel.isConversationMode else {
+        if let chatViewModel, chatViewModel.isConversationMode {
             errorMessage = "聊天页免提对话正在使用麦克风，请先退出。"
             return
         }
@@ -133,6 +173,7 @@ final class VoiceAssistantViewModel {
         VoiceWakeCapability.shared.stopListening()
 
         roundCount = 0
+        conversationHistory.removeAll()
         lastTranscript = ""
         lastReply = ""
         errorMessage = nil
@@ -166,9 +207,7 @@ final class VoiceAssistantViewModel {
             }
         )
         state = .listening
-
-        // TODO(主智能体)：sceneMode.keepsScreenAwake（开车/夜间）时建议接线处设置
-        // `UIApplication.shared.isIdleTimerDisabled = true`，stopConversation 里恢复 false。
+        applyScreenAwakePolicy()
     }
 
     /// 结束连续对讲：停录音、停朗读、取消任务。
@@ -179,11 +218,58 @@ final class VoiceAssistantViewModel {
         speechService?.stop()
         audioPlayback.stop()
         state = .idle
+        applyScreenAwakePolicy()
     }
 
     /// 页面退出/App 生命周期兜底（幂等）。
     func stop() {
         stopConversation()
+    }
+
+    // MARK: - 场景模式
+
+    /// 场景模式快速切换（卡片右上角小按钮）：normal → driving → night → normal 循环。
+    func cycleSceneMode() {
+        guard let idx = VoiceSceneMode.allCases.firstIndex(of: sceneMode) else {
+            sceneMode = .normal
+            return
+        }
+        let next = VoiceSceneMode.allCases[(idx + 1) % VoiceSceneMode.allCases.count]
+        sceneMode = next
+        Self.saveSceneMode(next)
+        applyScreenAwakePolicy()
+    }
+
+    /// 按场景模式设置屏幕常亮（开车/夜间对讲期间常亮，空闲恢复），与场景快速切换联动。
+    private func applyScreenAwakePolicy() {
+        UIApplication.shared.isIdleTimerDisabled = state != .idle && sceneMode.keepsScreenAwake
+    }
+
+    private static let sceneModeDefaultsKey = "voiceAssistant.sceneMode"
+
+    private static func loadSceneMode() -> VoiceSceneMode {
+        guard let raw = UserDefaults.standard.string(forKey: sceneModeDefaultsKey),
+              let mode = VoiceSceneMode(rawValue: raw) else {
+            return .normal
+        }
+        return mode
+    }
+
+    private static func saveSceneMode(_ mode: VoiceSceneMode) {
+        UserDefaults.standard.set(mode.rawValue, forKey: sceneModeDefaultsKey)
+    }
+
+    /// 默认目标智能体：优先 settings 里「唤醒后进入的频道」（voiceWakeChannelID），
+    /// 其次频道列表第一个频道；都没有则 "main"。
+    private static func resolveDefaultAgentID(settings: SettingsStore) -> String {
+        if let wakeChannelID = settings.settings.voiceWakeChannelID,
+           let matched = ChannelStore.shared.channels.first(where: { $0.id.uuidString == wakeChannelID }) {
+            return matched.agentId
+        }
+        if let first = ChannelStore.shared.channels.first {
+            return first.agentId
+        }
+        return "main"
     }
 
     // MARK: - 对话循环
@@ -255,11 +341,20 @@ final class VoiceAssistantViewModel {
 
     /// 发送给智能体并拿到完整回复文本。
     ///
-    /// 复用 ChatViewModel 的发送链路（公开 API：sendText + messages 轮询）。
-    /// TODO(主智能体)：更干净的做法是给 ChatViewModel 增加一个「纯文本发送、不朗读、
-    /// 直接返回完整回复」的公开方法（如 `func sendForVoiceAssistant(_ text: String) async throws -> String`），
-    /// 替换本方法的兼容路径（sendText + 轮询抑制自带朗读），避免双播/轮询开销。
+    /// - 独立路径（无 chatViewModel）：本类自己持有 OpenClawClient 走网关流式发送
+    ///   （OpenClawClient.stream + model "openclaw:<agentId>"，与 SyncChatViewModel.send 同链路），
+    ///   不依赖聊天页，主页没进过聊天也能用。
+    /// - 兼容路径（注入了 chatViewModel）：复用 ChatViewModel 的 sendText + messages 轮询，
+    ///   并持续抑制其自带朗读（语音助手自己控制 TTS 场景音量/打断）。
     private func requestAgentReply(_ text: String) async throws -> String {
+        if let chatViewModel {
+            return try await requestAgentReplyViaChatViewModel(text, chatViewModel: chatViewModel)
+        }
+        return try await requestAgentReplyViaGateway(text)
+    }
+
+    /// 兼容路径：ChatViewModel sendText + 轮询 messages。
+    private func requestAgentReplyViaChatViewModel(_ text: String, chatViewModel: ChatViewModel) async throws -> String {
         guard chatViewModel.state == .idle || chatViewModel.state == .speaking || chatViewModel.state == .streaming else {
             throw VoiceAssistantError.busy
         }
@@ -301,6 +396,74 @@ final class VoiceAssistantViewModel {
             try await Task.sleep(nanoseconds: 150_000_000)
         }
         throw VoiceAssistantError.timeout
+    }
+
+    /// 独立路径：OpenClawClient.stream 流式拿完整回复（纯文本，不朗读）。
+    private func requestAgentReplyViaGateway(_ text: String) async throws -> String {
+        guard settings.isConfigured else {
+            throw VoiceAssistantError.notConfigured("请先在设置中配置 OpenClaw 网关。")
+        }
+
+        conversationHistory.append(Message(role: .user, content: text))
+        trimConversationHistory()
+
+        let token = OpenClawClient.resolveHTTPToken(
+            settingsToken: settings.gatewayToken,
+            gatewayURL: settings.settings.gatewayURL
+        )
+        let eventStream = openClaw.stream(
+            messages: conversationHistory,
+            gatewayURL: settings.settings.gatewayURL,
+            token: token,
+            model: "openclaw:\(agentId)",
+            apiMode: settings.settings.agentAPIMode,
+            sessionKey: nil,
+            messageChannel: "webchat"
+        )
+
+        var reply = ""
+        let deadline = Date().addingTimeInterval(90)
+        do {
+            for try await event in eventStream {
+                try Task.checkCancellation()
+                if Date() > deadline {
+                    throw VoiceAssistantError.timeout
+                }
+                switch event {
+                case .textDelta(let delta):
+                    reply += delta
+                case .modelIdentified, .completed:
+                    break
+                }
+            }
+        } catch {
+            // 发送失败/取消：不把失败消息留在上下文历史里，下一轮从干净上下文继续。
+            removeConversationUserMessage(text)
+            throw error
+        }
+
+        let trimmed = reply.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            removeConversationUserMessage(text)
+            throw VoiceAssistantError.emptyReply
+        }
+
+        conversationHistory.append(Message(role: .assistant, content: trimmed))
+        trimConversationHistory()
+        return trimmed
+    }
+
+    /// 上下文历史只保留最近 20 条（约 10 轮），避免无限增长。
+    private func trimConversationHistory() {
+        if conversationHistory.count > 20 {
+            conversationHistory.removeFirst(conversationHistory.count - 20)
+        }
+    }
+
+    private func removeConversationUserMessage(_ text: String) {
+        if let idx = conversationHistory.lastIndex(where: { $0.role == .user && $0.content == text }) {
+            conversationHistory.remove(at: idx)
+        }
     }
 
     /// 朗读回复。返回 true = 正常读完；false = 被用户打断。

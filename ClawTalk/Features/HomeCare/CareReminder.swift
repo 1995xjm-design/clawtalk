@@ -11,7 +11,7 @@ enum CareReminderCategory: String, Codable, CaseIterable, Identifiable, Equatabl
 }
 
 /// 提醒重复方式。
-/// - none：一次性，到点响一次（今天该时间已过则不再触发）
+/// - none：一次性，到点响一次（指定日期或今天该时间已过则不再触发）
 /// - daily：每天同一时间
 /// - workday：工作日（周一至周五）同一时间
 enum CareReminderRepeat: String, Codable, CaseIterable, Identifiable, Equatable {
@@ -32,16 +32,20 @@ enum CareReminderRepeat: String, Codable, CaseIterable, Identifiable, Equatable 
 }
 
 /// 一条居家健康提醒（本地 UserDefaults 存储 + 本地通知调度共用）。
-/// 时间只取「时:分」；重复提醒由 CareReminderStore 拆成系统日历触发器。
+/// 重复提醒只取「时:分」；一次性提醒可用 scheduledDate 指定完整日期
+/// （语音输入「明天下午3点」会生成），由 CareReminderStore 排通知。
 struct CareReminder: Identifiable, Codable, Equatable {
     let id: String
     var title: String
-    /// 提醒时间（只取时/分；一次性提醒若今天该时间已过，则当天不再触发）
+    /// 提醒时间（重复提醒只取时/分；一次性提醒取时/分用于展示与兜底）
     var time: Date
     var category: CareReminderCategory
     var repeatType: CareReminderRepeat
     /// 开关：关闭后取消已排的本地通知
     var enabled: Bool
+    /// 一次性提醒（.none）的指定日期；nil 时按 time 的时:分走「今天/下一次」逻辑。
+    /// 语音输入「明天下午3点」会生成此字段（含完整日期），到点只响一次。
+    var scheduledDate: Date?
     let createdAt: Date
 
     init(
@@ -51,6 +55,7 @@ struct CareReminder: Identifiable, Codable, Equatable {
         category: CareReminderCategory,
         repeatType: CareReminderRepeat = .daily,
         enabled: Bool = true,
+        scheduledDate: Date? = nil,
         createdAt: Date = Date()
     ) {
         self.id = id
@@ -59,6 +64,7 @@ struct CareReminder: Identifiable, Codable, Equatable {
         self.category = category
         self.repeatType = repeatType
         self.enabled = enabled
+        self.scheduledDate = scheduledDate
         self.createdAt = createdAt
     }
 }

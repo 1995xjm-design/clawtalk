@@ -13,9 +13,12 @@ struct VoiceAssistantCardView: View, VoiceAssistantCardContent {
 
     @State private var breathing = false
     @State private var ripplePulse = false
+    /// 首次使用引导是否显示（第一次出现展示「点按开始说话 · 长按退出」）。
+    @State private var showFirstUseGuide = false
 
     private let micSize: CGFloat = 72
     private let cardHeight: CGFloat = 200
+    private let firstUseDefaultsKey = "voiceAssistant.didShowFirstUseGuide"
 
     init(viewModel: VoiceAssistantViewModel) {
         self.viewModel = viewModel
@@ -42,10 +45,18 @@ struct VoiceAssistantCardView: View, VoiceAssistantCardContent {
                     Text(statusText)
                         .font(.system(size: 18 * sceneFontScale, weight: .semibold))
                         .foregroundStyle(.white)
-                    Text(viewModel.sceneMode.hint)
-                        .font(.system(size: 12 * sceneFontScale))
-                        .foregroundStyle(.white.opacity(0.72))
-                        .lineLimit(1)
+                    if showFirstUseGuide {
+                        Text("点按开始说话 · 长按退出")
+                            .font(.system(size: 12 * sceneFontScale, weight: .medium))
+                            .foregroundStyle(.white.opacity(0.92))
+                            .lineLimit(1)
+                            .transition(.opacity)
+                    } else {
+                        Text(viewModel.sceneMode.hint)
+                            .font(.system(size: 12 * sceneFontScale))
+                            .foregroundStyle(.white.opacity(0.72))
+                            .lineLimit(1)
+                    }
                 }
             }
             .padding(24)
@@ -54,9 +65,11 @@ struct VoiceAssistantCardView: View, VoiceAssistantCardContent {
         .frame(height: cardHeight)
         .contentShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
         .gesture(cardGesture)
+        .overlay(alignment: .top) { topBar }
         .brightness(viewModel.sceneMode.cardBrightnessAdjustment)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("随身语音助手，\(statusText)。轻点开始或结束对话，长按退出。")
+        .accessibilityLabel("随身语音助手，\(statusText)。轻点开始或结束对话，长按退出，右上角切换场景模式。")
+        .onAppear(perform: maybeShowFirstUseGuide)
     }
 
     // MARK: - 手势：短按切换 / 长按退出
@@ -138,6 +151,58 @@ struct VoiceAssistantCardView: View, VoiceAssistantCardContent {
         }
     }
 
+    // MARK: - 顶部操作栏（长按退出角标 + 场景模式快速切换）
+
+    private var topBar: some View {
+        HStack {
+            if viewModel.isActive {
+                Text("长按退出")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.9))
+                    .padding(.horizontal, 9)
+                    .padding(.vertical, 5)
+                    .background(Capsule().fill(.black.opacity(0.28)))
+                    .transition(.opacity.combined(with: .scale(scale: 0.9)))
+            }
+            Spacer()
+            Button {
+                viewModel.cycleSceneMode()
+            } label: {
+                Image(systemName: sceneModeIcon)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: 30, height: 30)
+                    .background(Circle().fill(.white.opacity(0.18)))
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("切换场景模式，当前\(viewModel.sceneMode.displayName)")
+        }
+        .padding(14)
+    }
+
+    private var sceneModeIcon: String {
+        switch viewModel.sceneMode {
+        case .normal: return "sun.max.fill"
+        case .driving: return "car.fill"
+        case .night: return "moon.stars.fill"
+        }
+    }
+
+    /// 首次使用引导：第一次出现时展示小字提示，几秒后淡出；
+    /// 用 UserDefaults 记 flag，之后不再显示。
+    private func maybeShowFirstUseGuide() {
+        guard !UserDefaults.standard.bool(forKey: firstUseDefaultsKey) else { return }
+        UserDefaults.standard.set(true, forKey: firstUseDefaultsKey)
+        showFirstUseGuide = true
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 5_000_000_000)
+            guard showFirstUseGuide else { return }
+            withAnimation(.easeOut(duration: 0.6)) {
+                showFirstUseGuide = false
+            }
+        }
+    }
+
     // MARK: - 派生样式
 
     private var cardGradient: LinearGradient {
@@ -154,7 +219,7 @@ struct VoiceAssistantCardView: View, VoiceAssistantCardContent {
 
     private var statusText: String {
         switch viewModel.state {
-        case .idle: return "空闲"
+        case .idle: return "点按说话"
         case .listening: return "聆听中…"
         case .thinking: return "思考中…"
         case .speaking: return "播报中…"

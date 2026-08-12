@@ -4,6 +4,7 @@ import SwiftUI
 /// - 按住底部按钮说话，松开后自动转写并分类（待办/灵感/日记）
 /// - 录音中显示外圈脉冲 + 转圈动画；转写期间显示「整理中…」
 /// - 无日记时显示诚实空状态（不塞假数据）
+/// - 联动：待办自动加入提醒列表（成功显示「已加入提醒」小标）；灵感自动沉淀记忆中心（成功显示「已存入记忆」小标）
 struct VoiceDiaryView: View {
     @State private var viewModel: VoiceDiaryViewModel
     /// 关闭/返回回调（由入口通过 sheet / NavigationStack 传入）
@@ -20,8 +21,17 @@ struct VoiceDiaryView: View {
     /// 按住多久算开始录音（0.3 秒，与 TalkButton 一致）
     private let holdThreshold: UInt64 = 300_000_000
 
-    init(settingsStore: SettingsStore, onBack: (() -> Void)? = nil) {
-        _viewModel = State(initialValue: VoiceDiaryViewModel(settingsStore: settingsStore))
+    init(
+        settingsStore: SettingsStore,
+        careReminderStore: CareReminderStore? = nil,
+        memoryProfileStore: MemoryProfileStore? = nil,
+        onBack: (() -> Void)? = nil
+    ) {
+        _viewModel = State(initialValue: VoiceDiaryViewModel(
+            settingsStore: settingsStore,
+            careReminderStore: careReminderStore,
+            memoryProfileStore: memoryProfileStore
+        ))
         self.onBack = onBack
         self.hapticsEnabled = settingsStore.settings.hapticsEnabled
     }
@@ -77,6 +87,14 @@ struct VoiceDiaryView: View {
         let dayKeys = grouped.keys.sorted(by: >)
 
         return List {
+            if let notice = viewModel.linkageNotice {
+                Section {
+                    Label(notice, systemImage: "exclamationmark.triangle.fill")
+                        .font(.footnote)
+                        .foregroundStyle(.orange)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
             ForEach(dayKeys, id: \.self) { day in
                 let dayEntries = (grouped[day] ?? []).sorted { $0.createdAt > $1.createdAt }
                 Section(header: Text(Self.dayHeader(for: day))) {
@@ -313,6 +331,16 @@ private struct DiaryEntryRow: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
                 DiaryCategoryBadge(category: entry.category)
+                if entry.linkedReminderID != nil {
+                    Label("已加入提醒", systemImage: "bell.fill")
+                        .font(.caption2.weight(.medium))
+                        .foregroundStyle(.green)
+                }
+                if entry.linkedToMemory == true {
+                    Label("已存入记忆", systemImage: "brain.fill")
+                        .font(.caption2.weight(.medium))
+                        .foregroundStyle(.purple)
+                }
                 Spacer()
                 Text(timeText)
                     .font(.caption)

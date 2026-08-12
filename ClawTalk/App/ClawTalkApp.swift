@@ -80,7 +80,7 @@ struct ClawTalkApp: App {
         }
     }
 
-    // MARK: - 主界面 TabView（频道列表 + 副主页 Tab）
+    // MARK: - 主界面 TabView（频道列表 + 主页 Tab）
 
     @ViewBuilder
     private var mainTabView: some View {
@@ -98,7 +98,7 @@ struct ClawTalkApp: App {
                 chatViewModel: chatViewModel
             )
             .tabItem {
-                Label("副主页", systemImage: "square.grid.2x2")
+                Label("主页", systemImage: "square.grid.2x2")
             }
             .tag(1)
         }

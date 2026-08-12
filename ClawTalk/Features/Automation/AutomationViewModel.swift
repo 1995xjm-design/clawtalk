@@ -33,7 +33,10 @@ final class AutomationViewModel {
         if let settings, settings.isConfigured {
             gatewayClient = GatewayCronClient(
                 gatewayURL: settings.settings.gatewayURL,
-                token: settings.gatewayToken
+                token: OpenClawClient.resolveHTTPToken(
+                    settingsToken: settings.gatewayToken,
+                    gatewayURL: settings.settings.gatewayURL
+                )
             )
             gatewayStatusText = "已配置网关；cron 接口待网关侧确认后自动同步"
         } else {
@@ -103,9 +106,6 @@ final class AutomationViewModel {
             let remote = try await client.listCronTasks()
             mergeRemote(remote)
             gatewayStatusText = "已同步 \(remote.count) 个网关任务"
-        } catch let error as GatewayCronError {
-            // 端点未接线：不当作错误，本地列表照常可用
-            gatewayStatusText = "网关 cron 接口待确认（\(error.localizedDescription)）"
         } catch {
             errorMessage = error.localizedDescription
             gatewayStatusText = "网关同步失败，仅显示本机任务"
@@ -115,7 +115,9 @@ final class AutomationViewModel {
 
     /// 合并网关任务：网关有 id 的覆盖本机；本机独有（未同步）的保留。
     private func mergeRemote(_ remote: [AutomationTask]) {
-        for remoteTask in remote {
+        for var remoteTask in remote {
+            // 网关拉回来的任务视为已同步
+            remoteTask.gatewaySync = .synced
             if let index = tasks.firstIndex(where: { $0.id == remoteTask.id }) {
                 tasks[index] = remoteTask
             } else {
@@ -131,22 +133,23 @@ final class AutomationViewModel {
         guard let client = gatewayClient else { return }
         do {
             _ = try await client.createCronTask(task)
-        } catch let error as GatewayCronError {
-            LogCollector.record(module: "自动化", "网关创建未同步（待接线）：\(error.localizedDescription)")
+            markGatewaySync(taskID: task.id, state: .synced)
+            gatewayStatusText = "已同步到网关"
         } catch {
-            LogCollector.record(module: "自动化", "网关创建同步失败：\(error.localizedDescription)")
+            markGatewaySync(taskID: task.id, state: .failed)
+            gatewayStatusText = "网关未同步：\(Self.errorText(error))"
         }
     }
 
     private func pushUpdate(_ task: AutomationTask) async {
         guard let client = gatewayClient else { return }
         do {
-            // 更新端点待网关侧确认（PATCH /cron/tasks/{id}），先复用创建接口
-            _ = try await client.createCronTask(task)
-        } catch let error as GatewayCronError {
-            LogCollector.record(module: "自动化", "网关更新未同步（待接线）：\(error.localizedDescription)")
+            _ = try await client.updateCronTask(task)
+            markGatewaySync(taskID: task.id, state: .synced)
+            gatewayStatusText = "已同步到网关"
         } catch {
-            LogCollector.record(module: "自动化", "网关更新同步失败：\(error.localizedDescription)")
+            markGatewaySync(taskID: task.id, state: .failed)
+            gatewayStatusText = "网关未同步：\(Self.errorText(error))"
         }
     }
 
@@ -154,10 +157,9 @@ final class AutomationViewModel {
         guard let client = gatewayClient else { return }
         do {
             try await client.deleteCronTask(id: id)
-        } catch let error as GatewayCronError {
-            LogCollector.record(module: "自动化", "网关删除未同步（待接线）：\(error.localizedDescription)")
+            gatewayStatusText = "已从网关删除任务"
         } catch {
-            LogCollector.record(module: "自动化", "网关删除同步失败：\(error.localizedDescription)")
+            gatewayStatusText = "网关未同步：删除失败（\(Self.errorText(error))）"
         }
     }
 
@@ -165,11 +167,23 @@ final class AutomationViewModel {
         guard let client = gatewayClient else { return }
         do {
             try await client.setCronTaskEnabled(id: id, enabled: enabled)
-        } catch let error as GatewayCronError {
-            LogCollector.record(module: "自动化", "网关启停未同步（待接线）：\(error.localizedDescription)")
+            markGatewaySync(taskID: id, state: .synced)
+            gatewayStatusText = "已同步到网关"
         } catch {
-            LogCollector.record(module: "自动化", "网关启停同步失败：\(error.localizedDescription)")
+            markGatewaySync(taskID: id, state: .failed)
+            gatewayStatusText = "网关未同步：\(Self.errorText(error))"
         }
+    }
+
+    /// 回写任务网关同步状态并持久化（列表角标「网关未同步」的数据源）。
+    private func markGatewaySync(taskID: String, state: GatewaySyncState) {
+        guard let index = tasks.firstIndex(where: { $0.id == taskID }) else { return }
+        tasks[index].gatewaySync = state
+        persist()
+    }
+
+    private static func errorText(_ error: Error) -> String {
+        AppErrorText.localized(error.localizedDescription)
     }
 
     // MARK: - 本地持久化

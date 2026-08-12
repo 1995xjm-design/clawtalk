@@ -1,15 +1,17 @@
 import SwiftUI
 import EventKit
 
-/// 每日简报页：今天的日程 + 待办 + 天气。
+/// 每日简报页：今天的提醒（CareReminderStore）+ 日程 + 待办 + 天气。
 ///
 /// 数据源（诚实，不造假）：
+/// - 提醒：CareReminderStore（本地创建的居家提醒，今日将触发的展示出来）
 /// - 日程/待办：走现有 CalendarCapability / RemindersCapability（真实数据）；
 ///   未授权时不弹权限弹窗，显示空状态与引导文案。
 /// - 天气：暂无天气 API key，仅空状态说明；待主智能体接入天气接口后替换。
 /// - 早上推送：本页只负责展示；早上定时把简报内容推送给用户的本地通知，
 ///   由主智能体在接入天气接口后统一安排（可复用 NotificationCapability）。
 struct DailyBriefView: View {
+    @State private var careStore: CareReminderStore
     @State private var isLoading = false
     @State private var loadError: String?
     @State private var calendarStatus: EKAuthorizationStatus = .notDetermined
@@ -18,6 +20,10 @@ struct DailyBriefView: View {
     @State private var todoItems: [BriefTodoItem] = []
 
     private let isoFormatter = ISO8601DateFormatter()
+
+    init(store: CareReminderStore? = nil) {
+        _careStore = State(initialValue: store ?? CareReminderStore())
+    }
 
     var body: some View {
         List {
@@ -29,6 +35,7 @@ struct DailyBriefView: View {
                 }
             }
 
+            careSection
             scheduleSection
             todoSection
             weatherSection
@@ -43,6 +50,50 @@ struct DailyBriefView: View {
         }
         .task { await load() }
         .refreshable { await load() }
+    }
+
+    // MARK: - 今天的提醒（CareReminderStore）
+
+    @ViewBuilder
+    private var careSection: some View {
+        Section {
+            if careStore.reminders.isEmpty {
+                emptyStateRow("今天暂无提醒", detail: "在「提醒」卡片里创建的居家提醒会显示在这里")
+            } else {
+                let todays = careStore.upcomingReminders
+                    .filter { Calendar.current.isDateInToday($0.fireDate) }
+                    .map { BriefCareItem(reminder: $0.reminder, fireDate: $0.fireDate) }
+                if todays.isEmpty {
+                    emptyStateRow("今天暂无提醒", detail: "今天没有将触发的提醒，已过点的提醒不会重复显示")
+                } else {
+                    ForEach(todays) { item in
+                        careRow(item)
+                    }
+                }
+            }
+        } header: {
+            Label("今天的提醒", systemImage: "bell.badge")
+        }
+    }
+
+    private func careRow(_ item: BriefCareItem) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            Text(timeText(item.fireDate))
+                .font(.subheadline.weight(.semibold))
+                .monospacedDigit()
+                .frame(width: 52, alignment: .leading)
+                .foregroundStyle(.primary)
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(item.reminder.title)
+                    .font(.body)
+                    .foregroundStyle(.primary)
+                Label(item.reminder.category.rawValue, systemImage: item.reminder.category.iconName)
+                    .font(.caption2)
+                    .foregroundStyle(item.reminder.category.themeColor)
+            }
+        }
+        .padding(.vertical, 2)
     }
 
     // MARK: - 日程
@@ -226,6 +277,19 @@ struct DailyBriefView: View {
     }
 }
 
+/// 简报页居家提醒条目（仅展示，来自 CareReminderStore）。
+private struct BriefCareItem: Identifiable {
+    let id: String
+    let reminder: CareReminder
+    let fireDate: Date
+
+    init(reminder: CareReminder, fireDate: Date) {
+        self.id = reminder.id
+        self.reminder = reminder
+        self.fireDate = fireDate
+    }
+}
+
 /// 简报页日程条目（仅展示，来自日历能力）。
 struct BriefScheduleItem: Identifiable {
     let id: String
@@ -245,6 +309,7 @@ struct BriefTodoItem: Identifiable {
 
 /// 副主页「每日简报」入口：Button + fullScreenCover。
 /// 用法：放进副主页卡片区或工具栏即可（样式可随卡片网格调整）。
+/// 卡片网格推荐用 DailyBriefCardView（同款卡片样式，点击进 NavigationLink 简报页）。
 struct DailyBriefEntryButton: View {
     @State private var isPresented = false
 

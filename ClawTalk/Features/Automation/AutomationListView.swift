@@ -102,13 +102,23 @@ struct AutomationListView: View {
                     .foregroundStyle(.secondary)
 
                 if let next = task.nextRunAt {
-                    Text("下次：\(formatted(next))")
+                    Label(formatted(next), systemImage: "clock.fill")
                         .font(.caption2)
-                        .foregroundStyle(.tertiary)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(Capsule().fill(Color.openClawRed))
                 } else {
                     Text("下次：待网关排程")
                         .font(.caption2)
                         .foregroundStyle(.tertiary)
+                }
+
+                if task.gatewaySync == .failed {
+                    Label("网关未同步", systemImage: "exclamationmark.icloud")
+                        .font(.caption2)
+                        .foregroundStyle(.orange)
                 }
 
                 lastResultLine(task)

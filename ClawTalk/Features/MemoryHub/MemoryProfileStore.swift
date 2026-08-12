@@ -1,7 +1,12 @@
 import Foundation
 
 /// 本地档案存储：UserDefaults JSON 持久化 + 从本地对话按简单规则聚合。
-/// 诚实原则：只聚合真实存在的本地对话；没有数据时 profiles 为空数组，由界面展示空状态，不造假。
+///
+/// 第 4 层：新增网关记忆沉淀 —— 新识别的偏好/项目/灵感通过网关 memory_add
+/// 写入智能体记忆（与 MemorySearchTabView 的 memory_search 同款调用方式）。
+/// 诚实原则：网关调用失败静默不报错，本地档案始终保留；已成功推送的条目记录 id，
+/// 不会重复上报；没有本地数据时 profiles 为空数组，由界面展示空状态，不造假。
+@MainActor
 @Observable
 final class MemoryProfileStore {
     /// 当前档案条目（按分类顺序 + 最近更新时间排序），供界面直接展示。
@@ -10,16 +15,25 @@ final class MemoryProfileStore {
     private let defaults = UserDefaults.standard
     private let snapshotKey = "memory_hub_profiles_v1"
 
+    /// 网关配置（用于 memory_add 沉淀；nil = 未配置网关，只做本地聚合）
+    private let settings: SettingsStore?
+    private let client = OpenClawClient()
+
     private var entries: [MemoryProfile] = []
     /// 聚合键（分类|关键词）-> 条目 id：多次聚合时同一来源条目 id 保持稳定，避免列表抖动。
     private var keys: [String: UUID] = [:]
+    /// 已成功写入网关记忆的条目 id（持久化，避免重复上报）
+    private var pushedEntryIDs: Set<UUID> = []
 
     private struct Snapshot: Codable {
         var entries: [MemoryProfile]
         var keys: [String: UUID]
+        /// 可选字段：老版本数据没有该键时解码为 nil，不破坏兼容
+        var pushedEntryIDs: [UUID]?
     }
 
-    init() {
+    init(settings: SettingsStore? = nil) {
+        self.settings = settings
         load()
     }
 
@@ -157,6 +171,94 @@ final class MemoryProfileStore {
         return kept
     }
 
+    // MARK: - 外部写入（语音日记联动，第 4 层）
+
+    /// 追加一条档案条目（如语音日记的灵感），不进入对话聚合池。
+    /// key 带来源+条目 id 唯一后缀：每次写入都是独立条目，id 稳定，
+    /// 不会与 refreshFromConversations 的聚合键合并。
+    @discardableResult
+    func addProfileEntry(
+        category: MemoryProfile.Category,
+        summary: String,
+        source: String,
+        date: Date = Date()
+    ) -> MemoryProfile {
+        let entry = MemoryProfile(
+            id: UUID(),
+            title: Self.title(for: category.rawValue, text: summary),
+            category: category,
+            summary: summary,
+            source: source,
+            lastUpdated: date
+        )
+        keys["\(category.rawValue)|\(source)|\(entry.id.uuidString)"] = entry.id
+        entries.append(entry)
+        save()
+        profiles = Self.ordered(entries)
+        // 外部写入也尝试沉淀到网关（未配置网关时静默跳过；失败本地保留）
+        Task { await syncToGateway() }
+        return entry
+    }
+
+    // MARK: - 网关沉淀（第 4 层）
+
+    /// 最近沉淀：全部条目按更新时间倒序（供卡片「最近沉淀」滚动摘要）。
+    var recentEntries: [MemoryProfile] {
+        entries.sorted { $0.lastUpdated > $1.lastUpdated }
+    }
+
+    /// 今日新增条目数（卡片角标）：按 lastUpdated 是否落在今天统计。
+    var todayAddedCount: Int {
+        entries.filter { Calendar.current.isDateInToday($0.lastUpdated) }.count
+    }
+
+    /// 把尚未推送的 偏好/项目/灵感 条目写入网关记忆（memory_add）。
+    /// - 失败静默：不抛错、不提示，本地档案保留，下次同步自动重试。
+    /// - 事实类不推送，避免把普通聊天句子灌进智能体记忆。
+    func syncToGateway() async {
+        guard let settings, settings.isConfigured else { return }
+
+        let candidates = entries.filter { entry in
+            guard !pushedEntryIDs.contains(entry.id) else { return false }
+            return entry.category == .preference
+                || entry.category == .project
+                || entry.category == .inspiration
+        }
+        guard !candidates.isEmpty else { return }
+
+        let gatewayURL = settings.settings.gatewayURL
+        let token = OpenClawClient.resolveHTTPToken(
+            settingsToken: settings.gatewayToken,
+            gatewayURL: gatewayURL
+        )
+
+        for entry in candidates {
+            do {
+                // memory_add 工具名与参数为假设（官方工具清单当前只有 memory_search/memory_get），
+                // 待网关侧确认；content 尽量自包含，方便网关按文本沉淀。
+                _ = try await client.invokeTool(
+                    tool: "memory_add",
+                    args: [
+                        "content": .string(Self.gatewayContent(for: entry)),
+                        "source": .string(entry.source),
+                        "category": .string(entry.category.rawValue)
+                    ],
+                    gatewayURL: gatewayURL,
+                    token: token
+                )
+                pushedEntryIDs.insert(entry.id)
+            } catch {
+                // 网关 memory_add 未部署/参数不符/网络失败：静默跳过，本地保留
+            }
+        }
+        save()
+    }
+
+    /// 网关沉淀文本：分类 + 摘要 + 来源（内容自包含，便于网关直接记忆）。
+    private static func gatewayContent(for entry: MemoryProfile) -> String {
+        "【\(entry.category.rawValue)】\(entry.summary)\n来源：\(entry.source)"
+    }
+
     // MARK: - 持久化
 
     private func load() {
@@ -164,11 +266,16 @@ final class MemoryProfileStore {
               let snapshot = try? JSONDecoder().decode(Snapshot.self, from: data) else { return }
         entries = snapshot.entries
         keys = snapshot.keys
+        pushedEntryIDs = Set(snapshot.pushedEntryIDs ?? [])
         profiles = Self.ordered(entries)
     }
 
     private func save() {
-        let snapshot = Snapshot(entries: entries, keys: keys)
+        let snapshot = Snapshot(
+            entries: entries,
+            keys: keys,
+            pushedEntryIDs: Array(pushedEntryIDs)
+        )
         if let data = try? JSONEncoder().encode(snapshot) {
             defaults.set(data, forKey: snapshotKey)
         }

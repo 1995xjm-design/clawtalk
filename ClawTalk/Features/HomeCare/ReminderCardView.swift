@@ -1,6 +1,7 @@
 import SwiftUI
 
-/// 副主页「提醒」卡片：今日提醒数 + 最近一条提醒 + 图标，点击进入提醒列表。
+/// 副主页「提醒」卡片：今日提醒数角标 + 最近一条提醒 + 图标，点击进入提醒列表。
+/// 长按卡片可快捷「新建提醒 / 查看全部」（contextMenu）。
 ///
 /// 主智能体接线（二选一）：
 /// 1. 直接把 ReminderCardView 放进副主页卡片网格（自带 NavigationLink + 提醒列表页）：
@@ -29,6 +30,16 @@ struct ReminderCardView: View {
 
                     Spacer(minLength: 0)
 
+                    // 今日提醒数角标：0 条不显示（摘要里有诚实文案）
+                    if store.todayReminderCount > 0 {
+                        Text("今日 \(store.todayReminderCount)")
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 3)
+                            .background(Color.orange, in: Capsule())
+                    }
+
                     Image(systemName: "chevron.right")
                         .font(.caption)
                         .foregroundStyle(.tertiary)
@@ -55,6 +66,18 @@ struct ReminderCardView: View {
             )
         }
         .buttonStyle(.plain)
+        .contextMenu {
+            NavigationLink {
+                ReminderListView(store: store, autoOpenAdd: true)
+            } label: {
+                Label("新建提醒", systemImage: "plus.circle.fill")
+            }
+            NavigationLink {
+                ReminderListView(store: store)
+            } label: {
+                Label("查看全部", systemImage: "list.bullet")
+            }
+        }
     }
 }
 

@@ -13,6 +13,8 @@ struct AutomationTask: Codable, Identifiable, Equatable {
     var lastRunAt: Date?
     var lastResult: AutomationRunResult?
     var nextRunAt: Date?
+    /// 网关同步状态：nil = 未尝试/未知（仅本机任务）；.failed = 同步失败（列表标「网关未同步」）
+    var gatewaySync: GatewaySyncState?
 
     init(
         id: String = UUID().uuidString,
@@ -22,7 +24,8 @@ struct AutomationTask: Codable, Identifiable, Equatable {
         enabled: Bool = true,
         lastRunAt: Date? = nil,
         lastResult: AutomationRunResult? = nil,
-        nextRunAt: Date? = nil
+        nextRunAt: Date? = nil,
+        gatewaySync: GatewaySyncState? = nil
     ) {
         self.id = id
         self.name = name
@@ -32,7 +35,16 @@ struct AutomationTask: Codable, Identifiable, Equatable {
         self.lastRunAt = lastRunAt
         self.lastResult = lastResult
         self.nextRunAt = nextRunAt
+        self.gatewaySync = gatewaySync
     }
+}
+
+/// 网关同步状态（用于列表「网关未同步」角标；nil = 未尝试）
+enum GatewaySyncState: String, Codable, Equatable {
+    /// 已成功同步到网关
+    case synced
+    /// 同步失败（任务保留在本机，网关侧未生效）
+    case failed
 }
 
 /// 单次运行结果摘要（网关执行后回传；本地保留最近若干条用于「历史」入口）

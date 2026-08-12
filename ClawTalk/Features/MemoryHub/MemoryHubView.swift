@@ -96,6 +96,7 @@ private struct MemoryProfileTabView: View {
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
                     store.refreshFromConversations()
+                    Task { await store.syncToGateway() }
                 } label: {
                     Label("重新聚合", systemImage: "arrow.clockwise")
                 }
@@ -103,6 +104,7 @@ private struct MemoryProfileTabView: View {
         }
         .task {
             store.refreshFromConversations()
+            await store.syncToGateway()
         }
     }
 

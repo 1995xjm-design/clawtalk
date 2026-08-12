@@ -8,7 +8,8 @@ import UserNotifications
 /// - 权限由主 App 的 PushManager 统一申请过，这里只调度 UNNotificationRequest，不重复弹授权。
 /// - 到点响铃：content.sound = .default（NotificationCapability 的调用方式可读参考）。
 /// - daily 用一个按「时:分」重复的日历触发器；workday 拆成 5 个工作日周重复触发器；
-///   一次性（none）只排下一次触发（今天时间已过则不排，列表照常保留，诚实显示）。
+///   一次性（none）只排下一次触发（scheduledDate 指定日期，或今天时间已过则不排，
+///   列表照常保留，诚实显示）。
 @Observable
 @MainActor
 final class CareReminderStore {
@@ -63,6 +64,10 @@ final class CareReminderStore {
 
         switch reminder.repeatType {
         case .none:
+            // 语音创建的一次性提醒带完整日期：到点响一次，过了就不触发
+            if let scheduledDate = reminder.scheduledDate {
+                return scheduledDate > now ? scheduledDate : nil
+            }
             guard let todayTime, todayTime > now else { return nil }
             return todayTime
         case .daily:
