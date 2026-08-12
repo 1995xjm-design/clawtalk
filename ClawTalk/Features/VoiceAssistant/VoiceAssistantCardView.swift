@@ -661,14 +661,10 @@ private struct IdleWaveLayer: View {
         let x = size.width * (CGFloat(index) + 0.5) / CGFloat(barCount)
         let baseY = size.height * 0.66
 
-        let ambient: Double
-        if state != .idle && micActive {
-            // 对讲中：真实麦克风 RMS（voiceChat 模式已做回声消除，TTS 回声不会驱动起伏）。
-            ambient = Double(min(micLevel * 6.0, 1.0))
-        } else {
-            // 待机：确定性伪随机微澜（诚实实现，见结构注释）。
-            ambient = theme.idleAmplitude * (0.40 + 0.60 * abs(sin(t * 1.3 + phase * 1.7)))
-        }
+        // 对讲中=真实麦克风 RMS；待机=确定性伪随机微澜（诚实实现，见结构注释）。
+        let ambient: Double = (state != .idle && micActive)
+            ? Double(min(micLevel * 6.0, 1.0))
+            : theme.idleAmplitude * (0.40 + 0.60 * abs(sin(t * 1.3 + phase * 1.7)))
         let column = 0.35 + 0.65 * abs(sin(Double(index) * 0.42 + t * 0.8))
         let height = size.height * (0.05 + 0.32 * ambient) * (0.45 + 0.55 * column)
         let color = Color.white.opacity(theme.barOpacity * (0.7 + 0.3 * abs(sway)))
