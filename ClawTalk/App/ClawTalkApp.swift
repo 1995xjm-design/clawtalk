@@ -115,21 +115,27 @@ struct ClawTalkApp: App {
         }
     }
 
+    /// 根内容：引导页 / 主界面切换 + 深链接入口（拆出独立计算属性，避免类型检查超时）。
+    @ViewBuilder
+    private var rootWindowContent: some View {
+        Group {
+            if !settingsStore.hasCompletedOnboarding {
+                OnboardingView(settingsStore: settingsStore) {
+                    // Onboarding complete
+                }
+            } else {
+                mainTabView
+            }
+        }
+        .onOpenURL { url in
+            handleIncomingURL(url)
+        }
+    }
+
     /// WindowGroup 内容（拆出独立计算属性，避免 SwiftUI 类型检查超时）
     @ViewBuilder
     private var windowContent: some View {
-            Group {
-                if !settingsStore.hasCompletedOnboarding {
-                    OnboardingView(settingsStore: settingsStore) {
-                        // Onboarding complete
-                    }
-                } else {
-                    mainTabView
-                }
-            }
-            .onOpenURL { url in
-                handleIncomingURL(url)
-            }
+        rootWindowContent
             .overlay {
                 ApprovalOverlayView(gatewayConnection: gatewayConnection)
             }
