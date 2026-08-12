@@ -163,7 +163,7 @@ final class SummarizerStore {
         }
 
         do {
-            let raw = try await requestAIReply(text: trimmed, length: length, settings: settings)
+            let raw = try await Self.requestAIReply(text: trimmed, length: length, settings: settings)
             if let draft = SummaryJSONParser.parse(raw) {
                 let record = SummaryRecord(
                     originalText: trimmed,

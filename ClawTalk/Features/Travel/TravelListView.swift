@@ -8,7 +8,6 @@ struct TravelListView: View {
     @State private var settingsStore: SettingsStore
     @State private var careReminderStore: CareReminderStore
     @State private var voiceController: TravelVoiceController
-    @State private var activeAlert: TravelListAlert?
 
     init(store: TravelStore? = nil, settings: SettingsStore? = nil, careReminderStore: CareReminderStore? = nil) {
         let resolvedSettings = settings ?? SettingsStore()
@@ -80,13 +79,38 @@ struct TravelListView: View {
                 }
             }
         }
-        .alert(item: $activeAlert) { alert in
-            switch alert {
-            case .add:
-                addAlertContent
-            case .notice(let message):
-                noticeAlertContent(message)
+        .sheet(isPresented: $showAddSheet) {
+            NavigationStack {
+                List {
+                    Section("目的地") {
+                        TextField("如：上海", text: $draftDestination)
+                    }
+                    Section("日期") {
+                        DatePicker("出发日期", selection: $draftDeparture, displayedComponents: [.date, .hourAndMinute])
+                        Toggle("设置返程日期", isOn: $hasReturn)
+                        if hasReturn {
+                            DatePicker("返程日期", selection: $draftReturn, displayedComponents: [.date, .hourAndMinute])
+                        }
+                    }
+                    Section("目的（可选）") {
+                        TextField("如：出差", text: $draftPurpose)
+                    }
+                    Section {
+                        Button("保存") { saveDraft() }
+                            .frame(maxWidth: .infinity)
+                        Button("取消", role: .cancel) { resetDraft() }
+                            .frame(maxWidth: .infinity)
+                    }
+                }
+                .navigationTitle("新增出行")
+                .navigationBarTitleDisplayMode(.inline)
             }
+            .presentationDetents([.medium, .large])
+        }
+        .alert("提示", isPresented: $showNoticeAlert, presenting: noticeMessage) { _ in
+            Button("好") { noticeMessage = nil }
+        } message: { message in
+            Text(message)
         }
         .onAppear {
             voiceController.restoreWakeListening()
@@ -176,7 +200,7 @@ struct TravelListView: View {
 
     private func openAddAlert() {
         resetDraft()
-        activeAlert = .add
+        showAddSheet = true
     }
 
     private func resetDraft() {
@@ -190,12 +214,12 @@ struct TravelListView: View {
     private func saveDraft() {
         let destination = draftDestination.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !destination.isEmpty else {
-            activeAlert = .notice("请填写目的地")
+            noticeMessage = "请填写目的地"; showNoticeAlert = true
             return
         }
         let purpose = draftPurpose.trimmingCharacters(in: .whitespacesAndNewlines)
         if hasReturn, draftReturn < draftDeparture {
-            activeAlert = .notice("返程日期不能早于出发日期")
+            noticeMessage = "返程日期不能早于出发日期"; showNoticeAlert = true
             return
         }
         let resolvedPurpose = purpose.isEmpty ? nil : purpose
@@ -207,7 +231,7 @@ struct TravelListView: View {
             checklist: TravelStore.defaultChecklist(destination: destination, purpose: resolvedPurpose)
         )
         store.add(trip)
-        activeAlert = nil
+        showAddSheet = false; noticeMessage = nil
     }
 
     // MARK: - 语音新建
@@ -236,7 +260,7 @@ struct TravelListView: View {
                 guard !voiceController.isRecording, !voiceController.isTranscribing else { return }
                 voiceController.start()
                 if let message = voiceController.lastError {
-                    activeAlert = .notice(message)
+                    noticeMessage = message; showNoticeAlert = true
                 }
             }
             .onEnded { _ in
@@ -245,7 +269,7 @@ struct TravelListView: View {
                     if let text = await voiceController.stopAndTranscribe() {
                         applyVoiceText(text)
                     } else if let message = voiceController.lastError {
-                        activeAlert = .notice(message)
+                        noticeMessage = message; showNoticeAlert = true
                     }
                 }
             }
@@ -265,7 +289,7 @@ struct TravelListView: View {
                 checklist: TravelStore.defaultChecklist(destination: destination, purpose: purpose)
             )
             store.add(trip)
-            activeAlert = .notice("已新建「去\(destination)」的出行，清单已自动生成")
+            noticeMessage = "已新建「去\(destination)」的出行，清单已自动生成"; showNoticeAlert = true
         } else {
             draftDestination = parsed.destination ?? ""
             if let departure = parsed.departureDate {
@@ -274,44 +298,17 @@ struct TravelListView: View {
             draftReturn = parsed.returnDate ?? Date()
             hasReturn = parsed.returnDate != nil
             draftPurpose = parsed.purpose ?? ""
-            activeAlert = .add
+            showAddSheet = true
         }
     }
 
-    // MARK: - alert 内容
-
-    @ViewBuilder
-    private var addAlertContent: some View {
-        TextField("目的地（如：上海）", text: $draftDestination)
-        DatePicker("出发日期", selection: $draftDeparture, displayedComponents: [.date, .hourAndMinute])
-        Toggle("设置返程日期", isOn: $hasReturn)
-        if hasReturn {
-            DatePicker("返程日期", selection: $draftReturn, displayedComponents: [.date, .hourAndMinute])
-        }
-        TextField("目的（可选，如：出差）", text: $draftPurpose)
-        Button("保存") { saveDraft() }
-        Button("取消", role: .cancel) { resetDraft() }
-    }
-
-    @ViewBuilder
-    private func noticeAlertContent(_ message: String) -> some View {
-        Text(message)
-        Button("好") { activeAlert = nil }
-    }
 
     // MARK: - 状态
 
-    private enum TravelListAlert: Identifiable {
-        case add
-        case notice(String)
+    @State private var showAddSheet = false
+    @State private var showNoticeAlert = false
+    @State private var noticeMessage: String?
 
-        var id: String {
-            switch self {
-            case .add: return "add"
-            case .notice(let message): return "notice-\(message)"
-            }
-        }
-    }
 
     @State private var draftDestination = ""
     @State private var draftDeparture = Date()
