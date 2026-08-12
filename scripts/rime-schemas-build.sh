@@ -45,13 +45,17 @@ s = s[:start] + "schema_list:\n\n" + s[end:]
 open(path, "w", encoding="utf-8").write(s)
 PY
 
-# 7) rime-ice (includes the t9 Chinese nine-key schema): build rime-ice.zip
-#    with the same layout as Hamster. Use the official codeload zip, which
-#    expands git-lfs content automatically (git clone does not).
-echo "[rime] download rime-ice"; curl -fL -o "$TMP/rime-ice-src.zip" https://codeload.github.com/iDvel/rime-ice/zip/refs/heads/main
-mkdir -p "$TMP/rime-ice-src" "$OUT"
-unzip -q "$TMP/rime-ice-src.zip" -d "$TMP/rime-ice-src"
-( cd "$TMP/rime-ice-src"/*/ && zip -qr "$OUT/rime-ice.zip" . )
+# 7) rime-ice (includes the t9 Chinese nine-key schema): rime-ice.zip is a
+#    committed resource (same snapshot as Hamster). Regenerate only if missing.
+if [ ! -f "$OUT/rime-ice.zip" ]; then
+  echo "[rime] rime-ice.zip missing, cloning rime-ice"
+  git clone --depth 1 https://github.com/iDvel/rime-ice.git "$TMP/rime-ice"
+  mkdir -p "$OUT"
+  ( cd "$TMP/rime-ice" && zip -qr "$OUT/rime-ice.zip" . -x ".git/*" )
+else
+  echo "[rime] rime-ice.zip exists, reuse committed resource"
+fi
+ls -lh "$OUT/rime-ice.zip"
 echo "done: $OUT/rime-ice.zip"
 ls -lh "$OUT/rime-ice.zip"
 
