@@ -128,10 +128,7 @@ struct ClawTalkApp: App {
                 }
             }
             .onOpenURL { url in
-                if EmergencyStore.handleSOSDeepLink(url) {
-                    return
-                }
-                handleDeepLink(url)
+                handleIncomingURL(url)
             }
             .overlay {
                 ApprovalOverlayView(gatewayConnection: gatewayConnection)
@@ -555,6 +552,14 @@ struct ClawTalkApp: App {
     // MARK: - 深链接（clawtalk://）
 
     /// 深链接接线：pair/connect 写入网关配置；open 按频道名选中进入。
+    /// 深链接统一入口：SOS 优先，其余走既有 DeepLinkHandler。
+    private func handleIncomingURL(_ url: URL) {
+        if EmergencyStore.handleSOSDeepLink(url) {
+            return
+        }
+        handleDeepLink(url)
+    }
+
     private func handleDeepLink(_ url: URL) {
         guard DeepLinkHandler.handle(url, settings: settingsStore),
               let payload = DeepLinkHandler.parse(url),
