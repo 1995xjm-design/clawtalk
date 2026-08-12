@@ -159,7 +159,7 @@ struct ClawTalkApp: App {
             return
         }
         Task {
-            let ok = await FileTransferViewModel().uploadFile(fileURL: url, suggestedName: name)
+            let ok = await FileTransferViewModel(settings: settingsStore).uploadFile(fileURL: url, suggestedName: name)
             LogCollector.resetPendingUploadCount()
             if !ok {
                 LogCollector.record(module: "日志上报", "自动上传日志失败：\(name)")

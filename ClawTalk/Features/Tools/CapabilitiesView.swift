@@ -339,8 +339,10 @@ private struct CapabilityDetailView: View {
                 }
             }
 
-            Section("可用性") {
+            Section {
                 LabeledContent("权限要求", value: availabilityNote)
+            } header: {
+                Text("可用性")
             } footer: {
                 Text("能力是否可调用以网关连接回执为准；需要权限的能力请先在系统设置中授权。")
             }
