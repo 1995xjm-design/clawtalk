@@ -293,8 +293,11 @@ final class VoiceDiaryViewModel {
             hour = parsedHour
             if match.groups[2] == "半" {
                 minute = 30
-            } else if let minuteText = match.groups[3], let parsedMinute = Int(minuteText) {
-                minute = parsedMinute
+            } else if match.groups.count > 3 {
+                let minuteText = match.groups[3]
+                if !minuteText.isEmpty, let parsedMinute = Int(minuteText) {
+                    minute = parsedMinute
+                }
             }
         }
         if hour == nil, let match = Self.firstMatch(#"(\d{1,2})[:：](\d{2})"#, in: text),
