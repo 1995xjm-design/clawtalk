@@ -64,7 +64,7 @@ final class WindDownNoisePlayer: ObservableObject {
         timerTask = Task { @MainActor in
             for remaining in stride(from: minutes, through: 1, by: -1) {
                 try? await Task.sleep(nanoseconds: UInt64(60 * 1_000_000_000))
-                try Task.checkCancellation()
+                if Task.isCancelled { return }
                 remainingMinutes = remaining - 1
             }
             stop()
