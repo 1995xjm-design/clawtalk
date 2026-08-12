@@ -51,7 +51,7 @@ struct VoiceAssistantCardSlot: View {
             }
             .shadow(
                 color: .openClawRed.opacity(0.35),
-                radius: isBreathing ? 18 : 8,
+                radius: isBreathing ? 12 : 6,
                 x: 0,
                 y: 8
             )

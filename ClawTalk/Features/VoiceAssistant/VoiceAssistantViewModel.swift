@@ -147,6 +147,11 @@ final class VoiceAssistantViewModel {
         state != .idle
     }
 
+    /// 语音助手大卡是否显示实时转写/回复文字（只读透传 AppSettings 开关，设置页可切换）。
+    var voiceAssistantShowTranscript: Bool {
+        settings.settings.voiceAssistantShowTranscript
+    }
+
     // MARK: - 生命周期
 
     /// 卡片点按入口：空闲 → 开始对讲；对讲中 → 结束。

@@ -228,6 +228,7 @@ private var connectionSection: some View {
         Section {
             Toggle("语音输入（语音转文字）", isOn: $store.settings.voiceInputEnabled)
             Toggle("语音输出（文字转语音）", isOn: $store.settings.voiceOutputEnabled)
+            Toggle("语音助手显示实时转写", isOn: $store.settings.voiceAssistantShowTranscript)
             Toggle("触感反馈", isOn: $store.settings.hapticsEnabled)
             Toggle("语音唤醒", isOn: $store.settings.voiceWakeEnabled)
             if store.settings.voiceWakeEnabled {

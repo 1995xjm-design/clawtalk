@@ -126,6 +126,8 @@ struct AppSettings: Codable {
     var liveActivityStyle: LiveActivityStyle
     /// 随 agent 切换：当前频道/agent 变化时自动更新 Live Activity 内容
     var liveActivityFollowAgent: Bool
+    /// 语音助手大卡是否显示实时转写/回复文字（默认开启；关闭后大卡只显示状态文字）
+    var voiceAssistantShowTranscript: Bool
 
     static let defaults = AppSettings(
         gatewayURL: "",
@@ -152,7 +154,8 @@ struct AppSettings: Codable {
         fileServerURL: "",
         customHeaders: [:],
         liveActivityStyle: .standard,
-        liveActivityFollowAgent: false
+        liveActivityFollowAgent: false,
+        voiceAssistantShowTranscript: true
     )
 
     /// Build the full WebSocket URL from the gateway URL + port/path override.
@@ -207,7 +210,8 @@ struct AppSettings: Codable {
         fileServerURL: String = "",
         customHeaders: [String: String] = [:],
         liveActivityStyle: LiveActivityStyle = .standard,
-        liveActivityFollowAgent: Bool = false
+        liveActivityFollowAgent: Bool = false,
+        voiceAssistantShowTranscript: Bool = true
     ) {
         self.gatewayURL = gatewayURL
         self.bootstrapToken = bootstrapToken
@@ -236,6 +240,7 @@ struct AppSettings: Codable {
         self.customHeaders = customHeaders
         self.liveActivityStyle = liveActivityStyle
         self.liveActivityFollowAgent = liveActivityFollowAgent
+        self.voiceAssistantShowTranscript = voiceAssistantShowTranscript
     }
 
     init(from decoder: Decoder) throws {
@@ -277,6 +282,7 @@ struct AppSettings: Codable {
         customHeaders = try container.decodeIfPresent([String: String].self, forKey: .customHeaders) ?? [:]
         liveActivityStyle = try container.decodeIfPresent(LiveActivityStyle.self, forKey: .liveActivityStyle) ?? .standard
         liveActivityFollowAgent = try container.decodeIfPresent(Bool.self, forKey: .liveActivityFollowAgent) ?? false
+        voiceAssistantShowTranscript = try container.decodeIfPresent(Bool.self, forKey: .voiceAssistantShowTranscript) ?? true
 
         // Migrate legacy webSocketPort -> webSocketPath
         if let legacyPort = try container.decodeIfPresent(Int.self, forKey: .webSocketPort) {
@@ -303,6 +309,7 @@ struct AppSettings: Codable {
         case customHeaders
         case liveActivityStyle
         case liveActivityFollowAgent
+        case voiceAssistantShowTranscript
     }
 
     func encode(to encoder: Encoder) throws {
@@ -335,6 +342,7 @@ struct AppSettings: Codable {
         try container.encode(customHeaders, forKey: .customHeaders)
         try container.encode(liveActivityStyle, forKey: .liveActivityStyle)
         try container.encode(liveActivityFollowAgent, forKey: .liveActivityFollowAgent)
+        try container.encode(voiceAssistantShowTranscript, forKey: .voiceAssistantShowTranscript)
         // webSocketPort intentionally not encoded - legacy only
     }
 }
