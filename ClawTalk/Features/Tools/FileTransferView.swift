@@ -24,7 +24,7 @@ struct FileTransferChannelView: View {
     @State private var showFileSourceDialog = false
     @State private var showPhotoPicker = false
     @State private var showFileImporter = false
-    @State private var photoItem: PhotosPickerItem?
+    @State private var photoItems: [PhotosPickerItem] = []
 
     init(settings: SettingsStore, embeddedInNavigation: Bool = false, onBack: (() -> Void)? = nil) {
         self.settings = settings
@@ -164,43 +164,43 @@ struct FileTransferChannelView: View {
             Button("从文件选择") { showFileImporter = true }
             Button("取消", role: .cancel) {}
         }
-        .photosPicker(isPresented: $showPhotoPicker, selection: $photoItem, matching: .any(of: [.images, .videos]))
-        .fileImporter(isPresented: $showFileImporter, allowedContentTypes: [.item]) { result in
+        .photosPicker(isPresented: $showPhotoPicker, selection: $photoItems, maxSelectionCount: 0, matching: .any(of: [.images, .videos]))
+        .fileImporter(isPresented: $showFileImporter, allowedContentTypes: [.item], allowsMultipleSelection: true) { result in
             switch result {
-            case .success(let url):
-                Task { await uploadPickedFile(url: url, suggestedName: url.lastPathComponent) }
+            case .success(let urls):
+                Task { await uploadPickedFiles(urls: urls) }
             case .failure(let error):
                 showHint("选择文件失败：\(error.localizedDescription)")
             }
         }
-        .onChange(of: photoItem) { _, newItem in
-            guard let newItem else { return }
+        .onChange(of: photoItems) { _, newItems in
+            guard !newItems.isEmpty else { return }
             Task {
-                defer { photoItem = nil }
-                guard let data = try? await newItem.loadTransferable(type: Data.self) else {
-                    if let fileURL = try? await newItem.loadTransferable(type: URL.self) {
-                        await uploadPickedFile(url: fileURL, suggestedName: fileURL.lastPathComponent)
-                    } else {
-                        showHint("读取所选文件失败。")
+                var urls: [URL] = []
+                var tempURLs: [URL] = []
+                for item in newItems {
+                    if let data = try? await item.loadTransferable(type: Data.self) {
+                        let ext = item.supportedContentTypes.first?.preferredFilenameExtension ?? "bin"
+                        let name = "photo-\(UUID().uuidString.prefix(8)).\(ext)"
+                        let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(name)
+                        do {
+                            try data.write(to: tempURL)
+                        } catch {
+                            continue
+                        }
+                        urls.append(tempURL)
+                        tempURLs.append(tempURL)
+                    } else if let fileURL = try? await item.loadTransferable(type: URL.self) {
+                        urls.append(fileURL)
                     }
-                    return
                 }
-                let ext = newItem.supportedContentTypes.first?.preferredFilenameExtension ?? "bin"
-                let name = "photo-\(UUID().uuidString.prefix(8)).\(ext)"
-                let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(name)
-                do {
-                    try data.write(to: tempURL)
-                } catch {
-                    showHint("读取所选文件失败。")
-                    return
+                photoItems = []
+                await uploadPickedFiles(urls: urls)
+                for url in tempURLs {
+                    try? FileManager.default.removeItem(at: url)
                 }
-                await uploadPickedFile(url: tempURL, suggestedName: name)
-                try? FileManager.default.removeItem(at: tempURL)
             }
-        }
-    }
-
-    // MARK: - 服务未启动引导
+        }    // MARK: - 服务未启动引导
 
     private var guideView: some View {
         ScrollView {
@@ -615,6 +615,29 @@ struct FileTransferChannelView: View {
         }
     }
 
+    /// 多文件队列上传：逐个上传，汇总成功/失败数量。
+    private func uploadPickedFiles(urls: [URL]) async {
+        var successCount = 0
+        var failedCount = 0
+        for url in urls {
+            let accessing = url.startAccessingSecurityScopedResource()
+            defer {
+                if accessing {
+                    url.stopAccessingSecurityScopedResource()
+                }
+            }
+            if await viewModel.uploadFile(fileURL: url, suggestedName: url.lastPathComponent) {
+                successCount += 1
+            } else {
+                failedCount += 1
+            }
+        }
+        if successCount > 0 {
+            showHint("已发送 \(successCount) 个文件到电脑\(failedCount > 0 ? "，\(failedCount) 个失败" : "")")
+        } else if failedCount > 0 {
+            showHint("发送失败：\(failedCount) 个文件")
+        }
+    }
     /// 上传用户选择的文件到电脑端 inbound（成功后提示）。
     private func uploadPickedFile(url: URL, suggestedName: String) async {
         let accessing = url.startAccessingSecurityScopedResource()
