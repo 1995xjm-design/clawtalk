@@ -45,26 +45,10 @@ struct HomeTabView: View {
         _emergencyStore = State(initialValue: EmergencyStore(settings: SettingsStore()))
     }
 
-    var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
-                    if let assistantViewModel {
-                        VoiceAssistantCardSlot(content: VoiceAssistantCardView(viewModel: assistantViewModel))
-                            .padding(.horizontal, 16)
-                    } else {
-                        VoiceAssistantCardSlot()
-                            .padding(.horizontal, 16)
-                    }
+    /// 快捷入口卡片网格（拆出独立计算属性，避免 SwiftUI 类型检查超时）。
+    private var cardGrid: some View {
+        LazyVGrid(columns: columns, spacing: 12) {
 
-                    todayOverviewSection
-
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("快捷入口")
-                            .font(.headline)
-                            .foregroundStyle(.primary)
-
-                        LazyVGrid(columns: columns, spacing: 12) {
                             // 提醒卡（自带 NavigationLink → 提醒列表）
                             ReminderCardView()
 
@@ -160,7 +144,29 @@ struct HomeTabView: View {
 
                             // 睡前陪伴卡
                             WindDownCardView(settings: settings)
-                        }
+                                }
+    }
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
+                    if let assistantViewModel {
+                        VoiceAssistantCardSlot(content: VoiceAssistantCardView(viewModel: assistantViewModel))
+                            .padding(.horizontal, 16)
+                    } else {
+                        VoiceAssistantCardSlot()
+                            .padding(.horizontal, 16)
+                    }
+
+                    todayOverviewSection
+
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("快捷入口")
+                            .font(.headline)
+                            .foregroundStyle(.primary)
+
+                        cardGrid
                     }
                     .padding(.horizontal, 16)
                 }
