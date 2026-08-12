@@ -70,7 +70,7 @@ enum LogCollector {
         formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
         let lines = load().map { entry -> String in
             let time = formatter.string(from: entry.timestamp)
-            let version = entry.appVersion.map { "[$0] " } ?? ""
+            let version = entry.appVersion.map { "[\($0)] " } ?? ""
             return "\(time) [\(entry.module)] \(version)\(entry.message)"
         }
         return lines.joined(separator: "\n")
