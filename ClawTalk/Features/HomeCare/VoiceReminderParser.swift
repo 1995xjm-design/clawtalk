@@ -26,7 +26,7 @@ enum VoiceReminderParser {
         let category: CareReminderCategory
     }
 
-    enum Failure {
+    enum Failure: Error {
         /// 没解析出时间（需要手动填）
         case noTime
         /// 句式暂不支持（如每周五），附说明
