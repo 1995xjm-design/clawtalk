@@ -12,7 +12,6 @@ struct ClawTalkApp: App {
     @State private var settingsStore: SettingsStore
     @State private var channelStore: ChannelStore
     @State private var selectedChannel: Channel?
-    @State private var showFileTransferChannel = false
     @State private var chatViewModel: ChatViewModel?
     @State private var syncChatViewModel: SyncChatViewModel?
     @State private var selectedSyncChannel: Channel?
@@ -25,7 +24,14 @@ struct ClawTalkApp: App {
     @State private var gatewaySessionsViewModel: ToolsViewModel?
     @State private var widgetSnapshot: WidgetSnapshot?
     @State private var syncedChannelsSignature: String?
-    @State private var selectedTab = 0
+    @State private var selectedTab = 1
+    @State private var activeChatRoute: ChatRoute?
+
+    private enum ChatRoute: Hashable {
+        case chat
+        case sync
+        case fileTransfer
+    }
 
     init() {
         #if DEBUG
@@ -39,47 +45,67 @@ struct ClawTalkApp: App {
 
     @ViewBuilder
     private var mainZStack: some View {
-        ZStack {
-        ChannelListView(
-        channelStore: channelStore,
-        settingsStore: settingsStore,
-        gatewayConnection: gatewayConnection,
-        nodeConnection: nodeConnection,
-        onSelect: { channel in
-        selectChannel(channel)
-        },
-        onSelectFileTransfer: { showFileTransferChannel = true },
-        onOpenGatewaySessions: { openGatewaySessionsList() }
-        )
-        .zIndex(0)
-                if let vm = chatViewModel, selectedChannel != nil {
-        ChatView(viewModel: vm, settingsStore: settingsStore, gatewayConnection: gatewayConnection, onBack: goBack, onDeleteChannel: deleteCurrentChannel)
-        .zIndex(1)
-        .onChange(of: vm.isConversationMode) { _, isOn in
-        if isOn {
-        stopVoiceWake()
-        } else {
-        startVoiceWakeIfNeeded()
-        }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .clawTalkWakeRestartRequested)) { _ in
-        startVoiceWakeIfNeeded()
-        }
-        }
-                if let syncVM = syncChatViewModel, selectedSyncChannel != nil {
-        SyncChatView(viewModel: syncVM, onBack: goBack, onDeleteChannel: deleteCurrentChannel)
-        .zIndex(1)
-        }
-                if showFileTransferChannel {
-        FileTransferChannelView(
-        settings: settingsStore,
-        onBack: { showFileTransferChannel = false }
-        )
-        .zIndex(1)
-        }
+        NavigationStack {
+            ZStack {
+                ChannelListView(
+                    channelStore: channelStore,
+                    settingsStore: settingsStore,
+                    gatewayConnection: gatewayConnection,
+                    nodeConnection: nodeConnection,
+                    onSelect: { channel in
+                        selectChannel(channel)
+                    },
+                    onSelectFileTransfer: { activeChatRoute = .fileTransfer },
+                    onOpenGatewaySessions: { openGatewaySessionsList() }
+                )
+            }
+            .navigationDestination(item: $activeChatRoute) { route in
+                chatDestination(route)
+            }
+            .onChange(of: activeChatRoute) { oldValue, newValue in
+                // 系统侧滑返回 / 自绘返回按钮：路由清空时做聊天页退出清理
+                if oldValue != nil && newValue == nil {
+                    handleChatRouteCleared()
+                }
+            }
         }
     }
 
+    /// 聊天页路由目标（NavigationStack push，获得系统原生侧滑返回手势）。
+    @ViewBuilder
+    private func chatDestination(_ route: ChatRoute) -> some View {
+        switch route {
+        case .chat:
+            if let vm = chatViewModel, selectedChannel != nil {
+                ChatView(
+                    viewModel: vm,
+                    settingsStore: settingsStore,
+                    gatewayConnection: gatewayConnection,
+                    onBack: goBack,
+                    onDeleteChannel: deleteCurrentChannel
+                )
+                .toolbar(.hidden, for: .navigationBar)
+                .onChange(of: vm.isConversationMode) { _, isOn in
+                    if isOn {
+                        stopVoiceWake()
+                    } else {
+                        startVoiceWakeIfNeeded()
+                    }
+                }
+                .onReceive(NotificationCenter.default.publisher(for: .clawTalkWakeRestartRequested)) { _ in
+                    startVoiceWakeIfNeeded()
+                }
+            }
+        case .sync:
+            if let syncVM = syncChatViewModel, selectedSyncChannel != nil {
+                SyncChatView(viewModel: syncVM, onBack: goBack, onDeleteChannel: deleteCurrentChannel)
+                    .toolbar(.hidden, for: .navigationBar)
+            }
+        case .fileTransfer:
+            FileTransferChannelView(settings: settingsStore, onBack: goBack)
+                .toolbar(.hidden, for: .navigationBar)
+        }
+    }
     // MARK: - 主界面 TabView（频道列表 + 主页 Tab）
 
     @ViewBuilder
@@ -106,7 +132,7 @@ struct ClawTalkApp: App {
 
     /// 聊天 / 同步聊天 / 文件传输覆盖层打开时隐藏 Tab 栏，保持全屏聊天体验。
     private var isChatPresented: Bool {
-        chatViewModel != nil || selectedSyncChannel != nil || showFileTransferChannel
+        activeChatRoute != nil
     }
 
     var body: some Scene {
@@ -267,6 +293,7 @@ struct ClawTalkApp: App {
             selectedChannel = channel
             selectedSyncChannel = channel
             nodeConnection.onImagesReceived = nil
+            activeChatRoute = .sync
             return
         }
 
@@ -321,6 +348,7 @@ struct ClawTalkApp: App {
         if restartVoiceWake {
             startVoiceWakeIfNeeded()
         }
+        activeChatRoute = .chat
     }
 
     /// 网关会话入口：懒加载会话列表 ViewModel 并弹出全部会话列表
@@ -350,7 +378,13 @@ struct ClawTalkApp: App {
         selectChannel(channel)
     }
 
+    /// 聊天页返回（自绘返回按钮）：清空路由 → onChange 统一做退出清理。
     private func goBack() {
+        activeChatRoute = nil
+    }
+
+    /// 聊天页退出清理：系统侧滑返回或自绘返回按钮共用（不销毁后台任务，完成后发通知）。
+    private func handleChatRouteCleared() {
         stopVoiceWake()
         if syncChatViewModel != nil || selectedSyncChannel != nil {
             syncChatViewModel?.stopPolling()
@@ -378,10 +412,8 @@ struct ClawTalkApp: App {
         if isInFlight {
             vm.onRunFinished = { finishedVM, success, snippet in
                 guard !finishedVM.isVisible else { return }
-                let title = "ClawTalk · \(finishedVM.channel.name)"
-                let body = success
-                    ? (snippet ?? "回复已完成")
-                    : "回复失败：\(snippet ?? "请查看")"
+                let title = success ? "任务完成" : "任务失败"
+                let body = snippet ?? (success ? "对话已处理完毕" : "后台任务出现问题，请回聊天页查看")
                 Task {
                     try? await NotificationCapability.notify(title: title, body: body, sound: nil, priority: "urgent")
                 }
@@ -392,7 +424,6 @@ struct ClawTalkApp: App {
         selectedChannel = nil
         nodeConnection.onImagesReceived = nil
     }
-
     private func deleteCurrentChannel() {
         stopVoiceWake()
         if let vm = chatViewModel {
