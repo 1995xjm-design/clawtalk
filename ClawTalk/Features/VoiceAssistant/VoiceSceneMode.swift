@@ -230,4 +230,39 @@ enum VoiceAssistantTheme: String, CaseIterable, Identifiable, Codable {
         case .mono: return 0.50
         }
     }
+    /// 沉浸背景渐变（顶部→底部，模拟参考图深色沉浸氛围）。
+    var backgroundColors: [Color] {
+        switch self {
+        case .aurora:
+            return [
+                Color(red: 0.02, green: 0.01, blue: 0.10),
+                Color(red: 0.05, green: 0.12, blue: 0.32),
+                Color(red: 0.22, green: 0.08, blue: 0.38)
+            ]
+        case .ocean:
+            return [
+                Color(red: 0.01, green: 0.05, blue: 0.12),
+                Color(red: 0.03, green: 0.20, blue: 0.32),
+                Color(red: 0.05, green: 0.12, blue: 0.30)
+            ]
+        case .sunset:
+            return [
+                Color(red: 0.12, green: 0.02, blue: 0.06),
+                Color(red: 0.35, green: 0.10, blue: 0.20),
+                Color(red: 0.18, green: 0.04, blue: 0.24)
+            ]
+        case .forest:
+            return [
+                Color(red: 0.01, green: 0.08, blue: 0.06),
+                Color(red: 0.05, green: 0.22, blue: 0.16),
+                Color(red: 0.03, green: 0.12, blue: 0.18)
+            ]
+        case .mono:
+            return [
+                Color(red: 0.05, green: 0.05, blue: 0.08),
+                Color(red: 0.10, green: 0.11, blue: 0.15),
+                Color(red: 0.04, green: 0.04, blue: 0.06)
+            ]
+        }
+    }
 }

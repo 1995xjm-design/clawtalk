@@ -717,14 +717,28 @@ struct GlobalVoiceInputFloating: View {
 
     private var recordButton: some View {
         ZStack {
+            // 声呐波纹：按住/录音时从按钮中心向外扩散
+            if isPressed || viewModel.state == .recording {
+                SonarRings(color: buttonColor)
+                    .frame(width: buttonSize + 80, height: buttonSize + 80)
+            }
+
             if viewModel.state == .idle {
+                // 呼吸光晕：双层错相，幅度加大（待机更有「活」感）
                 Circle()
-                    .fill(Color.openClawRed.opacity(0.25))
+                    .fill(Color.openClawRed.opacity(0.22))
                     .frame(
-                        width: buttonSize + (isBreathing ? 20 : 6),
-                        height: buttonSize + (isBreathing ? 20 : 6)
+                        width: buttonSize + (isBreathing ? 36 : 12),
+                        height: buttonSize + (isBreathing ? 36 : 12)
                     )
-                    .animation(.easeInOut(duration: 1.8).repeatForever(autoreverses: true), value: isBreathing)
+                    .animation(.easeInOut(duration: 1.6).repeatForever(autoreverses: true), value: isBreathing)
+                Circle()
+                    .fill(Color.openClawRed.opacity(0.12))
+                    .frame(
+                        width: buttonSize + (isBreathing ? 52 : 22),
+                        height: buttonSize + (isBreathing ? 52 : 22)
+                    )
+                    .animation(.easeInOut(duration: 2.4).repeatForever(autoreverses: true), value: isBreathing)
             }
 
             if viewModel.state == .recording {
@@ -746,12 +760,19 @@ struct GlobalVoiceInputFloating: View {
                 }
             }
 
+            // 按钮主体：按压缩强（0.85）+ 点亮高光
             Circle()
                 .fill(buttonColor)
                 .frame(width: buttonSize, height: buttonSize)
-                .shadow(color: buttonColor.opacity(0.45), radius: isPressed ? 4 : 10, y: isPressed ? 2 : 6)
-                .scaleEffect(isPressed ? 0.88 : 1.0)
-                .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isPressed)
+                .shadow(color: buttonColor.opacity(isPressed ? 0.75 : 0.45), radius: isPressed ? 8 : 10, y: isPressed ? 2 : 6)
+                .scaleEffect(isPressed ? 0.85 : 1.0)
+                .animation(.spring(response: 0.28, dampingFraction: 0.55), value: isPressed)
+                .overlay(
+                    Circle()
+                        .fill(.white.opacity(isPressed ? 0.26 : 0.10))
+                        .scaleEffect(isPressed ? 0.92 : 1.0)
+                        .animation(.easeOut(duration: 0.18), value: isPressed)
+                )
 
             buttonIcon
                 .font(.system(size: 26, weight: .semibold))
@@ -763,7 +784,6 @@ struct GlobalVoiceInputFloating: View {
         .disabled(viewModel.state == .transcribing)
         .accessibilityLabel(accessibilityLabel)
     }
-
     private var recordingRingAngle: Double {
         viewModel.state == .recording ? 360 : 0
     }
@@ -777,18 +797,26 @@ struct GlobalVoiceInputFloating: View {
     }
 
     @ViewBuilder
+    @ViewBuilder
     private var buttonIcon: some View {
         switch viewModel.state {
         case .idle:
             Image(systemName: "mic.fill")
         case .recording:
-            Image(systemName: viewModel.mode == .long ? "stop.fill" : "mic.fill")
-                .symbolEffect(.pulse)
+            ZStack {
+                Image(systemName: viewModel.mode == .long ? "stop.fill" : "waveform")
+                    .symbolEffect(.pulse)
+                if viewModel.mode == .short {
+                    Circle()
+                        .fill(Color.red)
+                        .frame(width: 9, height: 9)
+                        .offset(x: 11, y: -11)
+                }
+            }
         case .transcribing:
             Image(systemName: "waveform")
         }
     }
-
     private var accessibilityLabel: String {
         switch viewModel.state {
         case .idle: return "按住说话，上滑切长录音"
@@ -941,6 +969,8 @@ struct GlobalVoiceInputFloating: View {
     }
 
     /// 迷你频谱条：随真实录音电平起伏（手指上方可见，不被手指遮挡）。
+    /// 迷你频谱条：随真实录音电平起伏（手指上方可见，不被手指遮挡）。
+    /// 出现时从中心横向展开（scale + opacity 过渡）。
     private var miniWaveform: some View {
         HStack(spacing: 3) {
             ForEach(0..<7, id: \.self) { index in
@@ -950,14 +980,38 @@ struct GlobalVoiceInputFloating: View {
             }
         }
         .frame(height: 22)
+        .transition(.scale(scale: 0.4, anchor: .bottom).combined(with: .opacity))
+        .animation(.spring(response: 0.42, dampingFraction: 0.7), value: viewModel.state)
         .animation(.easeOut(duration: 0.1), value: viewModel.audioLevel)
     }
-
     private func barHeight(index: Int) -> CGFloat {
         let seeds: [CGFloat] = [0.5, 1.0, 0.7, 1.2, 0.8, 1.1, 0.6]
         let seed = seeds[index % seeds.count]
         let level = max(0.06, CGFloat(viewModel.audioLevel) * 18)
         let wave = CGFloat(sin(Date().timeIntervalSince1970 * 6 + Double(index) * 0.9))
         return max(4, min(20, level * seed + wave * 2 + 3))
+    }
+}
+
+/// 声呐波纹：按住/录音时从按钮中心向外扩散的圆环（Canvas 30fps，轻量）。
+private struct SonarRings: View {
+    let color: Color
+    private let ringCount = 3
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { context in
+            let t = context.date.timeIntervalSinceReferenceDate
+            Canvas { context, size in
+                let center = CGPoint(x: size.width / 2, y: size.height / 2)
+                for i in 0..<ringCount {
+                    let progress = (t * 0.55 + Double(i) / Double(ringCount)).truncatingRemainder(dividingBy: 1.0)
+                    let radius = size.width * (0.12 + 0.36 * progress)
+                    let alpha = (1.0 - progress) * 0.5
+                    let rect = CGRect(x: center.x - radius, y: center.y - radius, width: radius * 2, height: radius * 2)
+                    context.stroke(Path(ellipseIn: rect), with: .color(color.opacity(alpha)), lineWidth: 1.8)
+                }
+            }
+        }
+        .allowsHitTesting(false)
     }
 }

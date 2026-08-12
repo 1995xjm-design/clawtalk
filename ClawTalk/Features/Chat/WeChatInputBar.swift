@@ -31,6 +31,7 @@ struct WeChatInputBar: View {
 
     private enum HoldAction {
         case cancel
+        case send
         case transcribe
     }
 
@@ -124,9 +125,13 @@ struct WeChatInputBar: View {
                     }
                     onHoldStart()
                 }
-                // 上滑 50pt 进入选择区；按 x 方向决定高亮项（左取消 / 右转文字）
+                // 上滑 50pt 进入选择区；按 x 方向三区决定高亮项（左取消 / 中松开发送 / 右转文字）
                 if value.translation.height < -50 {
-                    let newAction: HoldAction = value.translation.width >= 0 ? .transcribe : .cancel
+                    let newAction: HoldAction = {
+                        if value.translation.width < -40 { return .cancel }
+                        if value.translation.width > 40 { return .transcribe }
+                        return .send
+                    }()
                     if !showActionLayer {
                         // 进入选择区：中震动反馈
                         if hapticsEnabled {
@@ -154,6 +159,8 @@ struct WeChatInputBar: View {
                     switch selectedAction {
                     case .cancel:
                         onHoldCancel()
+                    case .send:
+                        onHoldSendVoice()
                     case .transcribe:
                         onHoldTranscribe()
                     case nil:
@@ -213,6 +220,7 @@ struct WeChatInputBar: View {
     private var actionLayer: some View {
         HStack(spacing: 12) {
             actionZoneItem("取消", icon: "xmark", tint: .red, action: .cancel)
+            actionZoneItem("松开 发送", icon: "waveform", tint: .blue, action: .send)
             actionZoneItem("滑到这里转文字", icon: "textformat", tint: .green, action: .transcribe)
         }
         .padding(.horizontal, 28)
