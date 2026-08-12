@@ -218,6 +218,55 @@ final class ChatViewModel {
         }
     }
 
+    /// 取消语音消息录制：丢弃本次录音（微信式上滑「取消」），恢复唤醒监听。
+    func cancelVoiceMessageRecording() {
+        guard isRecordingVoiceMessage, state == .recording else { return }
+        isRecordingVoiceMessage = false
+        _ = audioCapture.stopRecording()
+        state = .idle
+        NotificationCenter.default.post(name: .clawTalkWakeRestartRequested, object: nil)
+    }
+
+    /// 微信式上滑「转文字」：停止录音 → STT 转文字 → 直接发送文字（不带语音附件）。
+    func stopVoiceMessageRecordingAndSendTextOnly() {
+        guard isRecordingVoiceMessage, state == .recording else { return }
+        isRecordingVoiceMessage = false
+
+        let samples = audioCapture.stopRecording()
+        let duration = Date().timeIntervalSince(recordingStart ?? Date())
+        guard duration >= 0.5, samples.count > 8000 else {
+            state = .idle
+            NotificationCenter.default.post(name: .clawTalkWakeRestartRequested, object: nil)
+            return
+        }
+
+        state = .transcribing
+        sendTask = Task {
+            defer {
+                NotificationCenter.default.post(name: .clawTalkWakeRestartRequested, object: nil)
+            }
+            do {
+                guard let stt = transcriptionService else {
+                    throw ChatError.notConfigured("语音转文字服务未初始化")
+                }
+                let transcript: String
+                if let doubao = stt as? DoubaoSTTService {
+                    transcript = try await doubao.finishStreaming()
+                } else {
+                    transcript = try await stt.transcribe(audioSamples: samples)
+                }
+                guard !transcript.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                    state = .idle
+                    return
+                }
+                state = .idle
+                sendText(transcript)
+            } catch {
+                errorMessage = "转文字失败：\(AppErrorText.localized(error.localizedDescription))"
+                state = .idle
+            }
+        }
+    }
     /// 取某条消息的语音附件（无则返回 nil，气泡按普通文本渲染）。
     func voiceAttachment(for messageID: UUID) -> VoiceMessageAttachment? {
         voiceAttachments[messageID]

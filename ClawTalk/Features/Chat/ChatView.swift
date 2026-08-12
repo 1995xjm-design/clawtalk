@@ -334,87 +334,35 @@ struct ChatView: View {
                 .padding(.top, 4)
             }
 
-            HStack(spacing: 10) {
-                // 语音消息：按住录音 → 松开发送（本地存档 + 附件标记；网关不支持时降级文字）
-                if !viewModel.isConversationMode, settingsStore.settings.voiceInputEnabled {
-                    VoiceMessageButton(
-                        isRecording: viewModel.isRecordingVoiceMessage,
-                        hapticsEnabled: settingsStore.settings.hapticsEnabled,
-                        onHoldStart: { viewModel.startVoiceMessageRecording() },
-                        onHoldEnd: { viewModel.stopVoiceMessageRecordingAndSend() }
-                    )
-                }
-
-                attachmentsMenu
-
-                TextField("消息…", text: $textInput, axis: .vertical)
-                    .textFieldStyle(.plain)
-                    .lineLimit(1...5)
-                    .focused($isInputFocused)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
-                    .background(Color(.systemGray5))
-                    .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-                    .disabled(viewModel.isConversationMode)
-                    .opacity(viewModel.isConversationMode ? 0.5 : 1.0)
-
-                if !viewModel.isConversationMode {
-                    let trimmed = textInput.trimmingCharacters(in: .whitespacesAndNewlines)
-                    let hasText = !trimmed.isEmpty
-                    let hasAttachments = !attachedImages.isEmpty
-
-                    // Mic is visible whenever there's no typed text — even with
-                    // attachments, so users can dictate a message to send
-                    // alongside their photos. Hidden entirely if the user has
-                    // turned voice input off in Settings.
-                    if !hasText && settingsStore.settings.voiceInputEnabled {
-                        InlineMicButton(
-                            state: viewModel.state,
-                            hapticsEnabled: settingsStore.settings.hapticsEnabled,
-                            onTap: {
-                                if viewModel.state == .recording {
-                                    viewModel.stopRecordingAndSend(images: attachedImages)
-                                    attachedImages = []
-                                    selectedPhotos = []
-                                } else {
-                                    viewModel.startRecording()
-                                }
-                            },
-                            onHoldStart: { viewModel.startRecording() },
-                            onHoldEnd: {
-                                viewModel.stopRecordingAndSend(images: attachedImages)
-                                attachedImages = []
-                                selectedPhotos = []
-                            }
-                        )
+            WeChatInputBar(
+                text: $textInput,
+                voiceInputEnabled: settingsStore.settings.voiceInputEnabled,
+                hapticsEnabled: settingsStore.settings.hapticsEnabled,
+                isSending: viewModel.state == .transcribing || viewModel.state == .thinking,
+                isConversationMode: viewModel.isConversationMode,
+                onToggleVoiceMode: {},
+                onSendText: {
+                    if settingsStore.settings.hapticsEnabled {
+                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
                     }
-
-                    // Send arrow appears when there's something to send (text or
-                    // attachments). With only attachments, mic + send coexist
-                    // so users can pick voice or text-less send. When voice is
-                    // disabled, also show send for an empty input as a no-op
-                    // disabled state — better than a totally bare input row.
-                    let voiceOff = !settingsStore.settings.voiceInputEnabled
-                    if hasText || hasAttachments || voiceOff {
-                        Button(action: {
-                            if settingsStore.settings.hapticsEnabled {
-                                UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                            }
-                            viewModel.sendText(textInput, images: attachedImages)
-                            textInput = ""
-                            attachedImages = []
-                            selectedPhotos = []
-                        }) {
-                            Image(systemName: "arrow.up.circle.fill")
-                                .font(.title)
-                                .foregroundStyle(.openClawRed)
-                        }
-                        .disabled(!(viewModel.state == .idle || viewModel.state == .speaking || viewModel.state == .streaming))
-                    }
-                }
+                    viewModel.sendText(textInput, images: attachedImages)
+                    textInput = ""
+                    attachedImages = []
+                    selectedPhotos = []
+                },
+                onHoldStart: { viewModel.startVoiceMessageRecording() },
+                onHoldCancel: { viewModel.cancelVoiceMessageRecording() },
+                onHoldSendVoice: { viewModel.stopVoiceMessageRecordingAndSend() },
+                onHoldTranscribe: { viewModel.stopVoiceMessageRecordingAndSendTextOnly() },
+                onAddAttachment: { showPhotosPicker = true }
+            )
+            .photosPicker(isPresented: $showPhotosPicker,
+                          selection: $selectedPhotos,
+                          maxSelectionCount: 8,
+                          matching: .images)
+            .onChange(of: selectedPhotos) {
+                Task { await loadSelectedPhotos() }
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 12)
         }
         .background(Color(.secondarySystemBackground))
         .animation(.easeInOut(duration: 0.2), value: viewModel.state)

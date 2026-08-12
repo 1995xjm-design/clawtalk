@@ -1,5 +1,6 @@
 import SwiftUI
 import MarkdownUI
+import PhotosUI
 
 /// 三端同步聊天页：手机 / 电脑 AutoClaw / 桌面 AI 统一对话历史。
 /// 数据源为桥的 GET /sync（codex 18991 / claude 18992），每 3 秒轮询增量刷新；
@@ -17,6 +18,9 @@ struct SyncChatView: View {
     @State private var showDeleteConfirm = false
     @State private var scrollTargetID: UUID?
     @FocusState private var isInputFocused: Bool
+    @State private var showSyncPhotosPicker = false
+    @State private var selectedSyncPhotos: [PhotosPickerItem] = []
+    @State private var attachedSyncImages: [Data] = []
 
     var body: some View {
         VStack(spacing: 0) {
@@ -53,6 +57,32 @@ struct SyncChatView: View {
         }
     }
 
+    /// 转写结果追加到输入框（与微信式按住说话一致）。
+    private func appendTranscript(_ transcript: String) {
+        if textInput.isEmpty {
+            textInput = transcript
+        } else {
+            textInput += transcript
+        }
+    }
+
+    /// 相册多选 → 压缩后存入待发送图片。
+    private func loadSyncPhotos() async {
+        var newImages: [Data] = []
+        for item in selectedSyncPhotos {
+            do {
+                guard let data = try await item.loadTransferable(type: Data.self) else { continue }
+                guard let uiImage = UIImage(data: data) else { continue }
+                let resized = uiImage.resizedToFit(maxDimension: 512)
+                if let jpeg = resized.jpegData(compressionQuality: 0.4) {
+                    newImages.append(jpeg)
+                }
+            } catch {
+                LogCollector.record(module: "图片", "同步聊天图片加载失败：\(AppErrorText.localized(error.localizedDescription))")
+            }
+        }
+        attachedSyncImages = newImages
+    }
     /// 同步消息内容渲染防护：超长文本截断、剥离可能导致 MarkdownUI 崩溃的控制字符。
     static func sanitizedContent(_ raw: String) -> String {
         var text = raw
@@ -268,69 +298,47 @@ struct SyncChatView: View {
                 .padding(.top, 10)
             }
 
-            HStack(spacing: 10) {
-                syncMicButton
-
-                TextField("消息…", text: $textInput, axis: .vertical)
-                    .textFieldStyle(.plain)
-                    .lineLimit(1...5)
-                    .focused($isInputFocused)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
-                    .background(Color(.systemGray5))
-                    .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-
-                if !textInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    Button(action: {
-                        let text = textInput
-                        textInput = ""
-                        isInputFocused = false
-                        viewModel.send(text)
-                    }) {
-                        Image(systemName: "arrow.up.circle.fill")
-                            .font(.title)
-                            .foregroundStyle(.openClawRed)
+            WeChatInputBar(
+                text: $textInput,
+                voiceInputEnabled: true,
+                hapticsEnabled: true,
+                isSending: viewModel.isSending,
+                isConversationMode: false,
+                onToggleVoiceMode: {},
+                onSendText: {
+                    let text = textInput
+                    textInput = ""
+                    isInputFocused = false
+                    viewModel.send(text, images: attachedSyncImages)
+                    attachedSyncImages = []
+                    selectedSyncPhotos = []
+                },
+                onHoldStart: { viewModel.startVoiceInput() },
+                onHoldCancel: { viewModel.cancelVoiceInput() },
+                onHoldSendVoice: {
+                    viewModel.stopVoiceInputAndTranscribe { transcript in
+                        appendTranscript(transcript)
                     }
-                    .disabled(viewModel.isSending)
-                }
+                },
+                onHoldTranscribe: {
+                    viewModel.stopVoiceInputAndTranscribe { transcript in
+                        appendTranscript(transcript)
+                    }
+                },
+                onAddAttachment: { showSyncPhotosPicker = true }
+            )
+            .photosPicker(isPresented: $showSyncPhotosPicker,
+                          selection: $selectedSyncPhotos,
+                          maxSelectionCount: 8,
+                          matching: .images)
+            .onChange(of: selectedSyncPhotos) {
+                Task { await loadSyncPhotos() }
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 12)
         }
         .background(Color(.secondarySystemBackground))
     }
 
-    /// 麦克风按钮：按住说话 → 转文字填入输入框（与其他聊天页一致）。
-    private var syncMicButton: some View {
-        ZStack {
-            Circle()
-                .fill(viewModel.isRecordingVoiceInput ? Color.red : Color(.systemGray5))
-                .frame(width: 40, height: 40)
-            Image(systemName: viewModel.isTranscribingVoice ? "waveform" : (viewModel.isRecordingVoiceInput ? "waveform" : "mic.fill"))
-                .font(.body)
-                .foregroundStyle(viewModel.isRecordingVoiceInput ? .white : .openClawRed)
-        }
-        .frame(width: 52, height: 52)
-        .contentShape(Circle())
-        .gesture(
-            DragGesture(minimumDistance: 0)
-                .onChanged { _ in
-                    guard !viewModel.isRecordingVoiceInput, !viewModel.isTranscribingVoice else { return }
-                    viewModel.startVoiceInput()
-                }
-                .onEnded { _ in
-                    guard viewModel.isRecordingVoiceInput else { return }
-                    viewModel.stopVoiceInputAndTranscribe { transcript in
-                        if textInput.isEmpty {
-                            textInput = transcript
-                        } else {
-                            textInput += transcript
-                        }
-                    }
-                }
-        )
-        .accessibilityLabel("按住说话输入")
-    }
+
 }
 
 /// 查找聊天内容：基于已加载消息本地过滤，点结果滚动定位

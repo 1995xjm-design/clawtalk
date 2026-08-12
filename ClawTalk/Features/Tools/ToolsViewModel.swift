@@ -83,33 +83,28 @@ final class ToolsViewModel {
             (.browser, "browser", "status", nil),
         ]
 
-        await withTaskGroup(of: (ToolCategory, Bool).self) { group in
-            for (category, tool, action, args) in probes {
-                group.addTask { [client, gatewayURL, token] in
-                    do {
-                        _ = try await client.invokeTool(
-                            tool: tool,
-                            action: action,
-                            args: args,
-                            gatewayURL: gatewayURL,
-                            token: token
-                        )
-                        return (category, true)
-                    } catch let error as OpenClawError {
-                        if case .toolNotFound = error {
-                            return (category, false)
-                        }
-                        // Any other error means the tool exists but something else went wrong
-                        return (category, true)
-                    } catch {
-                        return (category, true)
-                    }
+        // 串行探测 + 小间隔：避免一次并发 4 个请求触发网关限流（历史日志大量 429）。
+        for (category, tool, action, args) in probes {
+            do {
+                _ = try await client.invokeTool(
+                    tool: tool,
+                    action: action,
+                    args: args,
+                    gatewayURL: gatewayURL,
+                    token: token
+                )
+                toolAvailability[category] = true
+            } catch let error as OpenClawError {
+                if case .toolNotFound = error {
+                    toolAvailability[category] = false
+                } else {
+                    // Any other error means the tool exists but something else went wrong
+                    toolAvailability[category] = true
                 }
+            } catch {
+                toolAvailability[category] = true
             }
-
-            for await (category, available) in group {
-                toolAvailability[category] = available
-            }
+            try? await Task.sleep(nanoseconds: 200_000_000)
         }
     }
 

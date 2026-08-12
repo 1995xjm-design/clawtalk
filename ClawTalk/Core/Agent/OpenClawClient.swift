@@ -512,14 +512,27 @@ final class OpenClawClient {
         )
         request.httpBody = try JSONEncoder().encode(body)
 
-        let (data, response) = try await session.data(for: request)
-
-        guard let http = response as? HTTPURLResponse else {
-            throw OpenClawError.invalidResponse
+        // 429 限流退避重试：最多额外重试 2 次（600ms / 1.2s 退避），
+        // 避免工具页并发探测触发网关限流后一次性失败刷屏（历史日志大量 429）。
+        var lastData = Data()
+        var lastStatus = -1
+        for attempt in 0...2 {
+            let (data, response) = try await session.data(for: request)
+            guard let http = response as? HTTPURLResponse else {
+                throw OpenClawError.invalidResponse
+            }
+            lastData = data
+            lastStatus = http.statusCode
+            if http.statusCode != 429 || attempt == 2 {
+                break
+            }
+            try? await Task.sleep(nanoseconds: UInt64((attempt == 0 ? 600 : 1200) * 1_000_000))
         }
+        let data = lastData
+        let httpStatus = lastStatus
 
         // 2xx 但响应体不是合法 JSON：多半是网关地址/路径填错（指向了后端而非 OpenClaw 网关）
-        if (200...299).contains(http.statusCode),
+        if (200...299).contains(httpStatus),
            (try? JSONSerialization.jsonObject(with: data)) == nil {
             throw OpenClawError.responseError(
                 "网关返回了非 JSON 数据：请检查网关地址/路径是否正确（工具接口应指向 OpenClaw 网关 18789，而不是后端 18890）"
@@ -527,7 +540,12 @@ final class OpenClawClient {
         }
 
         // Try to parse error body for both HTTP errors and {ok: false} responses
-        if !((200...299).contains(http.statusCode)) {
+        if !((200...299).contains(httpStatus)) {
+            if httpStatus == 401 || httpStatus == 403 {
+                throw OpenClawError.responseError(
+                    "网关令牌无效或已过期：请到设置重新扫码配对（openclaw qr）"
+                )
+            }
             if let errorResponse = try? JSONDecoder().decode(ToolInvokeResponse.self, from: data),
                let errorType = errorResponse.error?.type,
                let msg = errorResponse.error?.message {
@@ -536,7 +554,7 @@ final class OpenClawClient {
                 }
                 throw OpenClawError.toolError(msg)
             }
-            throw OpenClawError.httpError(http.statusCode)
+            throw OpenClawError.httpError(httpStatus)
         }
 
         let decoded = try JSONDecoder().decode(ToolInvokeResponse.self, from: data)

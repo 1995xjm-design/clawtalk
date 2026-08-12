@@ -267,6 +267,13 @@ final class SyncChatViewModel {
         }
     }
 
+    /// 微信式上滑「取消」：停止录音、丢弃转写结果，恢复唤醒监听。
+    func cancelVoiceInput() {
+        guard isRecordingVoiceInput else { return }
+        isRecordingVoiceInput = false
+        _ = audioCapture.stopRecording()
+        NotificationCenter.default.post(name: .clawTalkWakeRestartRequested, object: nil)
+    }
     private func makeTranscriptionService() -> (any TranscriptionService)? {
         let s = settings.settings
         switch s.sttProvider {
@@ -282,7 +289,7 @@ final class SyncChatViewModel {
 
     // MARK: - 发送
 
-    func send(_ text: String) {
+    func send(_ text: String, images: [Data] = []) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, !isSending else { return }
         guard settings.isConfigured else {
@@ -318,7 +325,7 @@ final class SyncChatViewModel {
                     gatewayURL: self.settings.settings.gatewayURL
                 )
                 let eventStream = self.openClaw.stream(
-                    messages: history + [Message(role: .user, content: trimmed)],
+                    messages: history + [Message(role: .user, content: trimmed, imageData: images.isEmpty ? nil : images)],
                     gatewayURL: self.settings.settings.gatewayURL,
                     token: token,
                     model: "openclaw:\(self.agentId)",
