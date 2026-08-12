@@ -227,7 +227,7 @@ struct ChannelListView: View {
                 AddChannelView(channelStore: channelStore, settings: settingsStore)
             }
             .sheet(isPresented: $showTools) {
-                ToolsView(settings: settingsStore, gatewayConnection: gatewayConnection)
+                ToolsView(settings: settingsStore, gatewayConnection: gatewayConnection, nodeConnection: nodeConnection)
             }
             .sheet(item: $editingChannel) { channel in
                 EditChannelView(channelStore: channelStore, channel: channel)

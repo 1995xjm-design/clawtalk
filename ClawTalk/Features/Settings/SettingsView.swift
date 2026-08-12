@@ -159,7 +159,7 @@ private var connectionSection: some View {
                     }
                 }
             }
-            .disabled(store.settings.gatewayURL.isEmpty || store.gatewayToken.isEmpty || connectionTestState == .testing)
+            .disabled(store.settings.gatewayURL.isEmpty || connectionTestState == .testing)
 
             if case .failed(let error) = connectionTestState {
                 Text(error)
@@ -207,8 +207,14 @@ private var connectionSection: some View {
                 }
             }
             .pickerStyle(.segmented)
+            .onChange(of: store.settings.liveActivityStyle) { _, _ in
+                refreshLiveActivityStyle()
+            }
 
             Toggle("随 agent 切换", isOn: $store.settings.liveActivityFollowAgent)
+                .onChange(of: store.settings.liveActivityFollowAgent) { _, _ in
+                    refreshLiveActivityStyle()
+                }
         } header: {
             Text("灵动岛")
         } footer: {
@@ -540,7 +546,11 @@ private var connectionSection: some View {
                 var request = URLRequest(url: url)
                 request.httpMethod = "POST"
                 request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-                request.setValue("Bearer \(store.gatewayToken)", forHTTPHeaderField: "Authorization")
+                let resolvedToken = OpenClawClient.resolveHTTPToken(
+                    settingsToken: store.gatewayToken,
+                    gatewayURL: store.settings.gatewayURL
+                )
+                request.setValue("Bearer \(resolvedToken)", forHTTPHeaderField: "Authorization")
                 request.httpBody = Data("{\"model\":\"openclaw:main\",\"messages\":[],\"stream\":false}".utf8)
                 request.timeoutInterval = 15
 
@@ -578,6 +588,15 @@ private var connectionSection: some View {
                 connectionTestState = .failed(error.localizedDescription)
             }
         }
+    }
+
+    /// 灵动岛风格/「随 agent 切换」变更后，用当前卡片状态按新风格重刷。
+    private func refreshLiveActivityStyle() {
+        store.save()
+        ClawTalkLiveActivity.update(
+            statusText: "免提对话",
+            icon: ClawTalkLiveActivity.defaultIcon
+        )
     }
 
     // MARK: - Voice Preview

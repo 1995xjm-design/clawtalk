@@ -50,7 +50,14 @@ final class ToolsViewModel {
     }
 
     private var gatewayURL: String { settings.settings.gatewayURL }
-    private var token: String { settings.gatewayToken }
+    private var token: String {
+        // 二维码配对后网关下发 device token（存 Keychain），优先取它；回退设置里的手填令牌。
+        // 直接读 settings.gatewayToken 在配对场景是空的，会导致工具页全部 401/灰显。
+        OpenClawClient.resolveHTTPToken(
+            settingsToken: settings.gatewayToken,
+            gatewayURL: settings.settings.gatewayURL
+        )
+    }
 
     enum ToolCategory: String, CaseIterable {
         case memory, agents, sessions, browser, models

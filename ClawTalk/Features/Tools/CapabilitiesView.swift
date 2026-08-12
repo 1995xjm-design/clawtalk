@@ -57,7 +57,7 @@ final class CapabilitiesViewModel {
             return
         }
 
-        if let remoteNames = await Self.fetchRemoteCapabilities(base: base, token: settings.gatewayToken),
+        if let remoteNames = await Self.fetchRemoteCapabilities(base: base, token: OpenClawClient.resolveHTTPToken(settingsToken: settings.gatewayToken, gatewayURL: settings.settings.gatewayURL)),
            !remoteNames.isEmpty {
             entries = remoteNames.map { name in
                 let meta = Self.localCapabilities.first { $0.name == name }
@@ -90,7 +90,7 @@ final class CapabilitiesViewModel {
                 commandCount: capability.commands.count,
                 detail: capability.detail,
                 source: .local,
-                statusNote: nodeConnected ? "节点已连接 · 网关可调用" : "已声明 · 等待节点连接"
+                statusNote: nodeConnected ? "已连接 · 网关可调用" : "已声明 · 网关可调用（HTTP）"
             )
         }
     }
@@ -153,9 +153,14 @@ struct CapabilitiesView: View {
 
     private var nodeStatusText: String {
         if let nodeConnection, case .connected = nodeConnection.connectionState {
-            return "已连接"
+            return "已连接（WS）"
         }
-        return "未连接"
+        // 未启用 WebSocket 时走 HTTP 模式：工具可直接调用，无需节点连接。
+        // 节点（NodeConnection）仅 WebSocket 模式需要，避免误导用户。
+        if settings.settings.useWebSocket {
+            return "未连接"
+        }
+        return "HTTP 模式（无需节点）"
     }
 
     var body: some View {
@@ -237,6 +242,12 @@ struct CapabilitiesView: View {
     }
 
     private func reload() async {
-        await model.load(settings: settings, nodeConnected: nodeStatusText == "已连接")
+        let wsConnected: Bool
+        if let nodeConnection, case .connected = nodeConnection.connectionState {
+            wsConnected = true
+        } else {
+            wsConnected = false
+        }
+        await model.load(settings: settings, nodeConnected: wsConnected)
     }
 }

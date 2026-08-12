@@ -4,9 +4,11 @@ struct ToolsView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var viewModel: ToolsViewModel
     private let settings: SettingsStore
+    private let nodeConnection: NodeConnection?
 
-    init(settings: SettingsStore, gatewayConnection: GatewayConnection? = nil) {
+    init(settings: SettingsStore, gatewayConnection: GatewayConnection? = nil, nodeConnection: NodeConnection? = nil) {
         self.settings = settings
+        self.nodeConnection = nodeConnection
         _viewModel = State(initialValue: ToolsViewModel(settings: settings, gatewayConnection: gatewayConnection))
     }
 
@@ -42,7 +44,7 @@ struct ToolsView: View {
                     }
 
                     NavigationLink {
-                        CapabilitiesView(settings: settings)
+                        CapabilitiesView(settings: settings, nodeConnection: nodeConnection)
                     } label: {
                         Label("能力面板", systemImage: "square.stack.3d.up")
                             .foregroundStyle(Color.openClawRed)
