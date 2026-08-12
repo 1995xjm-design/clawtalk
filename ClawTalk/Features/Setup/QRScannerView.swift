@@ -1,6 +1,8 @@
 import AVFoundation
+import PhotosUI
 import SwiftUI
 import UIKit
+import Vision
 
 /// 全屏二维码扫码页：用于引导页扫描 `openclaw qr` 生成的配对码。
 /// 扫到任意二维码后回调原始内容并自动停止相机会话。
