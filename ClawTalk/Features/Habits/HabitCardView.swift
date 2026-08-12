@@ -6,7 +6,7 @@ import SwiftUI
 struct HabitCardView: View {
     @State private var store: HabitStore
 
-    init(store: HabitStore = HabitStore()) {
+    init(store: HabitStore) {
         _store = State(initialValue: store)
     }
 

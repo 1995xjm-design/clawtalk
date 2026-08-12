@@ -9,7 +9,7 @@ import SwiftUI
 struct GeofenceCardView: View {
     @State private var store: GeofenceStore
 
-    init(store: GeofenceStore = GeofenceStore.shared) {
+    init(store: GeofenceStore) {
         _store = State(initialValue: store)
     }
 

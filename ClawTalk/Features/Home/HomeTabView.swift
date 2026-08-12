@@ -20,6 +20,12 @@ struct HomeTabView: View {
     /// 自动化数据源：本地任务实时读取；网关 cron 排程后回填 nextRunAt。
     @State private var automationViewModel: AutomationViewModel?
 
+    // 33 项功能包的 Store（卡片需要共享实例；MainActor 上下文中创建）
+    @State private var fileVaultStore: FileVaultStore
+    @State private var habitStore: HabitStore
+    @State private var geofenceStore: GeofenceStore
+    @State private var emergencyStore: EmergencyStore
+
     /// 今日日记数：TODO(主智能体接线) Diary 组暂无 DiaryStore 类，日记数据在
     /// VoiceDiaryViewModel.entries；等日记组接口就绪后改为「entries 中 date 为今天的条数」。
     @State private var todayDiaryCount = 0
@@ -33,6 +39,10 @@ struct HomeTabView: View {
         self.gatewayConnection = gatewayConnection
         self.chatViewModel = chatViewModel
         _careStore = State(initialValue: CareReminderStore())
+        _fileVaultStore = State(initialValue: FileVaultStore())
+        _habitStore = State(initialValue: HabitStore())
+        _geofenceStore = State(initialValue: GeofenceStore())
+        _emergencyStore = State(initialValue: EmergencyStore(settings: SettingsStore()))
     }
 
     var body: some View {
@@ -113,10 +123,10 @@ struct HomeTabView: View {
                             HealthReportCardView(settings: settings)
 
                             // 习惯打卡卡
-                            HabitCardView()
+                            HabitCardView(store: habitStore)
 
                             // 到家/离开提醒卡
-                            GeofenceCardView()
+                            GeofenceCardView(store: geofenceStore)
 
                             // 停车位置卡
                             ParkingCardView()
@@ -125,10 +135,10 @@ struct HomeTabView: View {
                             TravelCardView()
 
                             // 紧急求助卡
-                            EmergencyHomeCardView(store: EmergencyStore.shared)
+                            EmergencyHomeCardView(store: emergencyStore)
 
                             // 重要文件防丢卡
-                            FileVaultCardView()
+                            FileVaultCardView(store: fileVaultStore)
 
                             // 知识库问答卡
                             KBCardView(settings: settings, gatewayConnection: gatewayConnection)

@@ -33,8 +33,8 @@ final class FileVaultStore {
     private let careReminderStore: CareReminderStore
     private let fileManager = FileManager.default
 
-    init(careReminderStore: CareReminderStore = CareReminderStore()) {
-        self.careReminderStore = careReminderStore
+    init(careReminderStore: CareReminderStore? = nil) {
+        self.careReminderStore = careReminderStore ?? CareReminderStore()
         load()
     }
 
