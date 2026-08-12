@@ -595,7 +595,7 @@ private var connectionSection: some View {
         store.save()
         ClawTalkLiveActivity.update(
             statusText: "免提对话",
-            icon: ClawTalkLiveActivity.defaultIcon
+            icon: "💬"
         )
     }
 
