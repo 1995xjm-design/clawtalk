@@ -56,7 +56,7 @@ struct AgentStatusIndicator: View {
                 .foregroundStyle(displayStatus.color)
 
             Text("Agent · \(displayStatus.label)")
-                .font(.caption)
+                .font(.caption2)
                 .fontWeight(.medium)
                 .foregroundStyle(.secondary)
 

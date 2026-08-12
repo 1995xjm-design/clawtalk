@@ -2,8 +2,13 @@ import SwiftUI
 
 /// 主页 Tab：顶部语音助手大卡位 + 「今日概览」横向统计卡 + 下方可配置合并卡片网格。
 ///
-/// D2：23→8 卡合并（家庭共享移除，工具卡回工具页）；D3：长按卡片可移除（AppStorage 持久化，工具页可回加）；
-/// B5：默认无壁纸 = 系统纯色跟随深浅，选壁纸后固定（深浅只改蒙层+卡片），NavigationStack 不再盖住壁纸层。
+/// S10：卡片系统升级为 iOS 桌面小组件质感——
+/// - 壁纸修复：NavigationStack 容器背景透明，壁纸层透出（N9）；
+/// - 卡片尺寸：小（1 列）/ 中（2 列）/ 大（4 列），AppStorage 持久化；
+/// - 拖动排序：编辑态 draggable + dropDestination，顺序持久化；
+/// - 编辑态：长按卡片进入（抖动 + 移除 × + 尺寸切换），点空白或「完成」退出；
+/// - 毛玻璃：卡片背景 .ultraThinMaterial + 细描边 + 轻阴影；
+/// - 「我的记忆」并入网格（默认中卡，今日概览下方第一格）。
 struct HomeTabView: View {
     private let settings: SettingsStore
     private let gatewayConnection: GatewayConnection?
@@ -11,9 +16,8 @@ struct HomeTabView: View {
     /// N0：主页空白处长按 → 工具页（由 App 层接线弹 ToolsView）。
     private let onOpenTools: (() -> Void)?
 
-    private let columns = [
-        GridItem(.adaptive(minimum: 150), spacing: 12)
-    ]
+    /// S10：4 列弹性网格（小卡 1 列 / 中卡 2 列 / 大卡 4 列，对齐 iOS 小组件比例）。
+    private let columns = Array(repeating: GridItem(.flexible(), spacing: 12), count: 4)
 
     @State private var assistantViewModel: VoiceAssistantViewModel?
 
@@ -31,8 +35,17 @@ struct HomeTabView: View {
     /// 记账卡摘要数据源（本月收支）
     @State private var expenseStore: ExpenseStore
 
-    /// D3：主页卡片自定义（长按移除 / 工具页添加），AppStorage 持久化。
+    /// D3：主页卡片自定义（长按移除 / 工具页添加），AppStorage 持久化（顺序即排布）。
     @AppStorage(HomeCardRegistry.storageKey) private var enabledCardKindsStorage = HomeCardRegistry.defaultStorageValue
+    /// S10：卡片尺寸持久化（`kind:size,...`）。
+    @AppStorage(HomeCardRegistry.sizeStorageKey) private var cardSizesStorage = ""
+
+    /// S10：卡片编辑态（长按卡片进入；点空白 / 「完成」退出）。
+    @State private var isEditingCards = false
+    /// S10：拖拽目标高亮卡片。
+    @State private var targetedKind: HomeCardKind?
+    /// S10：编辑态抖动驱动。
+    @State private var wobbleTick = false
 
     /// 今日日记数：TODO(主智能体接线) Diary 组暂无 DiaryStore 类，日记数据在
     /// VoiceDiaryViewModel.entries；等日记组接口就绪后改为「entries 中 date 为今天的条数」。
@@ -58,56 +71,6 @@ struct HomeTabView: View {
         _expenseStore = State(initialValue: ExpenseStore())
     }
 
-    /// 可配置卡片网格（D3：长按移除；全部移除后提供一键恢复）。
-    private var cardGrid: some View {
-        let kinds = HomeCardRegistry.enabledKinds(from: enabledCardKindsStorage)
-        return Group {
-            if kinds.isEmpty {
-                VStack(spacing: 10) {
-                    Image(systemName: "square.grid.2x2")
-                        .font(.system(size: 30))
-                        .foregroundStyle(.secondary)
-                    Text("主页卡片已全部移除")
-                        .font(.subheadline.weight(.medium))
-                    Text("长按卡片移除后回到工具页；这里可一键恢复全部")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Button("恢复全部卡片") {
-                        enabledCardKindsStorage = HomeCardRegistry.defaultStorageValue
-                    }
-                    .font(.subheadline.weight(.semibold))
-                    .buttonStyle(.borderedProminent)
-                    .tint(.openClawRed)
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 24)
-            } else {
-                LazyVGrid(columns: columns, spacing: 12) {
-                    ForEach(kinds) { kind in
-                        HomeMergedCard(
-                            kind: kind,
-                            settings: settings,
-                            careStore: careStore,
-                            habitStore: habitStore,
-                            geofenceStore: geofenceStore,
-                            expenseStore: expenseStore,
-                            gatewayConnection: gatewayConnection,
-                            badge: badgeText(for: kind)
-                        )
-                        .contextMenu {
-                            Button(role: .destructive) {
-                                enabledCardKindsStorage = HomeCardRegistry.removing(kind, from: enabledCardKindsStorage)
-                            } label: {
-                                Label("从主页移除", systemImage: "xmark.circle")
-                            }
-                        }
-                    }
-                }
-                .task { expenseStore.reload() }
-            }
-        }
-    }
-
     var body: some View {
         ZStack {
             wallpaperLayer
@@ -122,42 +85,260 @@ struct HomeTabView: View {
                                 .padding(.horizontal, 16)
                         }
 
-                        MemoryHubCardView(settings: settings, gatewayConnection: gatewayConnection)
-                            .padding(.horizontal, 16)
-
                         todayOverviewSection
 
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text("常用卡片")
-                                .font(.headline)
-                                .foregroundStyle(.primary)
-                            Text("长按卡片可移除；到工具页可重新添加")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-
-                            cardGrid
-                        }
-                        .padding(.horizontal, 16)
+                        cardsSection
                     }
                     .padding(.vertical, 16)
                 }
                 .scrollContentBackground(.hidden)
                 .background(.clear)
                 .toolbarBackground(.hidden, for: .navigationBar)
-                .navigationTitle("主页")
                 .navigationBarTitleDisplayMode(.inline)
                 .onLongPressGesture(minimumDuration: 0.6) {
                     onOpenTools?()
                 }
                 .onAppear {
+                    migrateCardStorageIfNeeded()
                     configureAssistantIfNeeded()
                     configureOverviewIfNeeded()
+                }
+                .onChange(of: isEditingCards) { _, editing in
+                    if editing {
+                        withAnimation(.easeInOut(duration: 0.28).repeatForever(autoreverses: true)) {
+                            wobbleTick = true
+                        }
+                    } else {
+                        wobbleTick = false
+                    }
+                }
+            }
+            // N9：NavigationStack 容器背景必须透明，否则盖住底层壁纸层。
+            .background(.clear)
+        }
+    }
+
+    // MARK: - 卡片区
+
+    /// 「常用卡片」区：卡片网格 + 编辑态头部（提示 / 完成按钮）。
+    private var cardsSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .center, spacing: 12) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("常用卡片")
+                        .font(.headline)
+                        .foregroundStyle(.primary)
+                    Text(isEditingCards ? "拖动排序 · 点角标调大小 · 点空白完成" : "长按卡片进入编辑 · 可移动可调整大小")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 0)
+                if isEditingCards {
+                    Button("完成") {
+                        withAnimation(.easeOut(duration: 0.2)) { isEditingCards = false }
+                    }
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.openClawRed)
+                }
+            }
+
+            cardGrid
+        }
+        .padding(.horizontal, 16)
+    }
+
+    /// 可配置卡片网格（S10：编辑态拖动排序 + 尺寸调整；全部移除后一键恢复）。
+    private var cardGrid: some View {
+        let kinds = HomeCardRegistry.enabledKinds(from: enabledCardKindsStorage)
+        return Group {
+            if kinds.isEmpty {
+                VStack(spacing: 10) {
+                    Image(systemName: "square.grid.2x2")
+                        .font(.system(size: 30))
+                        .foregroundStyle(.secondary)
+                    Text("主页卡片已全部移除")
+                        .font(.subheadline.weight(.medium))
+                    Text("长按卡片进入编辑可移除；这里可一键恢复全部")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Button("恢复全部卡片") {
+                        enabledCardKindsStorage = HomeCardRegistry.defaultStorageValue
+                    }
+                    .font(.subheadline.weight(.semibold))
+                    .buttonStyle(.borderedProminent)
+                    .tint(.openClawRed)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 24)
+            } else {
+                ZStack(alignment: .top) {
+                    // 编辑态：点空白区域退出编辑（卡片在上层，不受影响）
+                    if isEditingCards {
+                        Color.clear
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                withAnimation(.easeOut(duration: 0.2)) { isEditingCards = false }
+                            }
+                            .frame(minHeight: 320)
+                    }
+                    LazyVGrid(columns: columns, spacing: 12) {
+                        ForEach(kinds) { kind in
+                            cardCell(for: kind)
+                        }
+                    }
+                    .task { expenseStore.reload() }
                 }
             }
         }
     }
 
-    /// 主页主题壁纸层（B5）：默认无壁纸 = 系统纯色（深浅色自适应）；
+    /// 单个卡片单元：编辑态 = 可拖动 / 移除 × / 尺寸切换；普通态 = 导航链接。
+    @ViewBuilder
+    private func cardCell(for kind: HomeCardKind) -> some View {
+        let size = HomeCardRegistry.size(for: kind, storage: cardSizesStorage)
+
+        if isEditingCards {
+            cardContent(for: kind, size: size)
+                .gridCellColumns(size.gridColumns)
+                .overlay(alignment: .topLeading) {
+                    removeOverlay(kind)
+                }
+                .overlay(alignment: .bottomTrailing) {
+                    sizeOverlay(kind)
+                }
+                .overlay {
+                    if targetedKind == kind {
+                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            .strokeBorder(.openClawRed, lineWidth: 2)
+                    }
+                }
+                .rotationEffect(.degrees(wobbleTick ? 0.6 : -0.6))
+                .scaleEffect(0.97)
+                .animation(.easeInOut(duration: 0.28).repeatForever(autoreverses: true), value: wobbleTick)
+                .draggable(kind) {
+                    dragPreview(for: kind, size: size)
+                }
+                .dropDestination(for: HomeCardKind.self) { items, _ in
+                    guard let dragged = items.first, dragged != kind else { return false }
+                    enabledCardKindsStorage = HomeCardRegistry.moving(dragged, before: kind, in: enabledCardKindsStorage)
+                    return true
+                } isTargeted: { targeted in
+                    withAnimation(.easeOut(duration: 0.15)) {
+                        targetedKind = targeted ? kind : nil
+                    }
+                }
+        } else {
+            NavigationLink {
+                destination(for: kind, size: size)
+            } label: {
+                cardContent(for: kind, size: size)
+                    .gridCellColumns(size.gridColumns)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .highPriorityGesture(
+                LongPressGesture(minimumDuration: 0.45)
+                    .onEnded { _ in
+                        withAnimation(.easeIn(duration: 0.15)) { isEditingCards = true }
+                    }
+            )
+        }
+    }
+
+    /// 卡片内容（S10：统一 HomeMergedCard 视觉，含记忆卡）。
+    private func cardContent(for kind: HomeCardKind, size: HomeCardSize) -> some View {
+        HomeMergedCard(
+            kind: kind,
+            settings: settings,
+            careStore: careStore,
+            habitStore: habitStore,
+            geofenceStore: geofenceStore,
+            expenseStore: expenseStore,
+            gatewayConnection: gatewayConnection,
+            size: size,
+            badge: badgeText(for: kind)
+        )
+    }
+
+    /// 卡片目标页：「我的记忆」直达记忆中心；其余进合并卡详情页。
+    @ViewBuilder
+    private func destination(for kind: HomeCardKind, size: HomeCardSize) -> some View {
+        if kind == .memory {
+            MemoryHubView(settings: settings, gatewayConnection: gatewayConnection)
+        } else {
+            HomeMergedCardPage(
+                kind: kind,
+                settings: settings,
+                careStore: careStore,
+                habitStore: habitStore,
+                geofenceStore: geofenceStore,
+                expenseStore: expenseStore,
+                gatewayConnection: gatewayConnection
+            )
+        }
+    }
+
+    /// 编辑态：左上角移除按钮。
+    private func removeOverlay(_ kind: HomeCardKind) -> some View {
+        Button {
+            withAnimation(.easeOut(duration: 0.2)) {
+                enabledCardKindsStorage = HomeCardRegistry.removing(kind, from: enabledCardKindsStorage)
+            }
+        } label: {
+            Image(systemName: "xmark")
+                .font(.system(size: 11, weight: .bold))
+                .foregroundStyle(.white)
+                .frame(width: 26, height: 26)
+                .background(Color.red, in: Circle())
+                .shadow(color: .black.opacity(0.25), radius: 4, x: 0, y: 1)
+        }
+        .padding(8)
+        .accessibilityLabel("移除\(kind.title)卡片")
+    }
+
+    /// 编辑态：右下角尺寸循环按钮（小 → 中 → 大 → 小）。
+    private func sizeOverlay(_ kind: HomeCardKind) -> some View {
+        Button {
+            let current = HomeCardRegistry.size(for: kind, storage: cardSizesStorage)
+            cardSizesStorage = HomeCardRegistry.settingSize(current.next, for: kind, in: cardSizesStorage)
+        } label: {
+            Text(HomeCardRegistry.size(for: kind, storage: cardSizesStorage).shortName)
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(.white)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .background(.black.opacity(0.45), in: Capsule())
+        }
+        .padding(8)
+        .accessibilityLabel("调整\(kind.title)卡片尺寸")
+    }
+
+    /// 拖拽预览（编辑态拖动时显示的浮层卡片）。
+    private func dragPreview(for kind: HomeCardKind, size: HomeCardSize) -> some View {
+        cardContent(for: kind, size: size)
+            .frame(width: dragPreviewWidth(for: size))
+    }
+
+    private func dragPreviewWidth(for size: HomeCardSize) -> CGFloat {
+        switch size {
+        case .small: return 140
+        case .medium: return 300
+        case .large: return 600
+        }
+    }
+
+    /// S10：老用户存储迁移——「我的记忆」并入网格并置于今日概览下方第一格（一次性）。
+    private func migrateCardStorageIfNeeded() {
+        var stored = enabledCardKindsStorage
+        HomeCardRegistry.migrateMemoryCardIfNeeded(&stored)
+        if stored != enabledCardKindsStorage {
+            enabledCardKindsStorage = stored
+        }
+    }
+
+    // MARK: - 壁纸层
+
+    /// 主页主题壁纸层（B5/N9）：默认无壁纸 = 系统纯色（深浅色自适应）；
     /// 选了内置壁纸/自定义照片后壁纸固定，深浅切换只改蒙层与卡片。
     private var wallpaperLayer: some View {
         GeometryReader { geo in
@@ -178,6 +359,8 @@ struct HomeTabView: View {
             .ignoresSafeArea()
         }
     }
+
+    // MARK: - 今日概览
 
     /// 「今日概览」区：语音助手下方、常用卡片上方，4 个横向小统计卡。
     private var todayOverviewSection: some View {
@@ -215,6 +398,8 @@ struct HomeTabView: View {
         }
         .padding(.horizontal, 16)
     }
+
+    // MARK: - 数据源
 
     /// 卡片实时徽标（与各 Store 共用同一数据源；无数据时返回 nil 显示纯卡片）。
     private func badgeText(for kind: HomeCardKind) -> String? {
@@ -276,7 +461,7 @@ struct HomeTabView: View {
     }
 }
 
-/// 今日概览小统计卡：图标 + 数值 + 标签，横向四连排布。
+/// 今日概览小统计卡：图标 + 数值 + 标签，横向四连排布（S10：毛玻璃材质）。
 private struct OverviewStatCard: View {
     let title: String
     let value: String
@@ -308,7 +493,7 @@ private struct OverviewStatCard: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(Color(.secondarySystemGroupedBackground))
+                .fill(.ultraThinMaterial)
         )
     }
 }

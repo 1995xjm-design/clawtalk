@@ -28,8 +28,8 @@ struct ChannelListView: View {
             VStack(spacing: 0) {
                 AgentStatusIndicator(gatewayConnection: gatewayConnection, settings: settingsStore)
                     .padding(.horizontal, 16)
-                    .padding(.top, 8)
-                    .padding(.bottom, 4)
+                    .padding(.top, 2)
+                    .padding(.bottom, 2)
 
                 List {
                     Section {
@@ -186,6 +186,12 @@ struct ChannelListView: View {
                     }
                 }
                 .listStyle(.insetGrouped)
+                .scrollContentBackground(.hidden)
+            }
+            .background {
+                if settingsStore.settings.globalGlassEnabled {
+                    Rectangle().fill(.ultraThinMaterial).ignoresSafeArea()
+                }
             }
             .navigationTitle("")
             .toolbar {

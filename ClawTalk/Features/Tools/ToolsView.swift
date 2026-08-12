@@ -63,6 +63,13 @@ struct ToolsView: View {
                         Label("投屏控制", systemImage: "airplayvideo")
                             .foregroundStyle(Color.openClawRed)
                     }
+
+                    NavigationLink {
+                        SettingsView(store: settings, gatewayConnection: gatewayConnection, nodeConnection: nodeConnection)
+                    } label: {
+                        Label("主页外观", systemImage: "paintpalette")
+                            .foregroundStyle(Color.openClawRed)
+                    }
                 } header: {
                     Text("网关信息")
                 } footer: {

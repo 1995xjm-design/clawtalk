@@ -117,6 +117,8 @@ struct AppSettings: Codable {
     /// 是否主动选择过壁纸（区分旧版「默认 systemWallpaper+id0=无壁纸」与新版「内置壁纸 0」）
     var homeWallpaperChosen: Bool
     var customWallpaperPath: String?
+    /// 全局毛玻璃：主界面背景启用磨砂材质（配合壁纸透出）。
+    var globalGlassEnabled: Bool
     var homeBlurStrength: Double
 
     static let defaults = AppSettings(
@@ -150,6 +152,7 @@ struct AppSettings: Codable {
         homeWallpaperID: 0,
         homeWallpaperChosen: false,
         customWallpaperPath: nil,
+        globalGlassEnabled: false,
         homeBlurStrength: 0.55
     )
 
@@ -211,6 +214,7 @@ struct AppSettings: Codable {
         homeWallpaperID: Int = 0,
         homeWallpaperChosen: Bool = false,
         customWallpaperPath: String? = nil,
+        globalGlassEnabled: Bool = false,
         homeBlurStrength: Double = 0.55
     ) {
         self.gatewayURL = gatewayURL
@@ -245,6 +249,7 @@ struct AppSettings: Codable {
         self.homeWallpaperID = homeWallpaperID
         self.homeWallpaperChosen = homeWallpaperChosen
         self.customWallpaperPath = customWallpaperPath
+        self.globalGlassEnabled = globalGlassEnabled
         self.homeBlurStrength = homeBlurStrength
     }
 
@@ -291,6 +296,7 @@ struct AppSettings: Codable {
         homeWallpaperChosen = try container.decodeIfPresent(Bool.self, forKey: .homeWallpaperChosen) ?? false
         homeWallpaperID = try container.decodeIfPresent(Int.self, forKey: .homeWallpaperID) ?? 0
         customWallpaperPath = try container.decodeIfPresent(String.self, forKey: .customWallpaperPath)
+        globalGlassEnabled = try container.decodeIfPresent(Bool.self, forKey: .globalGlassEnabled) ?? false
         var themeSource = (try? container.decodeIfPresent(HomeThemeSource.self, forKey: .homeThemeSource)) ?? .noWallpaper
         // 旧数据迁移：旧版「默认」= systemWallpaper + id 0（未主动选择壁纸）→ 新语义「无壁纸」
         if !homeWallpaperChosen, themeSource == .systemWallpaper, homeWallpaperID == 0 {
@@ -325,7 +331,7 @@ struct AppSettings: Codable {
         case liveActivityStyle
         case liveActivityFollowAgent
         case voiceAssistantShowTranscript
-        case homeThemeSource, homeWallpaperID, homeWallpaperChosen, customWallpaperPath, homeBlurStrength
+        case homeThemeSource, homeWallpaperID, homeWallpaperChosen, customWallpaperPath, homeBlurStrength, globalGlassEnabled
     }
 
     func encode(to encoder: Encoder) throws {
@@ -363,6 +369,7 @@ struct AppSettings: Codable {
         try container.encode(homeWallpaperID, forKey: .homeWallpaperID)
         try container.encode(homeWallpaperChosen, forKey: .homeWallpaperChosen)
         try container.encodeIfPresent(customWallpaperPath, forKey: .customWallpaperPath)
+        try container.encode(globalGlassEnabled, forKey: .globalGlassEnabled)
         try container.encode(homeBlurStrength, forKey: .homeBlurStrength)
         // webSocketPort intentionally not encoded - legacy only
     }

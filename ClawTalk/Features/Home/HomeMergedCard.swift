@@ -10,7 +10,8 @@ struct HomeSection: Identifiable {
     let destination: AnyView
 }
 
-/// 合并卡（主页网格）：图标 + 标题 + 摘要 + 可选实时徽标，点击进入合并页。
+/// 合并卡（主页网格）：图标 + 标题 + 摘要 + 可选实时徽标。
+/// S10：纯内容视图（导航由 HomeTabView 按编辑态包裹），尺寸区分小/中/大，毛玻璃材质贴近 iOS 桌面小组件。
 struct HomeMergedCard: View {
     let kind: HomeCardKind
     let settings: SettingsStore
@@ -19,66 +20,99 @@ struct HomeMergedCard: View {
     let geofenceStore: GeofenceStore
     let expenseStore: ExpenseStore
     let gatewayConnection: GatewayConnection?
+    var size: HomeCardSize = .medium
     var badge: String?
 
     var body: some View {
-        NavigationLink {
-            HomeMergedCardPage(
-                kind: kind,
-                settings: settings,
-                careStore: careStore,
-                habitStore: habitStore,
-                geofenceStore: geofenceStore,
-                expenseStore: expenseStore,
-                gatewayConnection: gatewayConnection
-            )
-        } label: {
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(alignment: .top) {
-                    Image(systemName: kind.icon)
-                        .font(.system(size: 20, weight: .semibold))
-                        .foregroundStyle(.white)
-                        .frame(width: 42, height: 42)
-                        .background(kind.tint)
-                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        Group {
+            switch size {
+            case .small:
+                smallLayout
+            case .medium, .large:
+                standardLayout
+            }
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, minHeight: minHeight, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(.ultraThinMaterial)
+        )
+        .overlay {
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(.white.opacity(0.18), lineWidth: 0.5)
+        }
+        .shadow(color: .black.opacity(0.08), radius: 8, x: 0, y: 2)
+    }
 
-                    Spacer(minLength: 0)
+    /// 小卡：图标 + 标题（对齐 iOS 小号小组件，信息密度低）。
+    private var smallLayout: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Image(systemName: kind.icon)
+                .font(.system(size: 20, weight: .semibold))
+                .foregroundStyle(.white)
+                .frame(width: 40, height: 40)
+                .background(kind.tint)
+                .clipShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
 
-                    if let badge {
-                        Text(badge)
-                            .font(.caption2.weight(.semibold))
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background(kind.tint.opacity(0.9), in: Capsule())
-                    } else {
-                        Image(systemName: "chevron.right")
-                            .font(.caption)
-                            .foregroundStyle(.tertiary)
-                    }
-                }
+            Spacer(minLength: 0)
+
+            Text(kind.title)
+                .font(.footnote.weight(.semibold))
+                .foregroundStyle(.primary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+        }
+    }
+
+    /// 中/大卡：图标 + 徽标 + 标题 + 摘要。
+    private var standardLayout: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .top) {
+                Image(systemName: kind.icon)
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: 42, height: 42)
+                    .background(kind.tint)
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
 
                 Spacer(minLength: 0)
 
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(kind.title)
-                        .font(.headline)
-                        .foregroundStyle(.primary)
-                    Text(kind.summary)
+                if let badge {
+                    Text(badge)
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(kind.tint.opacity(0.9), in: Capsule())
+                } else {
+                    Image(systemName: "chevron.right")
                         .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
-                        .multilineTextAlignment(.leading)
+                        .foregroundStyle(.tertiary)
                 }
             }
-            .padding(14)
-            .frame(maxWidth: .infinity, minHeight: 128, alignment: .leading)
-            .background(
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(Color(.secondarySystemGroupedBackground))
-            )
+
+            Spacer(minLength: 0)
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(kind.title)
+                    .font(.headline)
+                    .foregroundStyle(.primary)
+                Text(kind.summary)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+            }
         }
-        .buttonStyle(.plain)
+    }
+
+    private var minHeight: CGFloat {
+        switch size {
+        case .small: return 100
+        case .medium: return 128
+        case .large: return 150
+        }
     }
 }
 
@@ -202,7 +236,7 @@ struct HomeMergedCardPage: View {
         .frame(maxWidth: .infinity, minHeight: 110, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(Color(.secondarySystemGroupedBackground))
+                .fill(.ultraThinMaterial)
         )
     }
 
@@ -240,6 +274,14 @@ struct HomeMergedCardPage: View {
     /// 各卡的分区子功能（复用现有功能页，全部为真实页面）。
     private var sections: [HomeSection] {
         switch kind {
+        case .memory:
+            return [
+                HomeSection(
+                    id: "memory", title: "我的记忆", icon: "brain.head.profile", tint: .purple,
+                    subtitle: "个人档案 · 对话沉淀 · 记忆搜索",
+                    destination: AnyView(MemoryHubView(settings: settings, gatewayConnection: gatewayConnection))
+                )
+            ]
         case .record:
             return [
                 HomeSection(

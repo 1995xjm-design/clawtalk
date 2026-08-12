@@ -428,10 +428,33 @@ private var connectionSection: some View {
             .pickerStyle(.segmented)
 
             Toggle("显示 Token 用量", isOn: $store.settings.showTokenUsage)
+
+            HStack {
+                Text("全局毛玻璃")
+                Spacer()
+                Button {
+                    store.settings.globalGlassEnabled.toggle()
+                    store.save()
+                } label: {
+                    Text(store.settings.globalGlassEnabled ? "已开启" : "关闭")
+                        .font(.caption.weight(.semibold))
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 5)
+                        .background(
+                            Capsule().fill(
+                                store.settings.globalGlassEnabled
+                                    ? Color.green.opacity(0.18)
+                                    : Color(.systemGray5)
+                            )
+                        )
+                        .foregroundStyle(store.settings.globalGlassEnabled ? Color.green : Color.secondary)
+                }
+                .buttonStyle(.plain)
+            }
         } header: {
             Text("显示")
         } footer: {
-            Text("在助手消息下显示输入/输出 Token 用量，需 Open Responses API 模式。")
+            Text("在助手消息下显示输入/输出 Token 用量，需 Open Responses API 模式。开启全局毛玻璃后，主页与频道背景启用磨砂材质（配合壁纸效果最佳）。")
         }
     }
 
