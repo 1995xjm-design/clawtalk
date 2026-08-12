@@ -67,7 +67,7 @@ struct ToolsView: View {
                     }
 
                     NavigationLink {
-                        SettingsView(store: settings, gatewayConnection: gatewayConnection, nodeConnection: nodeConnection)
+                        SettingsView(store: settings, gatewayConnection: gatewayConnection ?? GatewayConnection(), nodeConnection: nodeConnection)
                     } label: {
                         Label("主页外观", systemImage: "paintpalette")
                             .foregroundStyle(Color.openClawRed)
