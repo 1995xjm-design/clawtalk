@@ -29,7 +29,7 @@ final class AppleTTSService: NSObject, SpeechService, AVSpeechSynthesizerDelegat
     func streamSpeech(text: String) -> AsyncThrowingStream<Data, Error> {
         // 复位粘滞标记：被打断后再次朗读必须能出声（S6 发现）
         stopped = false
-        AsyncThrowingStream { continuation in
+        return AsyncThrowingStream { continuation in
             let utterance = AVSpeechUtterance(string: text)
             utterance.rate = Float(min(max(0.5 + Double(speed) / 100.0, 0.1), 1.0))
             utterance.pitchMultiplier = Float(min(max(1.0 + Double(pitch) / 10.0, 0.5), 2.0))
