@@ -489,8 +489,13 @@ struct ConnectionDiagnostics {
             .trimmingCharacters(in: .whitespacesAndNewlines)
             .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
         guard !base.isEmpty else { return step(.auth, success: false, since: start, detail: "未配置网关地址") }
-        guard !settings.gatewayToken.isEmpty else {
-            return step(.auth, success: false, since: start, detail: "未配置网关令牌（请在设置中填写）")
+        // 二维码配对后网关下发 device token（存 Keychain），优先取它；回退手填令牌。
+        let resolvedToken = OpenClawClient.resolveHTTPToken(
+            settingsToken: settings.gatewayToken,
+            gatewayURL: settings.settings.gatewayURL
+        )
+        guard !resolvedToken.isEmpty else {
+            return step(.auth, success: false, since: start, detail: "未获取到网关令牌（请先 openclaw qr 配对或填写令牌）")
         }
         guard let url = URL(string: "\(base)/health") else {
             return step(.auth, success: false, since: start, detail: "网关地址无法解析")
@@ -499,7 +504,7 @@ struct ConnectionDiagnostics {
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
         request.timeoutInterval = 5
-        request.setValue("Bearer \(settings.gatewayToken)", forHTTPHeaderField: "Authorization")
+        request.setValue("Bearer \(resolvedToken)", forHTTPHeaderField: "Authorization")
 
         do {
             let (_, response) = try await URLSession.shared.data(for: request)

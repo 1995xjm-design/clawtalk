@@ -402,7 +402,15 @@ struct OnboardingView: View {
         let gateway = GatewayWebSocket(
             url: wsURL,
             token: nil,
-            bootstrapToken: bootstrapToken
+            bootstrapToken: bootstrapToken,
+            deviceTokenHandler: { [weak self] deviceToken in
+                Task { @MainActor in
+                    // 配对成功：把网关下发的 device token 存为 App 的网关令牌，
+                    // 否则工具页/诊断/网关会话拿不到令牌（此前这里一直是空）。
+                    self?.settingsStore.gatewayToken = deviceToken
+                    self?.settingsStore.save()
+                }
+            }
         )
         do {
             try await gateway.connect()

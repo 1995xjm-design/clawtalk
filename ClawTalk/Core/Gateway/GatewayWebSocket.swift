@@ -105,6 +105,7 @@ actor GatewayWebSocket {
 
     // Callbacks
     private let pushHandler: (@Sendable (Push) async -> Void)?
+    private let deviceTokenHandler: (@Sendable (String) -> Void)?
     private let stateHandler: (@Sendable (ConnectionState) async -> Void)?
 
     // Connect options
@@ -126,7 +127,8 @@ actor GatewayWebSocket {
         commands: [String] = [],
         clientMode: String = "ui",
         pushHandler: (@Sendable (Push) async -> Void)? = nil,
-        stateHandler: (@Sendable (ConnectionState) async -> Void)? = nil
+        stateHandler: (@Sendable (ConnectionState) async -> Void)? = nil,
+        deviceTokenHandler: (@Sendable (String) -> Void)? = nil
     ) {
         self.url = url
         self.token = token
@@ -138,6 +140,7 @@ actor GatewayWebSocket {
         self.clientMode = clientMode
         self.pushHandler = pushHandler
         self.stateHandler = stateHandler
+        self.deviceTokenHandler = deviceTokenHandler
 
         let tlsDelegate = GatewayTLSDelegate()
         self.tlsDelegate = tlsDelegate
@@ -482,6 +485,9 @@ actor GatewayWebSocket {
                 token: deviceToken,
                 scopes: scopeValues
             )
+            // 同步把配对下发的 device token 传给 App 层（写入 settings.gatewayToken），
+            // 供 HTTP 工具调用 / 诊断鉴权等使用（配对场景 settings.gatewayToken 原本为空）。
+            deviceTokenHandler?(deviceToken)
         }
 
         lastTick = Date()

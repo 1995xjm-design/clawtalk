@@ -269,6 +269,8 @@ struct SyncChatView: View {
             }
 
             HStack(spacing: 10) {
+                syncMicButton
+
                 TextField("消息…", text: $textInput, axis: .vertical)
                     .textFieldStyle(.plain)
                     .lineLimit(1...5)
@@ -298,6 +300,38 @@ struct SyncChatView: View {
         .background(Color(.secondarySystemBackground))
     }
 }
+
+    /// 麦克风按钮：按住说话 → 转文字填入输入框（与其他聊天页一致）。
+    private var syncMicButton: some View {
+        ZStack {
+            Circle()
+                .fill(viewModel.isRecordingVoiceInput ? Color.red : Color(.systemGray5))
+                .frame(width: 40, height: 40)
+            Image(systemName: viewModel.isTranscribingVoice ? "waveform" : (viewModel.isRecordingVoiceInput ? "waveform" : "mic.fill"))
+                .font(.body)
+                .foregroundStyle(viewModel.isRecordingVoiceInput ? .white : .openClawRed)
+        }
+        .frame(width: 52, height: 52)
+        .contentShape(Circle())
+        .gesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { _ in
+                    guard !viewModel.isRecordingVoiceInput, !viewModel.isTranscribingVoice else { return }
+                    viewModel.startVoiceInput()
+                }
+                .onEnded { _ in
+                    guard viewModel.isRecordingVoiceInput else { return }
+                    viewModel.stopVoiceInputAndTranscribe { transcript in
+                        if textInput.isEmpty {
+                            textInput = transcript
+                        } else {
+                            textInput += transcript
+                        }
+                    }
+                }
+        )
+        .accessibilityLabel("按住说话输入")
+    }
 
 /// 查找聊天内容：基于已加载消息本地过滤，点结果滚动定位
 private struct SyncSearchView: View {

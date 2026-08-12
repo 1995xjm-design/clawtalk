@@ -218,6 +218,68 @@ final class SyncChatViewModel {
         messages.removeAll { $0.timestamp < cutoff }
     }
 
+    // MARK: - 语音输入（按住说话 → STT 填入输入框，与其他聊天页一致）
+
+    private let audioCapture = AudioCaptureManager()
+    private(set) var isRecordingVoiceInput = false
+    private(set) var isTranscribingVoice = false
+    var voiceInputError: String?
+
+    func startVoiceInput() {
+        guard !isRecordingVoiceInput, !isTranscribingVoice else { return }
+        VoiceWakeCapability.shared.stopListening()
+        do {
+            try audioCapture.startRecording()
+            isRecordingVoiceInput = true
+        } catch {
+            voiceInputError = "麦克风访问失败：\(AppErrorText.localized(error.localizedDescription))"
+        }
+    }
+
+    func stopVoiceInputAndTranscribe(appendTo completion: @escaping (String) -> Void) {
+        guard isRecordingVoiceInput else { return }
+        isRecordingVoiceInput = false
+        let samples = audioCapture.stopRecording()
+        guard samples.count > 8000 else {
+            isTranscribingVoice = false
+            return
+        }
+        isTranscribingVoice = true
+        Task { [weak self] in
+            guard let self else { return }
+            defer {
+                self.isTranscribingVoice = false
+                NotificationCenter.default.post(name: .clawTalkWakeRestartRequested, object: nil)
+            }
+            do {
+                guard let stt = self.makeTranscriptionService() else {
+                    self.voiceInputError = "语音转文字服务未配置，请在设置中开启语音输入。"
+                    return
+                }
+                let transcript = try await stt.transcribe(audioSamples: samples)
+                let trimmed = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !trimmed.isEmpty {
+                    completion(trimmed)
+                }
+            } catch {
+                self.voiceInputError = "转写失败：\(AppErrorText.localized(error.localizedDescription))"
+            }
+        }
+    }
+
+    private func makeTranscriptionService() -> (any TranscriptionService)? {
+        let s = settings.settings
+        switch s.sttProvider {
+        case .doubao:
+            if let key = SecureStorage.shared.doubaoAPIKey, !key.isEmpty {
+                return DoubaoSTTService(apiKey: key, language: s.whisperLanguage)
+            }
+            return AppleSTTService(language: s.whisperLanguage)
+        case .apple:
+            return AppleSTTService(language: s.whisperLanguage)
+        }
+    }
+
     // MARK: - 发送
 
     func send(_ text: String) {
