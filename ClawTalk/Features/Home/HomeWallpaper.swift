@@ -12,7 +12,7 @@ enum HomeWallpaper {
         guard size.width > 0, size.height > 0 else { return nil }
         let renderer = UIGraphicsImageRenderer(size: size)
         return renderer.image { ctx in
-            let palette: [(CGFloat, CGFloat, CGFloat, CGFloat, CGFloat, CGFloat)]
+            let palette: [(CGFloat, CGFloat, CGFloat)]
             switch normalized {
             case 1:
                 palette = [(0.95, 0.45, 0.25), (0.85, 0.22, 0.45), (0.55, 0.15, 0.55)]
