@@ -33,18 +33,29 @@ cp -R "$TMP/share/opencc/"* "$DST/opencc/"
 # 5) 键盘配置（九宫格默认）
 cp "$OUT/hamster.yaml" "$DST/"
 
-# 6) default.yaml 仅启用 朙月拼音·简化字
+# 6) default.yaml: leave schema_list empty (same as Hamster), so that the
+#    rime-ice default.yaml deployed in UserData takes over the schema list.
 python3 - "$DST/default.yaml" <<'PY'
 import sys
 path = sys.argv[1]
 s = open(path, encoding="utf-8").read()
 start = s.index("schema_list:")
 end = s.index("\nswitcher:", start)
-s = s[:start] + "schema_list:\n  - schema: luna_pinyin_simp\n" + s[end:]
+s = s[:start] + "schema_list:\n\n" + s[end:]
 open(path, "w", encoding="utf-8").write(s)
 PY
 
-# 7) 打包（条目在根下）
+# 7) rime-ice (includes the t9 Chinese nine-key schema): build rime-ice.zip
+#    with the same layout as Hamster. Use the official codeload zip, which
+#    expands git-lfs content automatically (git clone does not).
+echo "[rime] download rime-ice"; curl -fL -o "$TMP/rime-ice-src.zip" https://codeload.github.com/iDvel/rime-ice/zip/refs/heads/main
+mkdir -p "$TMP/rime-ice-src" "$OUT"
+unzip -q "$TMP/rime-ice-src.zip" -d "$TMP/rime-ice-src"
+( cd "$TMP/rime-ice-src"/*/ && zip -qr "$OUT/rime-ice.zip" . )
+echo "done: $OUT/rime-ice.zip"
+ls -lh "$OUT/rime-ice.zip"
+
+# 8) package SharedSupport.zip (entries at root, no top-level folder)
 mkdir -p "$OUT"
 ( cd "$DST" && zip -qr "$OUT/SharedSupport.zip" . )
 echo "done: $OUT/SharedSupport.zip"

@@ -199,26 +199,31 @@ public extension RimeContext {
   func start(hasFullAccess: Bool) async {
     Rime.shared.setNotificationDelegate(self)
 
-    // ClawTalk 极简版引导：主 App 不负责 Rime 部署，
-    // 键盘扩展首次运行时从自身 bundle（SharedSupport/SharedSupport.zip）
-    // 初始化输入方案并部署到 App Group，保证简体拼音开箱可用。
-    if !FileManager.default.fileExists(atPath: FileManager.appGroupSharedSupportDirectoryURL.appendingPathComponent("default.yaml").path) {
+    // ClawTalk minimal bootstrap: keyboard extension self-deploys Rime schemas
+    // from its own bundle (SharedSupport.zip + rime-ice.zip) into App Group,
+    // so simplified pinyin and Chinese nine-key (t9) work out of the box.
+    // Note: upgraded users may already have default.yaml; also check t9 schema.
+    let sharedSupportReady = FileManager.default.fileExists(atPath: FileManager.appGroupSharedSupportDirectoryURL.appendingPathComponent("default.yaml").path)
+    let t9Ready = FileManager.default.fileExists(atPath: FileManager.appGroupUserDataDirectoryURL.appendingPathComponent("t9.schema.yaml").path)
+    if !sharedSupportReady || !t9Ready {
       do {
         try FileManager.initSandboxSharedSupportDirectory(override: true)
-        try FileManager.initSandboxUserDataDirectory(override: true, unzip: false)
+        try FileManager.initSandboxUserDataDirectory(override: true, unzip: true)
         var config = try HamsterConfigurationRepositories.shared.loadConfiguration()
         try deployment(configuration: &config)
-        // 极简版固定简体拼音方案，避免按字母排序选中非拼音方案
-        if let preferred = schemas.first(where: { $0.schemaId == "luna_pinyin_simp" })
-          ?? schemas.first(where: { $0.schemaId == "luna_pinyin" }) {
-          self.currentSchema = preferred
-          self.latestSchema = nil
-          self.selectSchemas = [preferred]
-        }
       } catch {
         Logger.statistics.error("ClawTalk rime bootstrap error: \(error.localizedDescription)")
       }
     }
+
+    // ClawTalk fixed schema: t9 (Chinese nine-key) preferred, fallback full pinyin
+    let preferredSchema = schemas.first(where: { $0.schemaId == "t9" })
+      ?? schemas.first(where: { $0.schemaId == "luna_pinyin_simp" })
+      ?? schemas.first(where: { $0.schemaId == "luna_pinyin" })
+      ?? RimeSchema(schemaId: "t9", schemaName: "中文九键")
+    self.currentSchema = preferredSchema
+    self.latestSchema = nil
+    self.selectSchemas = [preferredSchema]
 
     // 启动
     Rime.shared.start(Rime.createTraits(
@@ -1048,3 +1053,4 @@ public extension RimeContext {
     })
   }
 }
+
