@@ -8,8 +8,8 @@ import SwiftUI
 struct FileVaultCardView: View {
     @State private var store: FileVaultStore
 
-    init(store: FileVaultStore? = nil) {
-        _store = State(initialValue: store ?? FileVaultStore.shared)
+    init(store: FileVaultStore = FileVaultStore.shared) {
+        _store = State(initialValue: store)
     }
 
     var body: some View {

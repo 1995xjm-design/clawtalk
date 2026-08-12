@@ -100,8 +100,9 @@ final class HabitStore {
         repeatDays: [Int],
         targetPerDay: Int? = nil,
         linkDailyReminder: Bool = false,
-        reminderTime: Date = Self.defaultReminderTime
+        reminderTime: Date? = nil
     ) -> Habit? {
+        let reminderTime = reminderTime ?? Self.defaultReminderTime
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
 
@@ -144,9 +145,10 @@ final class HabitStore {
     }
 
     /// 切换「同步每日提醒」：开 → 创建/更新时间；关 → 删除提醒并解除关联。
-    func setLinkedReminder(_ enabled: Bool, for habitID: String, time: Date = Self.defaultReminderTime) {
+    func setLinkedReminder(_ enabled: Bool, for habitID: String, time: Date? = nil) {
         guard let index = habits.firstIndex(where: { $0.id == habitID }) else { return }
         var habit = habits[index]
+        let time = time ?? Self.defaultReminderTime
 
         if enabled {
             if let reminderID = habit.linkedReminderID {

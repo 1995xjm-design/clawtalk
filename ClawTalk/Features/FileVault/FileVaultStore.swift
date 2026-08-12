@@ -14,7 +14,7 @@ import Observation
 final class FileVaultStore {
 
     /// 全局单例：主页卡片 / 列表页 / 详情页共用同一数据。
-    static let shared = FileVaultStore()
+    @MainActor static let shared = FileVaultStore()
 
     private(set) var files: [ImportantFile] = []
     /// 通知权限被系统拒绝时置 true（数据来自 CareReminderStore，列表页提示，不弹授权框）。
