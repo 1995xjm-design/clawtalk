@@ -104,6 +104,7 @@ struct VoiceAssistantCardView: View, VoiceAssistantCardContent {
                 .foregroundStyle(.white)
                 .scaleEffect(viewModel.state == .idle ? (textBreathing ? 1.03 : 1.0) : 1.0)
                 .opacity(viewModel.state == .idle ? (textBreathing ? 0.9 : 1.0) : 1.0)
+                .shadow(color: .white.opacity(0.35), radius: 10)
                 .contentTransition(.opacity)
 
             if showFirstUseGuide {
@@ -411,33 +412,57 @@ private struct SiriBackgroundLayer: View {
         TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { context in
             let t = context.date.timeIntervalSinceReferenceDate
             let speed = speedFactor
-            // 整卡呼吸透明度（待机也有「活」感）
-            let breathing = 0.88 + 0.10 * abs(sin(t * 1.3))
-            ZStack {
-                // 三团流动色：红 → 紫 → 蓝，缓慢游走
-                Circle()
-                    .fill(Color(red: 0.62, green: 0.10, blue: 0.22).opacity(0.55))
-                    .frame(width: 300, height: 300)
-                    .blur(radius: 80)
-                    .offset(x: CGFloat(100 * sin(t * 0.30 * speed)), y: CGFloat(55 * cos(t * 0.22 * speed)))
-                Circle()
-                    .fill(Color(red: 0.50, green: 0.10, blue: 0.62).opacity(0.50))
-                    .frame(width: 270, height: 270)
-                    .blur(radius: 72)
-                    .offset(x: CGFloat(75 * cos(t * 0.26 * speed)), y: CGFloat(65 * sin(t * 0.34 * speed)))
-                Circle()
-                    .fill(Color(red: 0.08, green: 0.28, blue: 0.62).opacity(0.48))
-                    .frame(width: 250, height: 250)
-                    .blur(radius: 66)
-                    .offset(x: CGFloat(-85 * sin(t * 0.22 * speed)), y: CGFloat(-45 * cos(t * 0.30 * speed)))
-                // 呼吸光罩：状态越活跃越亮、动得越快
-                Circle()
-                    .fill(.white.opacity(0.04 + 0.05 * abs(sin(t * (state == .speaking ? 2.4 : 1.5)))))
-                    .frame(width: 340, height: 340)
-                    .blur(radius: 80)
+            // 整卡呼吸透明度（待机也有「活」感，0.82 ↔ 1.0）
+            let breathing = 0.82 + 0.18 * abs(sin(t * 1.3))
+            GeometryReader { geo in
+                ZStack {
+                    // 主色带：环形渐变绕中心旋转（Siri 绸缎流动感）
+                    AngularGradient(
+                        colors: [
+                            Color(red: 0.62, green: 0.10, blue: 0.22),
+                            Color(red: 0.50, green: 0.10, blue: 0.62),
+                            Color(red: 0.08, green: 0.28, blue: 0.62),
+                            Color(red: 0.62, green: 0.10, blue: 0.22)
+                        ],
+                        center: .center,
+                        angle: .degrees(360 * (t * 0.05 * speed).truncatingRemainder(dividingBy: 1.0))
+                    )
+                    .blur(radius: 70)
+                    .scaleEffect(1.25)
+
+                    // 反向慢速微光带（叠加发光，交叉处自然提亮）
+                    AngularGradient(
+                        colors: [
+                            Color.white.opacity(0.07),
+                            Color.clear,
+                            Color.white.opacity(0.05),
+                            Color.clear
+                        ],
+                        center: .center,
+                        angle: .degrees(360 * (t * 0.03 * speed).truncatingRemainder(dividingBy: 1.0))
+                    )
+                    .blur(radius: 60)
+                    .scaleEffect(1.3)
+
+                    // 中央高亮（Siri 的光聚在中间）
+                    RadialGradient(
+                        colors: [.white.opacity(0.16), .clear],
+                        center: .center,
+                        startRadius: 0,
+                        endRadius: geo.size.width * 0.55
+                    )
+
+                    // 边缘暗角（层次感）
+                    RadialGradient(
+                        colors: [.clear, .black.opacity(0.32)],
+                        center: .center,
+                        startRadius: geo.size.width * 0.42,
+                        endRadius: max(geo.size.width, geo.size.height) * 0.75
+                    )
+                }
+                .frame(width: geo.size.width, height: geo.size.height)
+                .opacity(breathing)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .opacity(breathing)
         }
         .allowsHitTesting(false)
     }
@@ -452,7 +477,6 @@ private struct SiriBackgroundLayer: View {
         }
     }
 }
-
 // MARK: - 悬浮光点（整卡漂浮）
 
 private struct ParticleLayer: View {
@@ -474,13 +498,24 @@ private struct ParticleLayer: View {
                             .frame(width: 3.5 + CGFloat(index % 3) * 1.5)
                             .position(x: x, y: y)
                     }
+                    // 流星：两道细光轮流划过（Siri 标志性细节）
+                    ForEach(0..<2, id: \.self) { index in
+                        let phase = Double(index) * 0.5
+                        let progress = (t * 0.12 + phase).truncatingRemainder(dividingBy: 1.0)
+                        let x = geo.size.width * (progress * 1.35 - 0.18)
+                        let y = geo.size.height * (0.18 + progress * 0.55)
+                        Capsule()
+                            .fill(.white.opacity(0.28 * (1 - progress)))
+                            .frame(width: 46, height: 1.5)
+                            .rotationEffect(.degrees(-35))
+                            .position(x: x, y: y)
+                    }
                 }
             }
         }
         .allowsHitTesting(false)
     }
 }
-
 // MARK: - 状态特效（聆听波纹 / 思考光点 / 播报脉动）
 
 private struct StateEffectLayer: View {

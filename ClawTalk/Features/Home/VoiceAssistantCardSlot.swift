@@ -33,8 +33,8 @@ struct VoiceAssistantCardSlot: View {
     var body: some View {
         cardContent
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 12)
-            .padding(.horizontal, 12)
+            .padding(.vertical, 0)
+            .padding(.horizontal, 0)
             .background(
                 RoundedRectangle(cornerRadius: 24, style: .continuous)
                     .fill(
