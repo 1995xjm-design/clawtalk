@@ -200,7 +200,10 @@ struct FileTransferChannelView: View {
                     try? FileManager.default.removeItem(at: url)
                 }
             }
-        }    // MARK: - 服务未启动引导
+        }
+    }
+
+    // MARK: - 服务未启动引导
 
     private var guideView: some View {
         ScrollView {
