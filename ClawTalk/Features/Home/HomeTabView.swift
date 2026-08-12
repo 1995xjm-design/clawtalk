@@ -148,37 +148,61 @@ struct HomeTabView: View {
     }
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
-                    if let assistantViewModel {
-                        VoiceAssistantCardSlot(content: VoiceAssistantCardView(viewModel: assistantViewModel, settingsStore: settings))
-                            .padding(.horizontal, 16)
-                    } else {
-                        VoiceAssistantCardSlot()
-                            .padding(.horizontal, 16)
+        ZStack {
+            wallpaperLayer
+            NavigationStack {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 20) {
+                        if let assistantViewModel {
+                            VoiceAssistantCardSlot(content: VoiceAssistantCardView(viewModel: assistantViewModel, settingsStore: settings))
+                                .padding(.horizontal, 16)
+                        } else {
+                            VoiceAssistantCardSlot()
+                                .padding(.horizontal, 16)
+                        }
+
+                        todayOverviewSection
+
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("快捷入口")
+                                .font(.headline)
+                                .foregroundStyle(.primary)
+
+                            cardGrid
+                        }
+                        .padding(.horizontal, 16)
                     }
-
-                    todayOverviewSection
-
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("快捷入口")
-                            .font(.headline)
-                            .foregroundStyle(.primary)
-
-                        cardGrid
-                    }
-                    .padding(.horizontal, 16)
+                    .padding(.vertical, 16)
                 }
-                .padding(.vertical, 16)
+                .scrollContentBackground(.hidden)
+                .background(.clear)
+                .navigationTitle("主页")
+                .navigationBarTitleDisplayMode(.inline)
+                .onAppear {
+                    configureAssistantIfNeeded()
+                    configureOverviewIfNeeded()
+                }
             }
-            .background(Color(.systemGroupedBackground))
-            .navigationTitle("主页")
-            .navigationBarTitleDisplayMode(.inline)
-            .onAppear {
-                configureAssistantIfNeeded()
-                configureOverviewIfNeeded()
+        }
+    }
+
+    /// 主页主题壁纸层：内置壁纸/自定义照片 + 毛玻璃（模糊强度随设置）+ 轻度暗化。
+    private var wallpaperLayer: some View {
+        GeometryReader { geo in
+            ZStack {
+                if let image = HomeWallpaper.currentImage(settings: settings.settings) {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: geo.size.width, height: geo.size.height)
+                        .blur(radius: CGFloat((1 - settings.settings.homeBlurStrength) * 22))
+                        .clipped()
+                } else {
+                    Color(.systemGroupedBackground)
+                }
+                Color.black.opacity(0.12)
             }
+            .ignoresSafeArea()
         }
     }
 

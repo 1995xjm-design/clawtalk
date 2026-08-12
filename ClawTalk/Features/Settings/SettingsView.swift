@@ -1,3 +1,4 @@
+import PhotosUI
 import SwiftUI
 
 /// 唤醒词编辑行：UUID 稳定 id（ForEach 删除/编辑不会因 index 越界崩溃）。
@@ -26,6 +27,8 @@ struct SettingsView: View {
     @State private var showScanPairing = false
     @State private var pairingMessage: String?
     @State private var showPairingResult = false
+    @State private var showThemePhotoPicker = false
+    @State private var themePhotoItem: PhotosPickerItem?
     @State private var wakeWordEdits: [WakeWordEdit] = []
 
 
@@ -74,6 +77,7 @@ struct SettingsView: View {
                 connectionSection
             keyboardSection
                 displaySection
+                appearanceSection
                 liveActivitySection
                 voiceSection
                 ttsSection
@@ -203,6 +207,76 @@ struct SettingsView: View {
             pairingMessage = "配对失败：\(AppErrorText.localized(error.localizedDescription))"
         }
         showPairingResult = true
+    }
+    // MARK: - 外观（主页主题：内置壁纸/自定义照片/模糊强度）
+
+    private var appearanceSection: some View {
+        Section("外观") {
+            // 内置壁纸（横排缩略图，点选即应用）
+            HStack(spacing: 12) {
+                ForEach(0..<HomeWallpaper.builtinCount, id: \.self) { id in
+                    Button {
+                        store.settings.homeThemeSource = .systemWallpaper
+                        store.settings.homeWallpaperID = id
+                        store.save()
+                    } label: {
+                        if let image = HomeWallpaper.builtinImage(id: id, size: CGSize(width: 54, height: 96)) {
+                            Image(uiImage: image)
+                                .resizable()
+                                .scaledToFill()
+                                .frame(width: 54, height: 96)
+                                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                        .stroke(
+                                            store.settings.homeThemeSource == .systemWallpaper && store.settings.homeWallpaperID == id
+                                                ? Color.accentColor : Color.clear,
+                                            lineWidth: 2.5
+                                        )
+                                )
+                        }
+                    }
+                    .buttonStyle(.plain)
+                }
+                Spacer()
+            }
+            Button {
+                showThemePhotoPicker = true
+            } label: {
+                Label(
+                    store.settings.homeThemeSource == .customPhoto ? "更换自定义壁纸" : "从相册选择壁纸",
+                    systemImage: "photo.on.rectangle"
+                )
+            }
+            .photosPicker(isPresented: $showThemePhotoPicker, selection: $themePhotoItem, matching: .images)
+            .onChange(of: themePhotoItem) { _, item in
+                guard let item else { return }
+                Task {
+                    defer { themePhotoItem = nil }
+                    guard let data = try? await item.loadTransferable(type: Data.self) else { return }
+                    if let path = HomeWallpaper.saveCustomPhoto(data) {
+                        store.settings.customWallpaperPath = path
+                        store.settings.homeThemeSource = .customPhoto
+                        store.save()
+                    }
+                }
+            }
+            HStack {
+                Text("模糊强度")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                Slider(value: $store.settings.homeBlurStrength, in: 0.1...1.0)
+            }
+            .onChange(of: store.settings.homeBlurStrength) { _, _ in
+                store.save()
+            }
+            Button("恢复默认壁纸") {
+                store.settings.homeThemeSource = .systemWallpaper
+                store.settings.homeWallpaperID = 0
+                store.settings.customWallpaperPath = nil
+                store.save()
+            }
+        }
     }
     // MARK: - Connection
 
@@ -684,6 +758,76 @@ private var connectionSection: some View {
             pairingMessage = "配对失败：\(AppErrorText.localized(error.localizedDescription))"
         }
         showPairingResult = true
+    }
+    // MARK: - 外观（主页主题：内置壁纸/自定义照片/模糊强度）
+
+    private var appearanceSection: some View {
+        Section("外观") {
+            // 内置壁纸（横排缩略图，点选即应用）
+            HStack(spacing: 12) {
+                ForEach(0..<HomeWallpaper.builtinCount, id: \.self) { id in
+                    Button {
+                        store.settings.homeThemeSource = .systemWallpaper
+                        store.settings.homeWallpaperID = id
+                        store.save()
+                    } label: {
+                        if let image = HomeWallpaper.builtinImage(id: id, size: CGSize(width: 54, height: 96)) {
+                            Image(uiImage: image)
+                                .resizable()
+                                .scaledToFill()
+                                .frame(width: 54, height: 96)
+                                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                        .stroke(
+                                            store.settings.homeThemeSource == .systemWallpaper && store.settings.homeWallpaperID == id
+                                                ? Color.accentColor : Color.clear,
+                                            lineWidth: 2.5
+                                        )
+                                )
+                        }
+                    }
+                    .buttonStyle(.plain)
+                }
+                Spacer()
+            }
+            Button {
+                showThemePhotoPicker = true
+            } label: {
+                Label(
+                    store.settings.homeThemeSource == .customPhoto ? "更换自定义壁纸" : "从相册选择壁纸",
+                    systemImage: "photo.on.rectangle"
+                )
+            }
+            .photosPicker(isPresented: $showThemePhotoPicker, selection: $themePhotoItem, matching: .images)
+            .onChange(of: themePhotoItem) { _, item in
+                guard let item else { return }
+                Task {
+                    defer { themePhotoItem = nil }
+                    guard let data = try? await item.loadTransferable(type: Data.self) else { return }
+                    if let path = HomeWallpaper.saveCustomPhoto(data) {
+                        store.settings.customWallpaperPath = path
+                        store.settings.homeThemeSource = .customPhoto
+                        store.save()
+                    }
+                }
+            }
+            HStack {
+                Text("模糊强度")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                Slider(value: $store.settings.homeBlurStrength, in: 0.1...1.0)
+            }
+            .onChange(of: store.settings.homeBlurStrength) { _, _ in
+                store.save()
+            }
+            Button("恢复默认壁纸") {
+                store.settings.homeThemeSource = .systemWallpaper
+                store.settings.homeWallpaperID = 0
+                store.settings.customWallpaperPath = nil
+                store.save()
+            }
+        }
     }
     // MARK: - Connection Test
 
