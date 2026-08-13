@@ -58,7 +58,7 @@ struct BrowserView: View {
 
                 // Screenshot section
                 Section {
-                    if let screenshot = viewModel.desktopScreenshot {
+                    if let screenshot = viewModel.browserScreenshot {
                         Image(uiImage: screenshot)
                             .resizable()
                             .scaledToFit()
@@ -70,9 +70,9 @@ struct BrowserView: View {
                     }
 
                     Button(action: {
-                        Task { await viewModel.takeDesktopScreenshot() }
+                        Task { await viewModel.takeBrowserScreenshot() }
                     }) {
-                        Label("截取电脑屏幕", systemImage: "display")
+                        Label("截取浏览器屏幕", systemImage: "camera")
                             .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.bordered)

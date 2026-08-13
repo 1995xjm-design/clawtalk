@@ -57,10 +57,6 @@ struct VoiceDiaryView: View {
         }
         .background(Color(.systemBackground))
         .onDisappear { viewModel.discardActiveRecording() }
-        .overlay(alignment: .bottom) {
-            GlobalVoiceInputFloating(settingsStore: settingsStore)
-                .padding(.bottom, 120)
-        }
     }
 
     // MARK: - 导航栏

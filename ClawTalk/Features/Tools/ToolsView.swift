@@ -52,12 +52,6 @@ struct ToolsView: View {
                             .foregroundStyle(Color.openClawRed)
                     }
 
-                    NavigationLink {
-                        SettingsView(store: settings, gatewayConnection: gatewayConnection ?? GatewayConnection(), nodeConnection: nodeConnection)
-                    } label: {
-                        Label("主页外观", systemImage: "paintpalette")
-                            .foregroundStyle(Color.openClawRed)
-                    }
                 } header: {
                     Text("网关信息")
                 } footer: {

@@ -394,10 +394,6 @@ struct SummarizeView: View {
         .navigationBarTitleDisplayMode(.inline)
         .onAppear { viewModel.checkSharedTextOnAppear() }
         .onDisappear { viewModel.discardActiveRecording() }
-        .overlay(alignment: .bottom) {
-            GlobalVoiceInputFloating(settingsStore: settingsStore)
-                .padding(.bottom, 120)
-        }
     }
 
     // MARK: - 内容区
@@ -756,17 +752,10 @@ struct SummarizeView: View {
     // MARK: - 底部：按住说话口述
 
     private var bottomArea: some View {
-        VStack(spacing: 8) {
-            if let errorMessage = viewModel.errorMessage {
-                Text(errorMessage)
-                    .font(.footnote)
-                    .foregroundStyle(.red)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, 24)
-            }
-
-            recordButton
-            statusLabel
+        GlobalVoiceInputEmbedded(settingsStore: settingsStore) { text, _ in
+            let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else { return }
+            viewModel.text = trimmed
         }
         .padding(.vertical, 10)
     }

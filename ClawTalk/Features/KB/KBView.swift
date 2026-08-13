@@ -184,10 +184,6 @@ struct KBView: View {
             holdTimer?.cancel()
             voiceRecorder.discardActiveRecording()
         }
-        .overlay(alignment: .bottom) {
-            GlobalVoiceInputFloating(settingsStore: settingsStore)
-                .padding(.bottom, 20)
-        }
     }
 
     // MARK: - 提问区：文字输入 + 发送 + 按住说话
@@ -214,9 +210,9 @@ struct KBView: View {
                 .disabled(!canSend)
             }
 
-            HStack(spacing: 12) {
-                recordButton
-                voiceStatusLabel
+            GlobalVoiceInputEmbedded(settingsStore: settingsStore) { text, _ in
+                query = ""
+                Task { _ = await store.ask(text) }
             }
         }
         .padding(14)

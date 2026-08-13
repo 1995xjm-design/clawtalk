@@ -19,7 +19,7 @@ final class ToolsViewModel {
     var sessionHistory: SessionHistoryResult?
 
     // Browser
-    var desktopScreenshot: UIImage?
+    var browserScreenshot: UIImage?
     var browserStatusText: String?
     var browserTabsText: String?
     var browserToolAvailable = true
@@ -446,25 +446,32 @@ final class ToolsViewModel {
         }
     }
 
-    func takeDesktopScreenshot() async {
+    func takeBrowserScreenshot() async {
         isLoading = true
         errorMessage = nil
-        defer { isLoading = false }
-        let instruction = "请用 PowerShell 截取整个桌面屏幕：1）Add-Type -AssemblyName System.Windows.Forms,System.Drawing；2）用 Graphics.CopyFromScreen 截取全屏；3）保存为 JPEG 并压缩到宽约 1200；4）转成 base64；5）回复我完整的 base64 字符串，不要省略、不要解释、不要加任何前缀。"
+
         do {
-            let reply = try await client.chat(
-                messages: [Message(role: .user, content: instruction)],
+            let data = try await client.invokeTool(
+                tool: "browser",
+                action: "screenshot",
+                args: ["type": .string("jpeg")],
                 gatewayURL: gatewayURL,
                 token: token
             )
-            if let b64 = Self.extractBase64(from: reply), let decoded = Data(base64Encoded: b64) {
-                desktopScreenshot = UIImage(data: decoded)
-            } else {
-                errorMessage = "未从回复中解析到截图数据"
+            let wrapper = try JSONDecoder().decode(ToolResultWrapper<BrowserDetails>.self, from: data)
+            if let imageItem = wrapper.content?.first(where: { $0.type == "image" }),
+               let base64 = imageItem.image?.data,
+               let decoded = Data(base64Encoded: base64) {
+                browserScreenshot = UIImage(data: decoded)
+            } else if let textContent = wrapper.content?.first?.text,
+                      let decoded = Data(base64Encoded: textContent) {
+                browserScreenshot = UIImage(data: decoded)
             }
         } catch {
-            errorMessage = Self.isRateLimit(error) ? "截图指令执行失败：网关限流（429），请稍后重试" : "截图指令执行失败：\(error.localizedDescription)"
+            errorMessage = Self.isRateLimit(error) ? "网关限流（429），请稍后重试" : error.localizedDescription
         }
+
+        isLoading = false
     }
 
     /// 是否网关限流（429）。

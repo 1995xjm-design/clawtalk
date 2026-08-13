@@ -53,10 +53,6 @@ struct MemoryHubView: View {
         }
         .navigationTitle("第二大脑")
         .navigationBarTitleDisplayMode(.inline)
-        .overlay(alignment: .bottom) {
-            GlobalVoiceInputFloating(settingsStore: settings)
-                .padding(.bottom, 20)
-        }
     }
 }
 
