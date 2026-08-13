@@ -311,9 +311,27 @@ final class VoiceAssistantViewModel {
     /// 最近一次意图执行反馈（如「已记入记账：…」），6 秒后自动消失。
     private(set) var lastIntentFeedback: String?
 
-    private lazy var expenseStore = ExpenseStore()
-    private lazy var writingStore = WritingStore()
-    private lazy var careReminderStore = CareReminderStore()
+    private var cachedExpenseStore: ExpenseStore?
+    private var expenseStore: ExpenseStore {
+        if let store = cachedExpenseStore { return store }
+        let store = ExpenseStore()
+        cachedExpenseStore = store
+        return store
+    }
+    private var cachedWritingStore: WritingStore?
+    private var writingStore: WritingStore {
+        if let store = cachedWritingStore { return store }
+        let store = WritingStore()
+        cachedWritingStore = store
+        return store
+    }
+    private var cachedCareReminderStore: CareReminderStore?
+    private var careReminderStore: CareReminderStore {
+        if let store = cachedCareReminderStore { return store }
+        let store = CareReminderStore()
+        cachedCareReminderStore = store
+        return store
+    }
     private var feedbackClearTask: Task<Void, Never>?
     private static let voiceDiaryDefaultsKey = "voice_assistant_diary_entries_v1"
 
