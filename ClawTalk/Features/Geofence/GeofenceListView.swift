@@ -43,6 +43,10 @@ struct GeofenceListView: View {
             store.refreshAuthorizationState()
             store.startMonitoringIfNeeded()
         }
+        .overlay(alignment: .bottom) {
+            GlobalVoiceInputFloating(settingsStore: SettingsStore())
+                .padding(.bottom, 20)
+        }
     }
 
     // MARK: - 授权 / 能力状态（诚实引导，不假装可用）

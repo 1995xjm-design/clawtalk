@@ -628,6 +628,10 @@ struct WritingComposeView: View {
                 WritingDetailView(draft: draft, store: viewModel.writingStore)
             }
         }
+        .overlay(alignment: .bottom) {
+            GlobalVoiceInputFloating(settingsStore: SettingsStore())
+                .padding(.bottom, 120)
+        }
     }
 
     // MARK: - 导航栏
@@ -834,10 +838,9 @@ struct WritingComposeView: View {
     }
 
     private var recordArea: some View {
-        GlobalVoiceInputEmbedded(settingsStore: SettingsStore()) { text, _ in
-            let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !trimmed.isEmpty else { return }
-            viewModel.points.append(trimmed)
+        VStack(spacing: 8) {
+            recordButton
+            statusLabel
         }
     }
 

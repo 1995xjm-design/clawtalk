@@ -67,7 +67,7 @@ enum HomeCardKind: String, CaseIterable, Identifiable, Hashable, Codable {
         switch self {
         case .memory: return "个人档案 · 对话沉淀 · 记忆搜索"
         case .cloneTalk: return "以你的口吻生成回复草稿"
-        case .record: return "语音日记 · 口述 · 写作 · 会议"
+        case .record: return "语音日记 · 捕捉 · 口述 · 写作 · 会议"
         case .reminders: return "提醒 · 纪念日 · 到家离开"
         case .health: return "健康 · 习惯打卡 · 健康周报"
         case .report: return "每日播报 · 周报月报 · 主动建议"

@@ -1,39 +1,43 @@
 import SwiftUI
-import PhotosUI
-import UIKit
 
-/// 语音日记页：按日期分组的日记列表 + 底部按住说话录音按钮。
-/// - 按住底部按钮说话，松开后自动转写并分类（待办/灵感/日记）
-/// - 录音中显示外圈脉冲 + 转圈动画；转写期间显示「整理中…」
-/// - 无日记时显示诚实空状态（不塞假数据）
-/// - 联动：待办自动加入提醒列表（成功显示「已加入提醒」小标）；灵感自动沉淀记忆中心（成功显示「已存入记忆」小标）
-struct VoiceDiaryView: View {
-    @State private var viewModel: VoiceDiaryViewModel
+/// 随手捕捉页：顶部归档反馈横幅 + 识别结果 + 手动改去向 + 文本框 + 底部按住说话按钮。
+///
+/// 交互流：
+/// - 按住说话 / 输入文字 → 转写 → 自动判断去向并归档 → 顶部绿色横幅「已归档到 XX」；
+/// - 手动改去向（四选一：日记/记忆/待办/记账）→ 追加归档一条到所选位置；
+/// - 归档失败 → 顶部橙色横幅提示原因，不静默。
+struct CaptureView: View {
+    @State private var viewModel: CaptureViewModel
     /// 关闭/返回回调（由入口通过 sheet / NavigationStack 传入）
     var onBack: (() -> Void)?
 
-    // 按住说话手势状态（参考 TalkButton / InlineMicButton 的模型）
+    // 按住说话手势状态（参考 VoiceDiaryView / TalkButton / InlineMicButton 的模型）
     @State private var isPressed = false
     @State private var holdTimer: Task<Void, Never>?
     @State private var isHolding = false
     @State private var showHoldHint = false
+    @State private var transcriptText = ""
+    /// 手动改去向（四选一，默认日记；仅在选择变化时触发归档）
+    @State private var manualDestination: CaptureDestination = .diary
 
     private let hapticsEnabled: Bool
     private let settingsStore: SettingsStore
     private let recordButtonSize: CGFloat = 72
-    /// 按住多久算开始录音（0.3 秒，与 TalkButton 一致）
+    /// 按住多久算开始录音（0.3 秒，与 VoiceDiaryView 一致）
     private let holdThreshold: UInt64 = 300_000_000
 
     init(
         settingsStore: SettingsStore,
         careReminderStore: CareReminderStore? = nil,
         memoryProfileStore: MemoryProfileStore? = nil,
+        expenseStore: ExpenseStore? = nil,
         onBack: (() -> Void)? = nil
     ) {
-        _viewModel = State(initialValue: VoiceDiaryViewModel(
+        _viewModel = State(initialValue: CaptureViewModel(
             settingsStore: settingsStore,
             careReminderStore: careReminderStore,
-            memoryProfileStore: memoryProfileStore
+            memoryProfileStore: memoryProfileStore,
+            expenseStore: expenseStore
         ))
         self.onBack = onBack
         self.hapticsEnabled = settingsStore.settings.hapticsEnabled
@@ -44,14 +48,15 @@ struct VoiceDiaryView: View {
         VStack(spacing: 0) {
             navBar
             Divider().opacity(0.3)
-            Group {
-                if viewModel.entries.isEmpty {
-                    emptyState
-                } else {
-                    entryList
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    feedbackBanner
+                    resultSection
+                    destinationPickerSection
+                    textInputSection
                 }
+                .padding(16)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
             Divider().opacity(0.3)
             recordArea
         }
@@ -67,7 +72,7 @@ struct VoiceDiaryView: View {
 
     private var navBar: some View {
         ZStack {
-            Text("语音日记")
+            Text("随手捕捉")
                 .font(.headline)
             HStack {
                 if let onBack {
@@ -86,74 +91,119 @@ struct VoiceDiaryView: View {
         .frame(height: 52)
     }
 
-    // MARK: - 列表（按日期分组）
+    // MARK: - 归档反馈横幅（成功绿色 / 失败橙色，页面顶部，不静默）
 
-    private var entryList: some View {
-        let grouped = Dictionary(grouping: viewModel.entries) {
-            Calendar.current.startOfDay(for: $0.date)
-        }
-        let dayKeys = grouped.keys.sorted(by: >)
+    @ViewBuilder
+    private var feedbackBanner: some View {
+        if let feedback = viewModel.feedback {
+            HStack(alignment: .top, spacing: 8) {
+                Image(systemName: feedback.tone == .success ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+                    .font(.system(size: 16, weight: .semibold))
 
-        return List {
-            if let notice = viewModel.linkageNotice {
-                Section {
-                    Label(notice, systemImage: "exclamationmark.triangle.fill")
-                        .font(.footnote)
-                        .foregroundStyle(.orange)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
-            if let notice = viewModel.photoNotice {
-                Section {
-                    Label(notice, systemImage: "photo.on.rectangle.angled")
-                        .font(.footnote)
-                        .foregroundStyle(.orange)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
-            ForEach(dayKeys, id: \.self) { day in
-                let dayEntries = (grouped[day] ?? []).sorted { $0.createdAt > $1.createdAt }
-                Section(header: Text(Self.dayHeader(for: day))) {
-                    ForEach(dayEntries) { entry in
-                        DiaryEntryRow(
-                            entry: entry,
-                            onAttachImage: { data in viewModel.attachImage(data: data, to: entry) },
-                            onRemoveImage: { viewModel.removeImage(from: entry) }
-                        )
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(feedback.title)
+                        .font(.subheadline.weight(.semibold))
+                    if let detail = feedback.detail {
+                        Text(detail)
+                            .font(.caption)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                 }
+
+                Spacer(minLength: 0)
+            }
+            .foregroundStyle(feedback.tone == .success ? Color.green : Color.orange)
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill((feedback.tone == .success ? Color.green : Color.orange).opacity(0.12))
+            )
+        }
+    }
+
+    // MARK: - 识别结果 + 自动归档去向
+
+    private var resultSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("识别结果")
+                .font(.headline)
+
+            if viewModel.transcript.isEmpty {
+                Text("按住下方按钮说一句，或直接在文本框输入。识别后会自动归档到对应位置。")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            } else {
+                Text(viewModel.transcript)
+                    .font(.body)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                if let detected = viewModel.detectedDestination {
+                    Label("自动归档去向：\(detected.rawValue)", systemImage: detected.systemImage)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
         }
-        .listStyle(.insetGrouped)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(14)
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(Color(.secondarySystemGroupedBackground))
+        )
     }
 
-    /// 日期分组标题：今天 / 昨天 / 明天 / M月d日 星期X
-    private static func dayHeader(for day: Date) -> String {
-        let calendar = Calendar.current
-        if calendar.isDateInToday(day) { return "今天" }
-        if calendar.isDateInYesterday(day) { return "昨天" }
-        if calendar.isDateInTomorrow(day) { return "明天" }
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "zh_CN")
-        formatter.dateFormat = "M月d日 EEEE"
-        return formatter.string(from: day)
-    }
+    // MARK: - 手动改去向（四选一）
 
-    // MARK: - 空状态（诚实，不塞假数据）
-
-    private var emptyState: some View {
-        VStack(spacing: 14) {
-            Image(systemName: "book.closed")
-                .font(.system(size: 44))
-                .foregroundStyle(.secondary)
-            Text("还没有日记")
+    private var destinationPickerSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("手动改去向")
                 .font(.headline)
-            Text("按住底部麦克风说一句话，松开后会自动整理成日记、待办或灵感。")
-                .font(.subheadline)
+            Text("选择后会追加归档一条到所选位置，原自动归档保留。")
+                .font(.caption)
                 .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 40)
+
+            Picker("归档去向", selection: $manualDestination) {
+                ForEach(CaptureDestination.manualChoices) { destination in
+                    Label(destination.rawValue, systemImage: destination.systemImage)
+                        .tag(destination)
+                }
+            }
+            .pickerStyle(.segmented)
+            .onChange(of: manualDestination) { _, newValue in
+                guard !viewModel.transcript.isEmpty else { return }
+                viewModel.archiveManually(to: newValue)
+            }
         }
+    }
+
+    // MARK: - 文本框输入
+
+    private var textInputSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                TextField("输入一句话，自动归档", text: $transcriptText, axis: .vertical)
+                    .lineLimit(1...4)
+                    .textFieldStyle(.roundedBorder)
+
+                Button(action: submitText) {
+                    Image(systemName: "arrow.up.circle.fill")
+                        .font(.system(size: 28))
+                }
+                .disabled(viewModel.state == .transcribing)
+                .accessibilityLabel("归档输入的文字")
+            }
+
+            Text("支持：提醒（提醒我/记得）、灵感、金额（XX元/块）、日记")
+                .font(.caption)
+                .foregroundStyle(.tertiary)
+        }
+    }
+
+    private func submitText() {
+        let text = transcriptText
+        transcriptText = ""
+        viewModel.submitText(text)
     }
 
     // MARK: - 底部录音区
@@ -179,7 +229,7 @@ struct VoiceDiaryView: View {
     private var statusLabel: some View {
         switch viewModel.state {
         case .idle:
-            Text(showHoldHint ? "按住说话，松开结束" : "按住说话，松开自动整理")
+            Text(showHoldHint ? "按住说话，松开结束" : "按住说话，松开自动归档")
                 .font(.subheadline.weight(.medium))
                 .foregroundStyle(showHoldHint ? Color.openClawRed : .secondary)
         case .recording:
@@ -201,7 +251,7 @@ struct VoiceDiaryView: View {
         }
     }
 
-    // MARK: - 按住说话按钮
+    // MARK: - 按住说话按钮（参考 VoiceDiaryView 同款手势）
 
     private var recordButton: some View {
         ZStack {
@@ -286,7 +336,7 @@ struct VoiceDiaryView: View {
 
     private var accessibilityLabel: String {
         switch viewModel.state {
-        case .idle: return "按住说话，松开自动整理成日记"
+        case .idle: return "按住说话，松开自动归档"
         case .recording: return "正在录音，松开结束"
         case .transcribing: return "正在整理转写结果"
         }
@@ -296,7 +346,7 @@ struct VoiceDiaryView: View {
         viewModel.state == .idle || viewModel.state == .recording
     }
 
-    // MARK: - 按住说话手势（参考 TalkButton / InlineMicButton）
+    // MARK: - 按住说话手势（参考 VoiceDiaryView 同款）
 
     private var recordGesture: some Gesture {
         DragGesture(minimumDistance: 0)
@@ -330,7 +380,7 @@ struct VoiceDiaryView: View {
                     UIImpactFeedbackGenerator(style: .light).impactOccurred()
                 }
                 if viewModel.state == .recording || isHolding {
-                    viewModel.stopRecordingAndProcess()
+                    viewModel.stopRecordingAndCapture()
                 } else {
                     // 短按未开始录音：提示按住说话
                     showHoldHint = true
@@ -340,94 +390,5 @@ struct VoiceDiaryView: View {
                     }
                 }
             }
-    }
-}
-
-/// 日记列表行：类别徽章 + 时间 + 正文。
-private struct DiaryEntryRow: View {
-    let entry: DiaryEntry
-    /// 手动配图回调（由页面承接保存）
-    var onAttachImage: ((Data) -> Void)?
-    /// 移除配图回调
-    var onRemoveImage: (() -> Void)?
-    @State private var selectedItem: PhotosPickerItem?
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 8) {
-                DiaryCategoryBadge(category: entry.category)
-                if entry.linkedReminderID != nil {
-                    Label("已加入提醒", systemImage: "bell.fill")
-                        .font(.caption2.weight(.medium))
-                        .foregroundStyle(.green)
-                }
-                if entry.linkedToMemory == true {
-                    Label("已存入记忆", systemImage: "brain.fill")
-                        .font(.caption2.weight(.medium))
-                        .foregroundStyle(.purple)
-                }
-                Spacer()
-                Text(timeText)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            Text(entry.text)
-                .font(.body)
-                .fixedSize(horizontal: false, vertical: true)
-
-            // 配图区：有图显示缩略图 + 移除；无图显示手动配图按钮
-            if let imagePath = entry.imagePath {
-                DiaryImageThumb(filename: imagePath)
-                Button("移除配图", role: .destructive) {
-                    onRemoveImage?()
-                }
-                .font(.caption)
-            } else {
-                PhotosPicker(selection: $selectedItem, matching: .images) {
-                    Label("配图", systemImage: "photo.badge.plus")
-                        .font(.caption)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .background(Color(.systemGray5), in: Capsule())
-                }
-                .onChange(of: selectedItem) { _, newValue in
-                    guard let newValue else { return }
-                    Task {
-                        if let data = try? await newValue.loadTransferable(type: Data.self) {
-                            onAttachImage?(data)
-                        }
-                    }
-                    selectedItem = nil
-                }
-            }
-        }
-        .padding(.vertical, 4)
-    }
-
-    private var timeText: String {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "zh_CN")
-        formatter.dateFormat = "HH:mm"
-        return formatter.string(from: entry.createdAt)
-    }
-}
-
-/// 日记配图缩略图：从 Documents/DiaryImages 直接读取展示。
-private struct DiaryImageThumb: View {
-    let filename: String
-
-    var body: some View {
-        if let image = UIImage(contentsOfFile: DiaryImageStore.imageURL(filename: filename).path) {
-            Image(uiImage: image)
-                .resizable()
-                .scaledToFill()
-                .frame(maxWidth: .infinity)
-                .frame(height: 170)
-                .clipShape(RoundedRectangle(cornerRadius: 10))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10)
-                        .stroke(Color(.systemGray4), lineWidth: 0.5)
-                )
-        }
     }
 }

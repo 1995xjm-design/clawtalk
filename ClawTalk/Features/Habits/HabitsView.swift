@@ -43,12 +43,10 @@ struct HabitsView: View {
     var body: some View {
         List {
             Section {
-                GlobalVoiceInputEmbedded(settingsStore: SettingsStore()) { text, _ in
-                    applyVoiceText(text)
-                }
+                holdToTalkRow
 
             } header: {
-                Text("按住说话打卡，松手识别")
+                Text(isVoiceRecording ? "正在录音，松手识别" : "按住说话打卡，松手识别")
             }
 
             if !store.habits.isEmpty {
@@ -136,6 +134,10 @@ struct HabitsView: View {
         .onAppear {
             store.errorMessage = nil
             store.reload()
+        }
+        .overlay(alignment: .bottom) {
+            GlobalVoiceInputFloating(settingsStore: SettingsStore())
+                .padding(.bottom, 20)
         }
     }
 

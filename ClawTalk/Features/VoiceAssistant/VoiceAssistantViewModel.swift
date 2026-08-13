@@ -36,33 +36,6 @@ struct VoiceAssistantTranscriptEntry: Identifiable, Codable, Equatable {
     var replyText: String
 }
 
-/// 语音助手意图（本地规则识别）：记账 / 提醒 / 写文章 / 日记。
-enum VoiceIntentKind: String, CaseIterable, Identifiable {
-    case expense = "记账"
-    case reminder = "提醒"
-    case article = "写文章"
-    case diary = "日记"
-
-    var id: String { rawValue }
-
-    var systemImage: String {
-        switch self {
-        case .expense: return "yensign.circle.fill"
-        case .reminder: return "bell.fill"
-        case .article: return "doc.text.fill"
-        case .diary: return "book.fill"
-        }
-    }
-}
-
-/// 待确认意图：识别到后在语音大卡展示确认条，用户确认才写入对应本地 Store。
-struct PendingVoiceIntent: Identifiable, Equatable {
-    let id = UUID()
-    let kind: VoiceIntentKind
-    let summary: String
-    let userText: String
-}
-
 /// 随身语音助手「连续对讲」会话管理器。
 ///
 /// 状态机（一轮连续对讲）：
@@ -202,15 +175,7 @@ final class VoiceAssistantViewModel {
                     stt = AppleSTTService(language: s.whisperLanguage)
                 case .doubao:
                     if let key = secure.doubaoAPIKey, !key.isEmpty {
-                        let doubao = DoubaoSTTService(apiKey: key, language: s.whisperLanguage)
-                        // 流式转写：逐句中间结果实时上屏（voiceAssistantShowTranscript 开启时生效）
-                        doubao.onPartialTranscript = { [weak self] text in
-                            guard let self, self.settings.settings.voiceAssistantShowTranscript else { return }
-                            Task { @MainActor in
-                                if !text.isEmpty { self.lastTranscript = text }
-                            }
-                        }
-                        stt = doubao
+                        stt = DoubaoSTTService(apiKey: key, language: s.whisperLanguage)
                     } else {
                         stt = AppleSTTService(language: s.whisperLanguage)
                     }
@@ -304,233 +269,6 @@ final class VoiceAssistantViewModel {
         guard let data = try? JSONEncoder().encode(entries) else { return }
         UserDefaults.standard.set(data, forKey: transcriptDefaultsKey)
     }
-    // MARK: - 记忆沉淀与意图分发（v049）
-
-    /// 待确认意图（语音大卡确认条数据源）；nil = 无可确认意图。
-    private(set) var pendingIntent: PendingVoiceIntent?
-    /// 最近一次意图执行反馈（如「已记入记账：…」），6 秒后自动消失。
-    private(set) var lastIntentFeedback: String?
-
-    private var cachedExpenseStore: ExpenseStore?
-    private var expenseStore: ExpenseStore {
-        if let store = cachedExpenseStore { return store }
-        let store = ExpenseStore()
-        cachedExpenseStore = store
-        return store
-    }
-    private var cachedWritingStore: WritingStore?
-    private var writingStore: WritingStore {
-        if let store = cachedWritingStore { return store }
-        let store = WritingStore()
-        cachedWritingStore = store
-        return store
-    }
-    private var cachedCareReminderStore: CareReminderStore?
-    private var careReminderStore: CareReminderStore {
-        if let store = cachedCareReminderStore { return store }
-        let store = CareReminderStore()
-        cachedCareReminderStore = store
-        return store
-    }
-    private var feedbackClearTask: Task<Void, Never>?
-    private static let voiceDiaryDefaultsKey = "voice_assistant_diary_entries_v1"
-
-    /// 对话记忆沉淀：把本轮 user+assistant 文本喂给本地记忆（失败静默，不影响对话）。
-    private func absorbConversationMemory(userText: String, replyText: String) {
-        memoryStore.absorb(
-            userText: userText,
-            assistantText: replyText,
-            source: "语音助手"
-        )
-    }
-
-    /// 意图分发（轻量本地规则）：识别记账/提醒/写文章/日记并提取参数。
-    /// 识别不到就静默不提示（诚实）；识别到只展示「待确认」，不自动写入。
-    private func dispatchIntentIfNeeded(userText: String) {
-        guard pendingIntent == nil else { return }
-        if let draft = ExpenseVoiceParser.parse(userText) {
-            pendingIntent = PendingVoiceIntent(
-                kind: .expense,
-                summary: "记一笔：\(Self.expensePreview(draft))，对吗？",
-                userText: userText
-            )
-            return
-        }
-        if Self.hasReminderIntent(userText) {
-            pendingIntent = PendingVoiceIntent(
-                kind: .reminder,
-                summary: "设提醒：\(Self.reminderPreview(userText))，对吗？",
-                userText: userText
-            )
-            return
-        }
-        if Self.hasArticleIntent(userText) {
-            pendingIntent = PendingVoiceIntent(
-                kind: .article,
-                summary: "帮你存一篇写文章草稿：\(Self.preview(userText))，对吗？",
-                userText: userText
-            )
-            return
-        }
-        if Self.hasDiaryIntent(userText) {
-            pendingIntent = PendingVoiceIntent(
-                kind: .diary,
-                summary: "帮你记日记：\(Self.preview(userText))，对吗？",
-                userText: userText
-            )
-        }
-    }
-
-    /// 确认待确认意图：执行写入并展示「已记入…」反馈。
-    func confirmPendingIntent() {
-        guard let intent = pendingIntent else { return }
-        pendingIntent = nil
-        lastIntentFeedback = executeIntent(intent)
-        feedbackClearTask?.cancel()
-        feedbackClearTask = Task { @MainActor [weak self] in
-            try? await Task.sleep(for: .seconds(6))
-            guard !Task.isCancelled else { return }
-            self?.lastIntentFeedback = nil
-        }
-    }
-
-    /// 取消待确认意图。
-    func cancelPendingIntent() {
-        pendingIntent = nil
-    }
-
-    private func executeIntent(_ intent: PendingVoiceIntent) -> String {
-        switch intent.kind {
-        case .expense:
-            guard let draft = ExpenseVoiceParser.parse(intent.userText) else {
-                return "记账失败：没有识别出金额"
-            }
-            guard expenseStore.add(
-                amount: draft.amount,
-                type: draft.type,
-                category: draft.category,
-                note: draft.note,
-                date: Date()
-            ) != nil else {
-                return "记账失败：金额无效"
-            }
-            return "已记入记账：\(draft.amount.expenseAmountText) 元（\(draft.category.rawValue)）"
-        case .reminder:
-            let added = careReminderStore.add(makeReminder(from: intent.userText))
-            return "已加入提醒：\(added.title)"
-        case .article:
-            let draft = ArticleDraft(
-                title: Self.articleTitle(from: intent.userText),
-                content: intent.userText,
-                outline: [intent.userText],
-                tone: .casual,
-                generatedByAI: false,
-                generationNotice: "语音助手识别意图后由用户确认归档"
-            )
-            writingStore.add(draft)
-            return "已存入写文章草稿"
-        case .diary:
-            saveDiaryEntry(intent.userText)
-            return "已记入日记"
-        }
-    }
-
-    /// 语音提醒 → CareReminder：优先 VoiceReminderParser 解析，失败兜底 1 小时后（与随手捕捉一致）。
-    private func makeReminder(from text: String) -> CareReminder {
-        switch VoiceReminderParser.parse(text) {
-        case .success(let draft):
-            return CareReminder(
-                title: draft.title,
-                time: draft.time,
-                category: draft.category,
-                repeatType: draft.repeatType,
-                enabled: true,
-                scheduledDate: draft.scheduledDate
-            )
-        case .failure:
-            return CareReminder(
-                title: VoiceReminderParser.extractTitle(from: text),
-                time: Date().addingTimeInterval(3600),
-                category: .custom,
-                repeatType: .none,
-                enabled: true
-            )
-        }
-    }
-
-    /// 语音日记暂存：VoiceDiaryViewModel 无公开写入接口，沿用随手捕捉的本地暂存模模式
-    /// （独立 key，避免双写互相覆盖）；待 DiaryStore 落地后由主线程统一接线。
-    private func saveDiaryEntry(_ text: String) {
-        var entries = Self.loadDiaryEntries()
-        entries.insert(DiaryEntry(text: text, category: DiaryCategory.classify(text)), at: 0)
-        if entries.count > 200 {
-            entries = Array(entries.prefix(200))
-        }
-        if let data = try? JSONEncoder().encode(entries) {
-            UserDefaults.standard.set(data, forKey: Self.voiceDiaryDefaultsKey)
-        }
-    }
-
-    private static func loadDiaryEntries() -> [DiaryEntry] {
-        guard let data = UserDefaults.standard.data(forKey: voiceDiaryDefaultsKey),
-              let decoded = try? JSONDecoder().decode([DiaryEntry].self, from: data) else {
-            return []
-        }
-        return decoded
-    }
-
-    // MARK: - 意图识别规则（本地关键词/正则，中文）
-
-    private static func hasReminderIntent(_ text: String) -> Bool {
-        // 注意：不含裸「记得」，避免「我记得…」这类叙述被误判为提醒意图
-        let keywords = [
-            "提醒我", "提醒一下", "别忘了", "别忘", "要记得",
-            "帮我设", "帮我设置", "帮我定", "设个提醒", "设置提醒", "设提醒",
-            "定个提醒", "安排个提醒", "安排提醒",
-        ]
-        return keywords.contains { text.contains($0) }
-    }
-
-    private static func hasArticleIntent(_ text: String) -> Bool {
-        let keywords = ["帮我写", "写篇文章", "写一篇文章", "写个文章", "写文章", "写一篇", "起草"]
-        return keywords.contains { text.contains($0) }
-    }
-
-    private static func hasDiaryIntent(_ text: String) -> Bool {
-        let keywords = ["写日记", "记日记", "记个日记", "记录今天", "记一笔日记"]
-        return keywords.contains { text.contains($0) }
-    }
-
-    private static func preview(_ text: String) -> String {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.count > 18 ? String(trimmed.prefix(18)) + "…" : trimmed
-    }
-
-    private static func expensePreview(_ draft: ExpenseVoiceParser.Draft) -> String {
-        let note = draft.note.count > 18 ? String(draft.note.prefix(18)) + "…" : draft.note
-        return "\(note) \(draft.amount.expenseAmountText) 元（\(draft.category.rawValue)）"
-    }
-
-    private static func reminderPreview(_ text: String) -> String {
-        switch VoiceReminderParser.parse(text) {
-        case .success(let draft):
-            return "\(draft.title)（\(Self.timeText(draft.time))）"
-        case .failure:
-            return "\(VoiceReminderParser.extractTitle(from: text))（1 小时后）"
-        }
-    }
-
-    private static func timeText(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "M月d日 HH:mm"
-        return formatter.string(from: date)
-    }
-
-    private static func articleTitle(from text: String) -> String {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return "语音文章" }
-        return trimmed.count > 12 ? String(trimmed.prefix(12)) + "…" : trimmed
-    }
 
 
     // MARK: - 生命周期
@@ -585,12 +323,10 @@ final class VoiceAssistantViewModel {
                 }
             },
             onAudioChunk: { [weak self] chunk in
-                // 流式转写：豆包 STT + 实时转写开关开启时，把音频块喂给流式引擎（中间结果经 onPartialTranscript 上屏）
-                guard let self, self.settings.settings.voiceAssistantShowTranscript,
-                      let stt = self.transcriptionService as? DoubaoSTTService else { return }
-                Task { @MainActor in
-                    try? await stt.feedStreaming(samples: chunk)
-                }
+                // TODO(主智能体)：若 STT 配成豆包，这里需把 chunk 喂给
+                // `(self?.transcriptionService as? DoubaoSTTService)?.feedStreaming(samples: chunk)`，
+                // 并在转写处改调 `finishStreaming()`（与 ChatViewModel.enterConversationMode 一致）。
+                _ = chunk
             },
             onInterrupt: { [weak self] in
                 Task { @MainActor in
@@ -730,9 +466,6 @@ final class VoiceAssistantViewModel {
 
                 // 记录本轮对话（真实流水，供大卡「记录」入口查看）。
                 recordTranscript(userText: transcript, replyText: reply)
-                // v049：对话自动沉淀记忆 + 本地规则意图分发（失败静默，不影响对话）
-                absorbConversationMemory(userText: transcript, replyText: reply)
-                dispatchIntentIfNeeded(userText: transcript)
 
                 let finishedSpeaking = await speak(reply)
                 try Task.checkCancellation()
@@ -776,10 +509,7 @@ final class VoiceAssistantViewModel {
         guard let stt = transcriptionService else {
             throw VoiceAssistantError.notConfigured("语音转文字服务未初始化")
         }
-        // 豆包 + 实时转写开关：取流式引擎最终结果（onAudioChunk 已喂 feedStreaming）
-        if settings.settings.voiceAssistantShowTranscript, let doubao = stt as? DoubaoSTTService {
-            return try await doubao.finishStreaming()
-        }
+        // 豆包整段识别走协议标准方法；流式（边说边送）接入见 startConversation 的 TODO。
         return try await stt.transcribe(audioSamples: samples)
     }
 

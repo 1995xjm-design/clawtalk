@@ -199,178 +199,6 @@ final class MemoryProfileStore {
         Task { await syncToGateway() }
         return entry
     }
-    // MARK: - 对话自动沉淀（v049）
-
-    /// 从一轮对话沉淀记忆：把用户与助手文本按句子切分、分类后合并进现有档案。
-    /// - 用户文本：允许沉淀为「事实」（与现有对话聚合规则一致）；
-    /// - 助手文本：只吸收带明确关键词的句子（避免把 AI 的长篇回复灌成事实）。
-    /// - 同一聚合键（分类|关键词）的条目只更新时间戳与摘要，不重复新增。
-    /// - 返回新增条数；失败静默（不影响对话）。
-    @discardableResult
-    func absorb(userText: String, assistantText: String, source: String, date: Date = Date()) -> Int {
-        var absorbed = absorb(text: userText, source: source, date: date, allowGenericFact: true)
-        absorbed += absorb(text: assistantText, source: source, date: date, allowGenericFact: false)
-        return absorbed
-    }
-
-    /// 从一段对话数组沉淀（聊天档案回放 / 语音助手历史用）。
-    @discardableResult
-    func absorb(conversation: [Message], source: String) -> Int {
-        var absorbed = 0
-        for message in conversation {
-            switch message.role {
-            case .user:
-                absorbed += absorb(text: message.content, source: source, date: message.timestamp, allowGenericFact: true)
-            case .assistant:
-                absorbed += absorb(text: message.content, source: source, date: message.timestamp, allowGenericFact: false)
-            }
-        }
-        return absorbed
-    }
-
-    @discardableResult
-    private func absorb(text: String, source: String, date: Date, allowGenericFact: Bool) -> Int {
-        var absorbed = 0
-        var changed = false
-        for sentence in Self.candidateSentences(text) {
-            guard let classified = Self.classifyAbsorb(sentence, allowGenericFact: allowGenericFact) else { continue }
-            let key = Self.aggregationKey(category: classified.category, keyword: classified.keyword)
-            let summary = Self.summarize(sentence)
-            let title = Self.title(for: classified.keyword, text: summary)
-            if let id = keys[key], let index = entries.firstIndex(where: { $0.id == id }) {
-                // 已存在同 key 条目：更新时间戳 + 摘要，不重复新增
-                entries[index].lastUpdated = date
-                entries[index].summary = summary
-                entries[index].title = title
-                entries[index].source = source
-                changed = true
-            } else {
-                let id = keys[key] ?? UUID()
-                entries.append(MemoryProfile(
-                    id: id,
-                    title: title,
-                    category: classified.category,
-                    summary: summary,
-                    source: source,
-                    lastUpdated: date
-                ))
-                keys[key] = id
-                absorbed += 1
-                changed = true
-            }
-        }
-        if changed {
-            entries = Self.capped(entries, perCategory: 30, total: 120)
-            save()
-            profiles = Self.ordered(entries)
-            // 网关记忆沉淀（未配置/失败静默）
-            Task { await syncToGateway() }
-        }
-        return absorbed
-    }
-
-    /// 切分候选句子：按中英文句末标点 / 分号 / 换行切分，过滤过短片段。
-    private static func candidateSentences(_ text: String) -> [String] {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return [] }
-        let delimiters = CharacterSet(charactersIn: "。！？!?；;\n")
-        var sentences: [String] = []
-        var current = ""
-        for scalar in trimmed.unicodeScalars {
-            current.unicodeScalars.append(scalar)
-            if delimiters.contains(scalar) {
-                let candidate = current.trimmingCharacters(in: .whitespacesAndNewlines)
-                if !candidate.isEmpty { sentences.append(candidate) }
-                current = ""
-            }
-        }
-        let tail = current.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !tail.isEmpty { sentences.append(tail) }
-        return sentences.filter { $0.count >= 4 }
-    }
-
-    /// 对话沉淀分类：偏好/项目/灵感沿用现有规则；健康/财务/关系用细分关键词归为「事实」，
-    /// 同主题事实聚合在同一个聚合键下（时间戳更新不重复），不同主题互不干扰。
-    private static func classifyAbsorb(_ text: String, allowGenericFact: Bool) -> (category: MemoryProfile.Category, keyword: String)? {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard Self.isReadable(trimmed) else { return nil }
-
-        if let keyword = Self.firstKeyword(in: trimmed, candidates: preferenceKeywords) {
-            return (.preference, keyword)
-        }
-        if let keyword = Self.firstKeyword(in: trimmed, candidates: projectKeywords) {
-            return (.project, keyword)
-        }
-        if let keyword = Self.firstKeyword(in: trimmed, candidates: inspirationKeywords) {
-            return (.inspiration, keyword)
-        }
-        if let keyword = Self.firstKeyword(in: trimmed, candidates: healthKeywords) {
-            return (.fact, keyword)
-        }
-        if let keyword = Self.firstKeyword(in: trimmed, candidates: financeKeywords) {
-            return (.fact, keyword)
-        }
-        if let keyword = Self.firstKeyword(in: trimmed, candidates: relationshipKeywords) {
-            return (.fact, keyword)
-        }
-        if allowGenericFact, trimmed.count >= 8 {
-            return (.fact, "事实")
-        }
-        return nil
-    }
-
-    private static let preferenceKeywords = [
-        "我不喜欢", "我不爱", "我喜欢", "我爱", "习惯", "偏好", "讨厌", "喜欢",
-        "爱吃", "爱喝", "想喝", "想吃", "超爱", "最爱", "受不了",
-    ]
-    private static let projectKeywords = [
-        "项目", "正在做", "在做", "打算", "计划", "开发", "负责", "下一步",
-        "准备做", "想做个", "在写", "在学", "在研究",
-    ]
-    private static let inspirationKeywords = ["灵感", "点子", "脑洞", "突然想到", "想法", "想到一个"]
-    private static let healthKeywords = [
-        "血压", "血糖", "尿酸", "血脂", "胆固醇", "体检", "失眠", "睡眠", "吃药",
-        "生病", "健身", "锻炼", "运动", "减肥", "体重", "腰疼", "胃疼", "头疼",
-        "头痛", "医生", "医院", "过敏", "疫苗",
-    ]
-    private static let financeKeywords = [
-        "工资", "账单", "花呗", "信用卡", "房租", "房贷", "还贷", "存了", "花了",
-        "预算", "理财", "股票", "基金", "记账", "报销", "收入", "开销", "省了",
-    ]
-    private static let relationshipKeywords = [
-        "女朋友", "男朋友", "老婆", "老公", "对象", "家人", "爸妈", "父母", "孩子",
-        "儿子", "女儿", "同事", "闺蜜", "兄弟", "客户", "老板", "亲戚",
-    ]
-
-    // MARK: - App Group 共享摘要（v049，键盘扩展读取）
-
-    /// App Group 共享摘要键：主 App 写入，键盘侧 AIService/AutoInsight/SmartFreq 读取。
-    static let sharedSummaryKey = "clawtalk.memory.summary"
-    static let sharedSummarySuiteName = "group.7518554"
-
-    /// 把档案摘要（标题/分类/摘要文本）导出到 App Group，供键盘扩展读取注入个人背景。
-    /// JSON 数组，元素键：title / category / summary / updatedAt（ISO8601 字符串）。
-    func exportSharedSummary() {
-        guard let suite = UserDefaults(suiteName: Self.sharedSummarySuiteName) else { return }
-        let items = entries.map { entry -> [String: String] in
-            [
-                "title": entry.title,
-                "category": entry.category.rawValue,
-                "summary": entry.summary,
-                "updatedAt": Self.sharedSummaryDateFormatter.string(from: entry.lastUpdated),
-            ]
-        }
-        guard let data = try? JSONSerialization.data(withJSONObject: items) else { return }
-        suite.set(data, forKey: Self.sharedSummaryKey)
-    }
-
-    private static let sharedSummaryDateFormatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ssZ"
-        return formatter
-    }()
-
 
     // MARK: - 网关沉淀（第 4 层）
 
@@ -488,7 +316,6 @@ final class MemoryProfileStore {
         keys = snapshot.keys
         pushedEntryIDs = Set(snapshot.pushedEntryIDs ?? [])
         profiles = Self.ordered(entries)
-        exportSharedSummary()
     }
 
     private func save() {
@@ -500,7 +327,6 @@ final class MemoryProfileStore {
         if let data = try? JSONEncoder().encode(snapshot) {
             defaults.set(data, forKey: snapshotKey)
         }
-        exportSharedSummary()
     }
 
     private struct GroupValue {

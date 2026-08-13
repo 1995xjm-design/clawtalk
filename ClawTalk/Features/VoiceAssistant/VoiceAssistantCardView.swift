@@ -167,69 +167,10 @@ struct VoiceAssistantCardView: View, VoiceAssistantCardContent {
                     .transition(.opacity.combined(with: .scale(scale: 0.92)))
             }
 
-            if let intent = viewModel.pendingIntent {
-                intentConfirmBar(intent)
-            }
-
-            if let feedback = viewModel.lastIntentFeedback {
-                Text(feedback)
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(.white)
-                    .multilineTextAlignment(.center)
-                    .lineLimit(2)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 5)
-                    .background(Capsule().fill(Color.green.opacity(0.85)))
-                    .padding(.top, 4)
-                    .transition(.opacity.combined(with: .scale(scale: 0.92)))
-            }
-
             Spacer(minLength: 0)
         }
         .padding(.horizontal, 24)
         .padding(.vertical, 14)
-    }
-
-    // MARK: - 意图确认条（v049）
-
-    /// 待确认意图确认条：显示「记一笔…对吗？」+ 确认/取消按钮，不阻塞正常对话。
-    private func intentConfirmBar(_ intent: PendingVoiceIntent) -> some View {
-        VStack(spacing: 6) {
-            Text(intent.summary)
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(.white)
-                .multilineTextAlignment(.center)
-                .lineLimit(2)
-            HStack(spacing: 10) {
-                Button {
-                    viewModel.cancelPendingIntent()
-                } label: {
-                    Text("取消")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.9))
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 6)
-                        .background(Capsule().fill(.white.opacity(0.22)))
-                }
-                .buttonStyle(.plain)
-                Button {
-                    viewModel.confirmPendingIntent()
-                } label: {
-                    Text("确认")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 6)
-                        .background(Capsule().fill(Color.blue.opacity(0.9)))
-                }
-                .buttonStyle(.plain)
-            }
-        }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .background(RoundedRectangle(cornerRadius: 14).fill(.black.opacity(0.35)))
-        .padding(.top, 6)
-        .transition(.opacity.combined(with: .scale(scale: 0.95)))
     }
 
     // MARK: - 手势：短按切换 / 长按退出（主手势，兼容滚动）

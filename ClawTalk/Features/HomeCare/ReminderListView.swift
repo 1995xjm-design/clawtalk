@@ -37,11 +37,9 @@ struct ReminderListView: View {
     var body: some View {
         List {
             Section {
-                GlobalVoiceInputEmbedded(settingsStore: SettingsStore()) { text, _ in
-                    applyVoiceText(text)
-                }
+                holdToTalkRow
             } header: {
-                Text("按住说话，松手识别")
+                Text(isVoiceRecording ? "正在录音，松手识别" : "按住说话，松手识别")
             }
             Section {
                 ForEach(CareReminderStore.defaultTemplates) { template in
@@ -150,6 +148,10 @@ struct ReminderListView: View {
                     .padding(.vertical, 6)
                     .background(.bar)
             }
+        }
+        .overlay(alignment: .bottom) {
+            GlobalVoiceInputFloating(settingsStore: SettingsStore())
+                .padding(.bottom, 20)
         }
     }
 

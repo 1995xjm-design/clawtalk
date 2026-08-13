@@ -24,6 +24,10 @@ struct EmergencyView: View {
                 sosMessageDraft = store.config.sosMessage
             }
         }
+        .overlay(alignment: .bottom) {
+            GlobalVoiceInputFloating(settingsStore: SettingsStore())
+                .padding(.bottom, 20)
+        }
     }
 
     // MARK: - 开关

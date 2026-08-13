@@ -20,11 +20,9 @@ struct TravelListView: View {
     var body: some View {
         List {
             Section {
-                GlobalVoiceInputEmbedded(settingsStore: settingsStore) { text, _ in
-                    applyVoiceText(text)
-                }
+                holdToTalkRow
             } header: {
-                Text("按住说话新建出行，松手识别")
+                Text(voiceController.isRecording ? "正在录音，松手识别" : "按住说话新建出行，松手识别")
             }
 
             if store.trips.isEmpty {
@@ -116,6 +114,10 @@ struct TravelListView: View {
         }
         .onAppear {
             voiceController.restoreWakeListening()
+        }
+        .overlay(alignment: .bottom) {
+            GlobalVoiceInputFloating(settingsStore: settingsStore)
+                .padding(.bottom, 20)
         }
     }
 
@@ -623,9 +625,21 @@ struct TravelDetailView: View {
     @ViewBuilder
     private func voiceUpdateSection(_ trip: TravelTrip) -> some View {
         Section {
-            GlobalVoiceInputEmbedded(settingsStore: settingsStore) { text, _ in
-                applyVoiceUpdate(text)
+            Button(action: {}) {
+                HStack {
+                    Image(systemName: voiceController.isRecording ? "waveform" : "mic.fill")
+                    Text(voiceController.isTranscribing ? "识别中…" : (voiceController.isRecording ? "正在录音，松手识别" : "按住说话修改行程"))
+                    if voiceController.isTranscribing {
+                        Spacer()
+                        ProgressView()
+                    }
+                }
+                .padding(.vertical, 6)
+                .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
+            .disabled(voiceController.isTranscribing)
+            .gesture(detailRecordGesture)
         } header: {
             Text("语音修改")
         } footer: {

@@ -164,7 +164,7 @@ struct HomeMergedCardPage: View {
                     Text("功能分区")
                         .font(.headline)
                         .foregroundStyle(.primary)
-                    Text("点卡片进入功能页")
+                    Text("点卡片进入功能页；下方悬浮麦按住说话、上滑切长录音")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -181,9 +181,14 @@ struct HomeMergedCardPage: View {
                 }
             }
             .padding(16)
+            .padding(.bottom, 220)
         }
         .navigationTitle(kind.title)
         .navigationBarTitleDisplayMode(.inline)
+        .overlay(alignment: .bottom) {
+            GlobalVoiceInputFloating(settingsStore: settings)
+                .padding(.bottom, 20)
+        }
         .task {
             if diaryViewModel == nil {
                 diaryViewModel = VoiceDiaryViewModel(settingsStore: settings)
@@ -292,6 +297,11 @@ struct HomeMergedCardPage: View {
                     id: "diary", title: "语音日记", icon: "waveform", tint: .pink,
                     subtitle: "说一段话，记下今天",
                     destination: AnyView(VoiceDiaryView(settingsStore: settings))
+                ),
+                HomeSection(
+                    id: "capture", title: "随手捕捉", icon: "tray.and.arrow.down.fill", tint: .teal,
+                    subtitle: "说一句，自动归档",
+                    destination: AnyView(CaptureView(settingsStore: settings, careReminderStore: careStore))
                 ),
                 HomeSection(
                     id: "dictation", title: "文档口述", icon: "doc.plaintext.fill", tint: .blue,
@@ -496,7 +506,7 @@ struct SmartFreqPanelHost: UIViewControllerRepresentable {
 /// 聊天档案：聊天对象背景档案
 struct HeartTargetPanelHost: UIViewControllerRepresentable {
     func makeUIViewController(context: Context) -> UIViewController {
-        UINavigationController(rootViewController: HeartTargetSettingsViewController())
+        KeyboardPanelHost.safe { HeartTargetSettingsViewController() }
     }
     func updateUIViewController(_ uiViewController: UIViewController, context: Context) {}
 }
