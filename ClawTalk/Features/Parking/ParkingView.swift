@@ -88,10 +88,6 @@ struct ParkingView: View {
         } message: {
             Text(store.errorMessage ?? "")
         }
-        .overlay(alignment: .bottom) {
-            GlobalVoiceInputFloating(settingsStore: SettingsStore())
-                .padding(.bottom, 20)
-        }
     }
 
     // MARK: - 记录按钮

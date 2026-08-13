@@ -22,6 +22,16 @@ public class SettingsViewModel: ObservableObject {
     self.navigate = navigate
     self.rimeViewModel = rimeViewModel
     self.backupViewModel = backupViewModel
+    // 手动 RIME 部署成功后清除「数据未就绪」标注（rimeDataReady 恢复 true）
+    NotificationCenter.default.addObserver(
+      forName: NSNotification.Name("rimeDeployDidSucceed"), object: nil, queue: .main
+    ) { [weak self] _ in
+      self?.rimeDataReady = true
+    }
+  }
+
+  deinit {
+    NotificationCenter.default.removeObserver(self)
   }
 
   public var enableColorSchema: Bool {
@@ -305,8 +315,8 @@ extension SettingsViewModel {
             var config = HamsterConfigurationStore.shared.configuration
             if !rimeFilesReady {
               // 阶段 1：解压输入方案目录（真实进度，按解压后字节数百分比）
-              let unzipSrc = FileManager.appSharedSupportDirectory.appendingPathComponent(HamsterConstants.userDataZipFile)
-              if FileManager.default.fileExists(atPath: unzipSrc.path) {
+              // 资源定位双保险：SharedSupport/ 目录优先，回退 Bundle 根目录（历史平铺打包兜底）
+              if let unzipSrc = FileManager.bundledRimeResource(named: HamsterConstants.userDataZipFile) {
                 DispatchQueue.main.async { ProgressHUD.progress("正在解压输入方案 0%", 0, interaction: false) }
                 try FileManager.default.unzipSync(unzipSrc, dst: FileManager.sandboxUserDataDirectory) { p in
                   DispatchQueue.main.async {
@@ -341,6 +351,7 @@ extension SettingsViewModel {
 
       HamsterConfigurationStore.shared.configuration = configuration
 
+      rimeDataReady = true
       await ProgressHUD.success(alreadyDeployed ? "已就绪" : "部署完成", interaction: false, delay: 1.5)
     } catch {
       // 失败不阻断设置页：清除部署中标记，记录日志（App Group 共享 + OSLog），标记 RIME 数据未就绪

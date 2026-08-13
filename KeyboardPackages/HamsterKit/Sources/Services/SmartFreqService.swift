@@ -123,7 +123,7 @@ NEW\t全拼编码\t词语
     let cfg = config
     guard cfg.isEnabled else { return false }
     let provider = AIService.shared.selectedProvider
-    guard !AIService.shared.apiKey(for: provider).isEmpty else { return false }
+    guard AIService.shared.clawTalkGatewayUsable || !AIService.shared.apiKey(for: provider).isEmpty else { return false }
     // Token 预算检查
     if cfg.monthlyTokenBudget > 0 {
       let currentMonth = Self.monthString(for: Date())
@@ -155,8 +155,19 @@ NEW\t全拼编码\t词语
       return
     }
 
+    // v049：追加 App Group 记忆摘要 + 键盘对话文本，让词频更贴个人语境
+    var dataText = clawTalkText
+    let memoryText = AIService.shared.clawTalkMemorySummaryText()
+    if !memoryText.isEmpty {
+      dataText += "\n\n【个人记忆摘要】\n\(memoryText)"
+    }
+    let chatLogText = AIService.shared.clawTalkKeyboardChatLogText(limit: 30)
+    if !chatLogText.isEmpty {
+      dataText += "\n\n【键盘对话记录】\n\(chatLogText)"
+    }
+
     let prompt = Self.defaultPrompt
-      .replacingOccurrences(of: "{data}", with: clawTalkText)
+      .replacingOccurrences(of: "{data}", with: dataText)
 
     let result = await callAIWithUsage(prompt: prompt)
 

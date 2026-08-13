@@ -146,6 +146,97 @@ public class AIService {
     savedPrompts = savedPrompts.filter { $0.id != id }
   }
 
+  // MARK: - ClawTalk 语音助手通道（v049，App Group 共享）
+
+  /// ClawTalk 主 App 写入的语音助手通道配置（App Group "group.7518554"）。
+  public struct ClawTalkChannelConfig {
+    public let channelRawValue: String
+    public let gatewayURL: String
+    public let gatewayToken: String
+    public let agentID: String
+    public let deepSeekConfigured: Bool
+
+    public init(channelRawValue: String, gatewayURL: String, gatewayToken: String, agentID: String, deepSeekConfigured: Bool) {
+      self.channelRawValue = channelRawValue
+      self.gatewayURL = gatewayURL
+      self.gatewayToken = gatewayToken
+      self.agentID = agentID
+      self.deepSeekConfigured = deepSeekConfigured
+    }
+
+    /// 网关是否可用（地址与令牌都非空）
+    public var isGatewayUsable: Bool {
+      !gatewayURL.isEmpty && !gatewayToken.isEmpty
+    }
+  }
+
+  /// 读取 ClawTalk 语音助手通道配置（键与主 App SettingsStore.syncGatewayToAppGroup 一致）。
+  /// 键盘扩展读不到主 App 的 Keychain（deepseek_api_key），降级规则：
+  /// 有网关地址/令牌 → 走网关 OpenAI 兼容通道；否则用本键盘自身 AIProvider 配置兜底。
+  public func clawTalkChannelConfig() -> ClawTalkChannelConfig? {
+    guard let suite = UserDefaults(suiteName: HamsterConstants.appGroupName) else { return nil }
+    let url = suite.string(forKey: "gateway_url") ?? ""
+    let token = suite.string(forKey: "gateway_token") ?? ""
+    guard !url.isEmpty, !token.isEmpty else { return nil }
+    return ClawTalkChannelConfig(
+      channelRawValue: suite.string(forKey: "voice_agent_channel") ?? "",
+      gatewayURL: url,
+      gatewayToken: token,
+      agentID: suite.string(forKey: "agent_id") ?? "main",
+      deepSeekConfigured: suite.bool(forKey: "deepseek_configured")
+    )
+  }
+
+  /// 是否可用 ClawTalk 网关通道（键盘 = 语音助手统一通道）。
+  public var clawTalkGatewayUsable: Bool {
+    clawTalkChannelConfig()?.isGatewayUsable ?? false
+  }
+
+  /// 读取主 App 记忆中心导出的个人记忆摘要（clawtalk.memory.summary，JSON 数组）。
+  public func clawTalkMemorySummaryText() -> String {
+    guard let suite = UserDefaults(suiteName: HamsterConstants.appGroupName),
+          let data = suite.data(forKey: "clawtalk.memory.summary"),
+          let array = (try? JSONSerialization.jsonObject(with: data)) as? [[String: Any]]
+    else { return "" }
+    let lines = array.compactMap { item -> String? in
+      guard let summary = item["summary"] as? String, !summary.isEmpty else { return nil }
+      let category = item["category"] as? String ?? ""
+      let title = item["title"] as? String ?? ""
+      if !title.isEmpty, title != summary {
+        return "【\(category)】\(title)：\(summary)"
+      }
+      return "【\(category)】\(summary)"
+    }
+    return Array(lines.prefix(30)).joined(separator: "\n")
+  }
+
+  /// 读取键盘↔主 App 共享对话（clawtalk.keyboard.chatlog，JSON 数组，最近 100 条）。
+  public func clawTalkKeyboardChatLogText(limit: Int = 20) -> String {
+    guard let suite = UserDefaults(suiteName: HamsterConstants.appGroupName),
+          let data = suite.data(forKey: "clawtalk.keyboard.chatlog"),
+          let array = (try? JSONSerialization.jsonObject(with: data)) as? [[String: Any]]
+    else { return "" }
+    let lines = array.compactMap { item -> String? in
+      guard let role = item["role"] as? String, let content = item["content"] as? String else { return nil }
+      let who = role == "user" ? "我" : "助手"
+      return "\(who)：\(content)"
+    }
+    return Array(lines.suffix(max(limit, 0))).joined(separator: "\n")
+  }
+
+  /// 把 App Group 记忆摘要追加到 system prompt（「用户个人背景：…」）。
+  private func injectingClawTalkMemory(into messages: [AIMessage]) -> [AIMessage] {
+    let background = clawTalkMemorySummaryText()
+    guard !background.isEmpty else { return messages }
+    let suffix = "\n\n用户个人背景：\n\(background)"
+    if let idx = messages.firstIndex(where: { $0.role == "system" }) {
+      var updated = messages
+      updated[idx] = AIMessage(role: "system", content: messages[idx].content + suffix)
+      return updated
+    }
+    return [AIMessage(role: "system", content: "用户个人背景：\n\(background)")] + messages
+  }
+
   // MARK: - Chat
 
   /// 发送消息到当前选定的 AI 提供商
@@ -163,6 +254,14 @@ public class AIService {
     messages: [AIMessage],
     completion: @escaping (Result<(String, AIUsage?), Error>) -> Void
   ) {
+    // v049 统一通道：主 App 已配置 ClawTalk 网关（App Group 共享）→ 键盘 AI 面板走同一网关；
+    // 键盘扩展读不到主 App 的 Keychain（deepseek_api_key），有网关地址/令牌就用网关，
+    // 否则回退本键盘自身 AIProvider 配置（默认行为不变）。
+    if let channel = clawTalkChannelConfig(), channel.isGatewayUsable {
+      chatClawTalkGatewayWithUsage(messages: injectingClawTalkMemory(into: messages), channel: channel, completion: completion)
+      return
+    }
+
     let provider = selectedProvider
     let key = apiKey(for: provider)
     guard !key.isEmpty else {
@@ -172,9 +271,9 @@ public class AIService {
     }
     switch provider {
     case .claude:
-      chatClaudeWithUsage(messages: messages, apiKey: key, completion: completion)
+      chatClaudeWithUsage(messages: injectingClawTalkMemory(into: messages), apiKey: key, completion: completion)
     default:
-      chatOpenAICompatWithUsage(messages: messages, provider: provider, apiKey: key, completion: completion)
+      chatOpenAICompatWithUsage(messages: injectingClawTalkMemory(into: messages), provider: provider, apiKey: key, completion: completion)
     }
   }
 
@@ -187,15 +286,60 @@ public class AIService {
     completion: @escaping (Result<(String, AIUsage?), Error>) -> Void
   ) {
     let urlString = "\(provider.baseURL)/chat/completions"
-    let url = URL(string: urlString)!
+    postOpenAICompatRequest(
+      urlString: urlString,
+      authorization: "Bearer \(apiKey)",
+      model: selectedModel,
+      label: provider.rawValue,
+      messages: messages,
+      extraHeaders: provider == .openrouter ? ["X-Title": "ClawTalk iOS"] : [:],
+      completion: completion
+    )
+  }
+
+  /// ClawTalk 统一通道：网关 OpenAI 兼容 /v1/chat/completions（baseURL=网关地址 + /v1）。
+  private func chatClawTalkGatewayWithUsage(
+    messages: [AIMessage],
+    channel: ClawTalkChannelConfig,
+    completion: @escaping (Result<(String, AIUsage?), Error>) -> Void
+  ) {
+    let base = channel.gatewayURL
+      .trimmingCharacters(in: .whitespacesAndNewlines)
+      .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+    let urlString = "\(base)/v1/chat/completions"
+    postOpenAICompatRequest(
+      urlString: urlString,
+      authorization: "Bearer \(channel.gatewayToken)",
+      model: "openclaw:\(channel.agentID)",
+      label: "ClawTalk网关",
+      messages: messages,
+      extraHeaders: [:],
+      completion: completion
+    )
+  }
+
+  /// OpenAI 兼容 POST /chat/completions 公共实现（键盘自带提供商与 ClawTalk 网关共用）。
+  private func postOpenAICompatRequest(
+    urlString: String,
+    authorization: String,
+    model: String,
+    label: String,
+    messages: [AIMessage],
+    extraHeaders: [String: String],
+    completion: @escaping (Result<(String, AIUsage?), Error>) -> Void
+  ) {
+    guard let url = URL(string: urlString) else {
+      ClawLog.record(module: "键盘AI", "AI 请求 URL 无效：\(urlString)")
+      DispatchQueue.main.async { completion(.failure(AIError.parseError)) }
+      return
+    }
     var req = URLRequest(url: url)
     req.httpMethod = "POST"
-    req.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+    req.setValue(authorization, forHTTPHeaderField: "Authorization")
     req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-    if provider == .openrouter {
-      req.setValue("ClawTalk iOS", forHTTPHeaderField: "X-Title")
+    for (key, value) in extraHeaders {
+      req.setValue(value, forHTTPHeaderField: key)
     }
-    let model = selectedModel
     let body: [String: Any] = [
       "model": model,
       "messages": messages.map { ["role": $0.role, "content": $0.content] },
@@ -204,7 +348,7 @@ public class AIService {
     req.httpBody = try? JSONSerialization.data(withJSONObject: body)
 
     let log = LogService.shared
-    log.log("→ \(provider.rawValue) \(model) \(urlString) msgs=\(messages.count)", tag: "AI")
+    log.log("→ \(label) \(model) \(urlString) msgs=\(messages.count)", tag: "AI")
 
     URLSession.shared.dataTask(with: req) { data, response, error in
       let status = (response as? HTTPURLResponse)?.statusCode ?? 0

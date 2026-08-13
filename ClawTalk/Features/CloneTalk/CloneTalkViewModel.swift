@@ -22,6 +22,19 @@ final class CloneTalkViewModel {
     private(set) var drafts: [CloneDraft] = []
     private(set) var didSaveCurrent = false
 
+    /// 连续失败冷却（v049）：连续失败 3 次后 30 秒内禁止重试。
+    private var consecutiveFailures = 0
+    private var retryBlockedUntil: Date?
+    private var cooldownTask: Task<Void, Never>?
+    /// 剩余冷却秒数（>0 时展示倒计时提示）。
+    private(set) var retryCooldownRemaining = 0 {
+        didSet {
+            if retryCooldownRemaining > 0 {
+                errorMessage = "连续失败次数过多，请 \(retryCooldownRemaining) 秒后再试"
+            }
+        }
+    }
+
     private static let draftsKey = "clone_talk_drafts_v1"
 
     init(settingsStore: SettingsStore, memoryStore: MemoryProfileStore? = nil) {
@@ -41,6 +54,10 @@ final class CloneTalkViewModel {
         let input = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !input.isEmpty else {
             errorMessage = "先输入一句话，分身才知道要帮你写什么"
+            return
+        }
+        if let until = retryBlockedUntil, Date() < until {
+            errorMessage = "连续失败次数过多，请 \(Int(until.timeIntervalSinceNow) + 1) 秒后再试"
             return
         }
         isGenerating = true
@@ -79,10 +96,13 @@ final class CloneTalkViewModel {
             let trimmed = generatedText.trimmingCharacters(in: .whitespacesAndNewlines)
             if trimmed.isEmpty {
                 errorMessage = "没有生成内容，请重试或换个说法"
+            } else {
+                consecutiveFailures = 0
             }
         } catch {
-            errorMessage = AppErrorText.localized(error.localizedDescription)
+            errorMessage = friendlyErrorText(for: error)
             LogCollector.record(module: "AI 分身", "直连生成失败：\(error.localizedDescription)")
+            registerFailure()
         }
     }
 
@@ -116,10 +136,70 @@ final class CloneTalkViewModel {
             let trimmed = generatedText.trimmingCharacters(in: .whitespacesAndNewlines)
             if trimmed.isEmpty {
                 errorMessage = "没有生成内容，请重试或换个说法"
+            } else {
+                consecutiveFailures = 0
             }
         } catch {
-            errorMessage = AppErrorText.localized(error.localizedDescription)
+            errorMessage = friendlyErrorText(for: error)
             LogCollector.record(module: "AI 分身", "生成失败：\(error.localizedDescription)")
+            registerFailure()
+        }
+    }
+
+    /// 生成失败文案：区分 401（DeepSeek Key 无效/未配置）与 429（限流）。
+    /// 网关路径的 401 按网关令牌错误提示（更诚实）。
+    private func friendlyErrorText(for error: Error) -> String {
+        if let deepSeekError = error as? DeepSeekDirectClient.DeepSeekError {
+            switch deepSeekError {
+            case .missingAPIKey:
+                return "DeepSeek API Key 无效或未配置，请到设置-语音助手通道检查"
+            case .badResponse(let code, _):
+                if code == 401 {
+                    return "DeepSeek API Key 无效或未配置，请到设置-语音助手通道检查"
+                }
+                if code == 429 {
+                    return "请求过于频繁被限流，请稍后再试"
+                }
+                return AppErrorText.localized(error.localizedDescription)
+            case .emptyReply, .invalidResponse:
+                return AppErrorText.localized(error.localizedDescription)
+            }
+        }
+        if let openClawError = error as? OpenClawError {
+            switch openClawError {
+            case .httpError(let code), .httpErrorDetailed(let code, _, _):
+                if code == 429 {
+                    return "请求过于频繁被限流，请稍后再试"
+                }
+                return AppErrorText.httpStatus(code)
+            default:
+                return AppErrorText.localized(error.localizedDescription)
+            }
+        }
+        return AppErrorText.localized(error.localizedDescription)
+    }
+
+    /// 失败登记：连续 3 次失败后进入 30 秒冷却。
+    private func registerFailure() {
+        consecutiveFailures += 1
+        if consecutiveFailures >= 3 {
+            consecutiveFailures = 0
+            startCooldown()
+        }
+    }
+
+    private func startCooldown() {
+        retryBlockedUntil = Date().addingTimeInterval(30)
+        retryCooldownRemaining = 30
+        cooldownTask?.cancel()
+        cooldownTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            while let until = self.retryBlockedUntil, Date() < until {
+                self.retryCooldownRemaining = max(0, Int(until.timeIntervalSinceNow) + 1)
+                try? await Task.sleep(for: .seconds(1))
+            }
+            self.retryBlockedUntil = nil
+            self.retryCooldownRemaining = 0
         }
     }
 

@@ -261,10 +261,6 @@ struct ExpenseListView: View {
         .sheet(isPresented: $showManualSheet) {
             manualSheet
         }
-        .overlay(alignment: .bottom) {
-            GlobalVoiceInputFloating(settingsStore: settingsStore)
-                .padding(.bottom, 20)
-        }
     }
 
     // MARK: - 导航栏
@@ -294,8 +290,10 @@ struct ExpenseListView: View {
 
     private var actionArea: some View {
         VStack(spacing: 10) {
-            recordCapsule
-                .alert("没听清金额", isPresented: $showParseFailAlert) {
+            GlobalVoiceInputEmbedded(settingsStore: settingsStore) { text, _ in
+                handleExpenseTranscript(text)
+            }
+            .alert("没听清金额", isPresented: $showParseFailAlert) {
                     Button("手动填写") {
                         presentManualEdit(transcript: parseFailTranscript)
                     }
@@ -508,6 +506,17 @@ struct ExpenseListView: View {
     }
 
     // MARK: - 录音结果处理
+
+    /// 内嵌语音输入转写文本：沿用原 ExpenseVoiceParser 解析 → 确认保存 / 弹手动填写（与录音流程一致）。
+    private func handleExpenseTranscript(_ text: String) {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        if let draft = ExpenseVoiceParser.parse(trimmed) {
+            handleOutcome(.parsed(draft))
+        } else {
+            handleOutcome(.needsManual(trimmed))
+        }
+    }
 
     private func handleOutcome(_ outcome: ExpenseRecordingController.Outcome) {
         switch outcome {

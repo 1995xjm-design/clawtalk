@@ -113,9 +113,9 @@ public class AutoInsightService {
   public var shouldRun: Bool {
     let cfg = config
     guard cfg.isEnabled else { return false }
-    // 需要有 API Key
+    // 需要有 API Key（v049：ClawTalk 网关统一通道下不依赖键盘自带 Key）
     let provider = AIService.shared.selectedProvider
-    guard !AIService.shared.apiKey(for: provider).isEmpty else { return false }
+    guard AIService.shared.clawTalkGatewayUsable || !AIService.shared.apiKey(for: provider).isEmpty else { return false }
     // 检查时间间隔
     guard let lastRun = cfg.lastRunDate else { return true }
     let minInterval = TimeInterval(cfg.intervalMinutes * 60)
@@ -131,8 +131,8 @@ public class AutoInsightService {
       return
     }
     let provider = AIService.shared.selectedProvider
-    guard !AIService.shared.apiKey(for: provider).isEmpty else {
-      log.log("跳过：\(provider.rawValue) API Key 未配置", level: .warn, tag: "AutoInsight")
+    guard AIService.shared.clawTalkGatewayUsable || !AIService.shared.apiKey(for: provider).isEmpty else {
+      log.log("跳过：\(provider.rawValue) API Key 未配置且未启用 ClawTalk 网关通道", level: .warn, tag: "AutoInsight")
       return
     }
     if let lastRun = cfg.lastRunDate {
@@ -156,8 +156,8 @@ public class AutoInsightService {
   public func runNow() async {
     let log = LogService.shared
     let provider = AIService.shared.selectedProvider
-    guard !AIService.shared.apiKey(for: provider).isEmpty else {
-      log.log("手动触发失败：\(provider.rawValue) API Key 未配置", level: .error, tag: "AutoInsight")
+    guard AIService.shared.clawTalkGatewayUsable || !AIService.shared.apiKey(for: provider).isEmpty else {
+      log.log("手动触发失败：\(provider.rawValue) API Key 未配置且未启用 ClawTalk 网关通道", level: .error, tag: "AutoInsight")
       return
     }
     var cfg = config
@@ -197,15 +197,32 @@ public class AutoInsightService {
     }
     let combinedData = dataSections.joined(separator: "\n\n")
 
-    let backgroundSection = cfg.personalBackground.isEmpty
-      ? ""
-      : "\n用户个人背景：\(cfg.personalBackground)\n"
+    let backgroundSection = resolveBackgroundSection(cfg)
 
     func buildPrompt(_ template: String) -> String {
       template
         .replacingOccurrences(of: "{background}", with: backgroundSection)
         .replacingOccurrences(of: "{data}", with: combinedData)
     }
+
+  /// 个人背景：优先手填配置；为空时自动读 App Group 记忆摘要（clawtalk.memory.summary）
+  /// + 最近 ClawTalk 键盘对话文本，让洞察更贴个人语境。
+  private func resolveBackgroundSection(_ cfg: AutoInsightConfig) -> String {
+    if !cfg.personalBackground.isEmpty {
+      return "\n用户个人背景：\(cfg.personalBackground)\n"
+    }
+    var parts: [String] = []
+    let memoryText = AIService.shared.clawTalkMemorySummaryText()
+    if !memoryText.isEmpty {
+      parts.append(memoryText)
+    }
+    let recentChat = AIService.shared.clawTalkKeyboardChatLogText(limit: 20)
+    if !recentChat.isEmpty {
+      parts.append("最近对话：\n\(recentChat)")
+    }
+    guard !parts.isEmpty else { return "" }
+    return "\n用户个人背景：\n" + parts.joined(separator: "\n\n") + "\n"
+  }
 
     let spiritualPromptText = buildPrompt(cfg.spiritualPrompt)
     let taskPromptText = buildPrompt(cfg.taskPrompt)

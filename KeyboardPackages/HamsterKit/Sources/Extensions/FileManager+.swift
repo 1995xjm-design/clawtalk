@@ -374,12 +374,31 @@ public extension FileManager {
     sandboxDirectory.appendingPathComponent("RIMELogger", isDirectory: true)
   }
 
-  /// 沙盒 Rime userData 目录是否就绪（目录存在且非空）
-  /// 用于部署兜底：已标记部署但文件被清理/损坏时需重新部署
+  /// 沙盒 Rime userData 目录是否就绪（关键文件齐全才算就绪）
+  /// 检查 default.yaml + t9.schema.yaml + build 编译产物目录?缺任何一个都视为未就绪，
+  /// 触发重新解压+全量部署（避免旧版残留残缺目录被误判就绪后编译失败）。
   static var isSandboxRimeUserDataReady: Bool {
-    guard FileManager.default.fileExists(atPath: sandboxUserDataDirectory.path) else { return false }
-    let contents = (try? FileManager.default.contentsOfDirectory(atPath: sandboxUserDataDirectory.path)) ?? []
-    return !contents.isEmpty
+    let fm = FileManager.default
+    let dir = sandboxUserDataDirectory.path
+    guard fm.fileExists(atPath: dir) else { return false }
+    guard fm.fileExists(atPath: dir + "/default.yaml"),
+          fm.fileExists(atPath: dir + "/t9.schema.yaml") else { return false }
+    let buildDir = dir + "/build"
+    guard fm.fileExists(atPath: buildDir) else { return false }
+    let buildContents = (try? fm.contentsOfDirectory(atPath: buildDir)) ?? []
+    return !buildContents.isEmpty
+  }
+
+  /// 主 App 内置 RIME 资源 zip 定位（双保险）：
+  /// 1. 优先 Bundle.main/SharedSupport/<name>（folder reference 打包的正确位置）
+  /// 2. 找不到时回退 Bundle 根目录同名文件（历史平铺打包的兜底）
+  static func bundledRimeResource(named name: String) -> URL? {
+    let fm = FileManager.default
+    let inDir = appSharedSupportDirectory.appendingPathComponent(name)
+    if fm.fileExists(atPath: inDir.path) { return inDir }
+    let atRoot = Bundle.main.bundleURL.appendingPathComponent(name)
+    if fm.fileExists(atPath: atRoot.path) { return atRoot }
+    return nil
   }
 
   // 安装包ShareSupport资源目录

@@ -699,6 +699,232 @@ struct GlobalVoiceInput: View {
     }
 }
 
+// MARK: - 可内嵌录音按钮（非悬浮）
+
+/// 与悬浮麦同能力的可内嵌录音按钮：按住说话 / 上滑切长录音 / 长录音点按结束，
+/// 声呐波纹 + 呼吸光晕 + 录音环形动画；非 overlay 悬浮，可嵌入页面内容流。
+/// 复用同一个 GlobalVoiceInputViewModel，转写结果经 onTranscript 回调交给页面承接。
+struct GlobalVoiceInputEmbedded: View {
+    @State private var viewModel: GlobalVoiceInputViewModel
+    @State private var isPressed = false
+    @State private var didSwitchToLong = false
+    @State private var isBreathing = false
+
+    private let buttonSize: CGFloat = 64
+    private let swipeUpThreshold: CGFloat = -70
+
+    init(settingsStore: SettingsStore, onTranscript: ((String, GlobalVoiceInputMode) -> Void)? = nil) {
+        let vm = GlobalVoiceInputViewModel(settingsStore: settingsStore)
+        vm.onTranscript = onTranscript
+        _viewModel = State(initialValue: vm)
+    }
+
+    var body: some View {
+        VStack(spacing: 10) {
+            recordButton
+            statusLine
+        }
+        .onAppear {
+            withAnimation(.easeInOut(duration: 1.8).repeatForever(autoreverses: true)) {
+                isBreathing = true
+            }
+        }
+        .onDisappear {
+            viewModel.discard()
+        }
+    }
+
+    // MARK: - 录音按钮（与悬浮麦同款：声呐 + 呼吸光晕 + 录音环形动画）
+
+    private var recordButton: some View {
+        ZStack {
+            // 声呐波纹：按住/录音时从按钮中心向外扩散
+            if isPressed || viewModel.state == .recording {
+                SonarRings(color: buttonColor)
+                    .frame(width: buttonSize + 80, height: buttonSize + 80)
+            }
+
+            if viewModel.state == .idle {
+                // 呼吸光晕：双层错相（与悬浮麦一致）
+                Circle()
+                    .fill(Color.openClawRed.opacity(0.22))
+                    .frame(
+                        width: buttonSize + (isBreathing ? 36 : 12),
+                        height: buttonSize + (isBreathing ? 36 : 12)
+                    )
+                    .animation(.easeInOut(duration: 1.6).repeatForever(autoreverses: true), value: isBreathing)
+                Circle()
+                    .fill(Color.openClawRed.opacity(0.12))
+                    .frame(
+                        width: buttonSize + (isBreathing ? 52 : 22),
+                        height: buttonSize + (isBreathing ? 52 : 22)
+                    )
+                    .animation(.easeInOut(duration: 2.4).repeatForever(autoreverses: true), value: isBreathing)
+            }
+
+            if viewModel.state == .recording {
+                if viewModel.mode == .long {
+                    Circle()
+                        .trim(from: 0, to: 0.7)
+                        .stroke(Color.openClawRed.opacity(0.6), style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
+                        .frame(width: buttonSize + 12, height: buttonSize + 12)
+                        .rotationEffect(.degrees(recordingRingAngle))
+                        .animation(.linear(duration: 1.0).repeatForever(autoreverses: false), value: recordingRingAngle)
+                } else {
+                    Circle()
+                        .stroke(Color.openClawRed.opacity(0.3), lineWidth: 3)
+                        .frame(
+                            width: buttonSize + 14 + CGFloat(viewModel.audioLevel * 52),
+                            height: buttonSize + 14 + CGFloat(viewModel.audioLevel * 52)
+                        )
+                        .animation(.easeOut(duration: 0.08), value: viewModel.audioLevel)
+                }
+            }
+
+            // 按钮主体：按压缩强 + 点亮高光
+            Circle()
+                .fill(buttonColor)
+                .frame(width: buttonSize, height: buttonSize)
+                .shadow(color: buttonColor.opacity(isPressed ? 0.75 : 0.45), radius: isPressed ? 8 : 10, y: isPressed ? 2 : 6)
+                .scaleEffect(isPressed ? 0.85 : 1.0)
+                .animation(.spring(response: 0.28, dampingFraction: 0.55), value: isPressed)
+                .overlay(
+                    Circle()
+                        .fill(.white.opacity(isPressed ? 0.26 : 0.10))
+                        .scaleEffect(isPressed ? 0.92 : 1.0)
+                        .animation(.easeOut(duration: 0.18), value: isPressed)
+                )
+
+            buttonIcon
+                .font(.system(size: 26, weight: .semibold))
+                .foregroundStyle(.white)
+        }
+        .frame(width: buttonSize + 80, height: buttonSize + 80)
+        .contentShape(Circle())
+        .gesture(recordGesture)
+        .disabled(viewModel.state == .transcribing)
+        .accessibilityLabel(accessibilityLabel)
+    }
+
+    private var recordingRingAngle: Double {
+        viewModel.state == .recording ? 360 : 0
+    }
+
+    private var buttonColor: Color {
+        switch viewModel.state {
+        case .idle: return .openClawRed
+        case .recording: return viewModel.mode == .long ? Color(red: 0.82, green: 0.16, blue: 0.2) : .red
+        case .transcribing: return .openClawRed.opacity(0.5)
+        }
+    }
+
+    @ViewBuilder
+    private var buttonIcon: some View {
+        switch viewModel.state {
+        case .idle:
+            Image(systemName: "mic.fill")
+        case .recording:
+            ZStack {
+                Image(systemName: viewModel.mode == .long ? "stop.fill" : "waveform")
+                    .symbolEffect(.pulse)
+                if viewModel.mode == .short {
+                    Circle()
+                        .fill(Color.red)
+                        .frame(width: 9, height: 9)
+                        .offset(x: 11, y: -11)
+                }
+            }
+        case .transcribing:
+            Image(systemName: "waveform")
+        }
+    }
+
+    private var accessibilityLabel: String {
+        switch viewModel.state {
+        case .idle: return "按住说话，上滑切长录音"
+        case .recording: return viewModel.mode == .long ? "长录音中，点按结束" : "正在录音，松开结束"
+        case .transcribing: return "正在转写"
+        }
+    }
+
+    // MARK: - 手势（按住说话 / 上滑切长录音 / 长录音点按结束）
+
+    private var recordGesture: some Gesture {
+        DragGesture(minimumDistance: 0)
+            .onChanged { value in
+                switch viewModel.state {
+                case .idle:
+                    guard viewModel.mode == .short, !isPressed else { return }
+                    isPressed = true
+                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                    viewModel.startShortRecording()
+                case .recording:
+                    if viewModel.mode == .short,
+                       value.translation.height < swipeUpThreshold,
+                       !didSwitchToLong {
+                        didSwitchToLong = true
+                        UINotificationFeedbackGenerator().notificationOccurred(.success)
+                        viewModel.switchToLongMode()
+                    }
+                case .transcribing:
+                    break
+                }
+            }
+            .onEnded { _ in
+                isPressed = false
+                if didSwitchToLong {
+                    didSwitchToLong = false
+                    return
+                }
+                switch viewModel.mode {
+                case .short:
+                    if viewModel.state == .recording {
+                        viewModel.stopShortRecording()
+                    }
+                case .long:
+                    if viewModel.state == .recording {
+                        viewModel.stopLongRecording()
+                    }
+                }
+            }
+    }
+
+    // MARK: - 状态提示（内嵌紧凑样式）
+
+    @ViewBuilder
+    private var statusLine: some View {
+        VStack(spacing: 6) {
+            switch viewModel.state {
+            case .idle:
+                Text(viewModel.mode.hint)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            case .recording:
+                Text(viewModel.mode == .long
+                     ? "长录音中 · \(viewModel.durationText)（点按结束）"
+                     : "正在录音… 松开结束")
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(Color.openClawRed)
+            case .transcribing:
+                HStack(spacing: 6) {
+                    ProgressView()
+                        .controlSize(.mini)
+                    Text("转写中…")
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            if let errorMessage = viewModel.errorMessage {
+                Text(errorMessage)
+                    .font(.caption2)
+                    .foregroundStyle(.red)
+                    .multilineTextAlignment(.center)
+            }
+        }
+    }
+}
+
 // MARK: - 悬浮圆麦组件（N3）
 
 /// 主页小卡页面统一的悬浮麦克风：屏幕下方偏上、居中悬浮，不挡内容滚动。

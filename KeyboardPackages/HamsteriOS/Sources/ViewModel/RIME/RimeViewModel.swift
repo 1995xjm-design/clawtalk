@@ -241,17 +241,37 @@ public extension RimeViewModel {
   }
 
   /// RIME 部署
+  /// 手动部署兜底：沙盒 Rime 关键文件缺失时先解压内置方案（带进度），再编译；
+  /// 成功后写部署标记并发通知（设置页据此清除「数据未就绪」状态）。
   func rimeDeploy() async {
     let (fileHandle, filePath) = rimeLogger()
     await ProgressHUD.animate("RIME部署中, 请稍候……", AnimationType.circleRotateChase, interaction: false)
     var hamsterConfiguration = HamsterConfigurationStore.shared.configuration
     do {
+      if !FileManager.isSandboxRimeUserDataReady {
+        // 资源定位双保险：SharedSupport/ 目录优先，回退 Bundle 根目录
+        if let zip = FileManager.bundledRimeResource(named: HamsterConstants.userDataZipFile) {
+          DispatchQueue.main.async { ProgressHUD.progress("正在解压输入方案 0%", 0, interaction: false) }
+          try FileManager.default.unzipSync(zip, dst: FileManager.sandboxUserDataDirectory) { p in
+            DispatchQueue.main.async {
+              ProgressHUD.progress("正在解压输入方案 \(Int(p * 100))%", CGFloat(p), interaction: false)
+            }
+          }
+        } else {
+          try FileManager.initSandboxUserDataDirectory(override: true, unzip: true)
+        }
+        try FileManager.initSandboxBackupDirectory(override: true)
+        DispatchQueue.main.async { ProgressHUD.animate("正在编译输入方案……", interaction: false) }
+      }
       try rimeContext.deployment(configuration: &hamsterConfiguration)
       await checkRimeLogger(filePath)
       HamsterConfigurationStore.shared.configuration = hamsterConfiguration
+      UserDefaults.hamster.set(true, forKey: "clawTalk_rime_deployed")
+      UserDefaults.hamster.set(false, forKey: "clawTalk_rime_deploy_in_progress")
+      NotificationCenter.default.post(name: NSNotification.Name("rimeDeployDidSucceed"), object: nil)
       await ProgressHUD.success("部署成功", interaction: false, delay: 1.5)
     } catch {
-      // try? FileHandle.standardError.write(contentsOf: error.localizedDescription.data(using: .utf8) ?? Data())
+      UserDefaults.hamster.set(false, forKey: "clawTalk_rime_deploy_in_progress")
       Logger.statistics.error("rime deploy error: \(error)")
       await ProgressHUD.failed(error, interaction: false, delay: 5)
     }

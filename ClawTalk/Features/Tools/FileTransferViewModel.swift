@@ -372,40 +372,120 @@ final class FileTransferViewModel {
 
     // MARK: - 上传（手机 → 电脑）
 
+    /// 上传失败分类：用于给用户区分「电脑端文件服务未启动」与「网络不通」。
+    enum UploadFailureKind: Equatable {
+        /// 电脑端文件服务未启动/未监听/返回异常（HTTP 层或连接被拒）
+        case serverNotStarted(String)
+        /// 网络不通（超时/断网/无法解析主机）
+        case networkUnreachable(String)
+        /// 文件超过大小上限
+        case fileTooLarge
+        /// 无法读取文件
+        case invalidFile
+        /// 其他错误
+        case other(String)
+
+        /// 面向用户的明确文案。
+        var friendlyText: String {
+            switch self {
+            case .serverNotStarted(let detail):
+                return "电脑端文件服务未启动或异常（\(detail)）：请先在电脑端启动文件服务（clawtalk_files_server.py），再重试。"
+            case .networkUnreachable(let detail):
+                return "网络不通（\(detail)）：请检查手机与电脑是否在同一网络（或已连上 Tailscale）后重试。"
+            case .fileTooLarge:
+                return "文件超过 50MB 上限，无法上传。"
+            case .invalidFile:
+                return "无法读取文件内容，请重试。"
+            case .other(let detail):
+                return "上传失败：\(detail)"
+            }
+        }
+    }
+
+    /// 最近一次上传失败分类（供自动日志上报等调用方读取明确提示）。
+    private(set) var lastUploadFailure: UploadFailureKind?
+
     /// 上传本地文件到电脑端 inbound 目录（POST /upload，multipart/form-data）。
+    /// 失败自动重试：最多重试 `maxRetries` 次（间隔 3 秒、6 秒），重试仍失败时给出
+    /// 区分「文件服务未启动」与「网络不通」的明确文案。
     /// - Parameters:
     ///   - fileURL: 本地文件 URL（App 沙盒 / 临时目录内）
     ///   - suggestedName: 服务端保存的文件名（默认取 fileURL 文件名）
+    ///   - maxRetries: 失败后的重试次数（默认 2，即最多共 3 次尝试）
     @discardableResult
-    func uploadFile(fileURL: URL, suggestedName: String? = nil) async -> Bool {
+    func uploadFile(fileURL: URL, suggestedName: String? = nil, maxRetries: Int = 2) async -> Bool {
         guard let uploadURL = URL(string: serverBaseURL + "/upload") else {
-            errorMessage = "上传地址无效，请先配置网关地址。"
+            let kind = UploadFailureKind.other("上传地址无效，请先配置网关地址。")
+            lastUploadFailure = kind
+            errorMessage = kind.friendlyText
             return false
         }
 
         let name = suggestedName ?? fileURL.lastPathComponent
         let boundary = "----ClawTalkBoundary" + UUID().uuidString
         guard let body = Self.makeMultipartBody(fileURL: fileURL, fileName: name, boundary: boundary) else {
-            errorMessage = "无法读取文件内容，请重试。"
+            let kind = UploadFailureKind.invalidFile
+            lastUploadFailure = kind
+            errorMessage = kind.friendlyText
             return false
         }
         guard body.count <= Self.maxUploadBytes else {
-            errorMessage = "文件超过 50MB 上限，无法上传。"
+            let kind = UploadFailureKind.fileTooLarge
+            lastUploadFailure = kind
+            errorMessage = kind.friendlyText
             return false
         }
 
-        var request = URLRequest(url: uploadURL)
-        request.httpMethod = "POST"
-        request.timeoutInterval = 300
-        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        // 重试间隔（秒）：第 1 次失败后等 3 秒，第 2 次失败后等 6 秒。
+        let retryDelays: [Double] = [3, 6]
 
         isUploading = true
         uploadProgress = 0
         errorMessage = nil
+        lastUploadFailure = nil
         defer {
             isUploading = false
             uploadProgress = nil
         }
+
+        let attempts = max(0, maxRetries) + 1
+        for attempt in 1...attempts {
+            let (ok, failure) = await performUploadAttempt(
+                uploadURL: uploadURL,
+                body: body,
+                boundary: boundary
+            )
+            if ok {
+                lastUploadFailure = nil
+                return true
+            }
+            lastUploadFailure = failure
+            if attempt < attempts {
+                let delay = retryDelays[min(attempt - 1, retryDelays.count - 1)]
+                LogCollector.record(module: "文件传输", "上传失败（第 \(attempt)/\(attempts) 次），\(Int(delay)) 秒后重试：\(failure?.friendlyText ?? "")")
+                try? await Task.sleep(for: .seconds(delay))
+            }
+        }
+
+        let kind = lastUploadFailure ?? .other("未知错误")
+        if attempts > 1 {
+            errorMessage = "上传失败（已重试 \(attempts - 1) 次）：\(kind.friendlyText)"
+        } else {
+            errorMessage = kind.friendlyText
+        }
+        return false
+    }
+
+    /// 单次上传尝试：返回是否成功与失败分类。
+    private func performUploadAttempt(
+        uploadURL: URL,
+        body: Data,
+        boundary: String
+    ) async -> (Bool, UploadFailureKind?) {
+        var request = URLRequest(url: uploadURL)
+        request.httpMethod = "POST"
+        request.timeoutInterval = 120
+        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
 
         let delegate = UploadTaskDelegate()
         let session = URLSession(configuration: .default, delegate: delegate, delegateQueue: nil)
@@ -421,17 +501,36 @@ final class FileTransferViewModel {
             }
             session.finishTasksAndInvalidate()
             guard (200...299).contains(response.statusCode) else {
-                errorMessage = "上传失败：服务端返回 \(response.statusCode)。"
-                return false
+                let kind = UploadFailureKind.serverNotStarted("HTTP \(response.statusCode)")
+                return (false, kind)
             }
-            return true
+            return (true, nil)
         } catch {
             session.invalidateAndCancel()
-            errorMessage = "上传失败：\(AppErrorText.localized(error.localizedDescription))"
-            return false
+            return (false, Self.classifyUploadError(error))
         }
     }
 
+    /// 把上传错误归类为「服务未启动」或「网络不通」，给用户明确提示。
+    private static func classifyUploadError(_ error: Error) -> UploadFailureKind {
+        if let urlError = error as? URLError {
+            switch urlError.code {
+            case .notConnectedToInternet:
+                return .networkUnreachable("未连接互联网")
+            case .timedOut:
+                return .networkUnreachable("请求超时")
+            case .networkConnectionLost:
+                return .networkUnreachable("连接中断")
+            case .cannotFindHost, .dnsLookupFailed:
+                return .networkUnreachable("无法访问主机（DNS）")
+            case .cannotConnectToHost:
+                return .serverNotStarted("连接被拒绝（端口 8899 未监听）")
+            default:
+                return .other(AppErrorText.localized(urlError.localizedDescription))
+            }
+        }
+        return .other(AppErrorText.localized(error.localizedDescription))
+    }
     private static func makeMultipartBody(fileURL: URL, fileName: String, boundary: String) -> Data? {
         guard let fileData = try? Data(contentsOf: fileURL) else { return nil }
         var body = Data()

@@ -498,11 +498,50 @@ public final class ClawPanelOverlayView: UIView {
       case .success(let reply):
         self.resultTextView.text = reply
         self.copyButton.isHidden = false
+        // v049：对话记忆沉淀（当前聊天对象档案）+ 共享对话写入 App Group（供主 App 续聊）
+        self.absorbConversation(userText: text, replyText: reply)
       case .failure(let error):
         ClawLog.record(module: "键盘面板", "AI 分析失败：\(error.localizedDescription)")
         self.resultTextView.text = "分析失败：\(error.localizedDescription)"
       }
     }
+  }
+
+  /// 键盘 AI 对话记忆沉淀（v049）：
+  /// ① 本轮 user+assistant 追加到当前选中聊天对象档案记忆；
+  /// ② 同时写入 App Group 共享对话文件（clawtalk.keyboard.chatlog，JSON 数组最近 100 条）。
+  private func absorbConversation(userText: String, replyText: String) {
+    let trimmedUser = userText.trimmingCharacters(in: .whitespacesAndNewlines)
+    let trimmedReply = replyText.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !trimmedUser.isEmpty, !trimmedReply.isEmpty else { return }
+    if let profileID = HeartTargetService.shared.selectedProfile?.id {
+      HeartTargetService.shared.appendMemory(to: profileID, "我：\(trimmedUser)\n助手：\(trimmedReply)")
+    }
+    Self.appendKeyboardChatLog(user: trimmedUser, assistant: trimmedReply)
+  }
+
+  /// 共享对话文件：App Group "clawtalk.keyboard.chatlog"，JSON 数组，最多 100 条。
+  private static let keyboardChatLogKey = "clawtalk.keyboard.chatlog"
+  private static let keyboardChatLogMaxCount = 100
+
+  private static func appendKeyboardChatLog(user: String, assistant: String) {
+    guard let defaults = UserDefaults(suiteName: HamsterConstants.appGroupName) else { return }
+    struct ChatLogEntry: Codable {
+      let role: String
+      let content: String
+      let timestamp: Date
+    }
+    var entries: [ChatLogEntry] = []
+    if let data = defaults.data(forKey: keyboardChatLogKey),
+       let decoded = try? JSONDecoder().decode([ChatLogEntry].self, from: data) {
+      entries = decoded
+    }
+    entries.append(ChatLogEntry(role: "user", content: user, timestamp: Date()))
+    entries.append(ChatLogEntry(role: "assistant", content: assistant, timestamp: Date()))
+    if entries.count > keyboardChatLogMaxCount {
+      entries = Array(entries.suffix(keyboardChatLogMaxCount))
+    }
+    defaults.set(try? JSONEncoder().encode(entries), forKey: keyboardChatLogKey)
   }
 
   /// 结果区提示消息

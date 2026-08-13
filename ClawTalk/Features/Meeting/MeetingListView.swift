@@ -38,10 +38,6 @@ struct MeetingListView: View {
                 .accessibilityLabel("新建会议纪要")
             }
         }
-        .overlay(alignment: .bottom) {
-            GlobalVoiceInputFloating(settingsStore: settingsStore)
-                .padding(.bottom, 20)
-        }
     }
 
     // MARK: - 列表（按日期分组）

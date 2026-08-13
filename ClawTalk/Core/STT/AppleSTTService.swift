@@ -230,7 +230,7 @@ enum AppleSTTError: LocalizedError {
         case .timeout:
             return "识别超时，请再说一遍试试"
         case .noSpeech:
-            return "没听到声音，请靠近一点再说"
+            return "没听到声音，请靠近麦克风再试"
         }
     }
 }

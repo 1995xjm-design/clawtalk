@@ -318,6 +318,10 @@ struct HomeTabView: View {
     private func destination(for kind: HomeCardKind, size: HomeCardSize) -> some View {
         if kind == .memory {
             MemoryHubView(settings: settings, gatewayConnection: gatewayConnection)
+        } else if kind == .cloneTalk {
+            CloneTalkView(settingsStore: settings)
+        } else if kind == .expense {
+            ExpenseListView(settingsStore: settings)
         } else {
             HomeMergedCardPage(
                 kind: kind,

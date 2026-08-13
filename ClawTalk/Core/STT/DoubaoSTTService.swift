@@ -45,8 +45,21 @@ final class DoubaoSTTService: TranscriptionService {
 
     // MARK: - 流式识别
 
+    /// 是否正在启动流式会话（防止并发重复建立）。
+    private var isStreamStarting = false
+
+    /// 流式中间结果回调：服务端每返回一版转写文本就回调一次（逐句实时转写）。
+    /// 注意：在后台队列触发，回调内部如需更新 UI 请自行切到主线程。
+    var onPartialTranscript: ((String) -> Void)?
+
+    /// 最近一版转写文本：流被异常中断时作为最终结果兜底，避免丢句。
+    private var lastPartialText = ""
+
     func startStreaming() async throws {
         guard streamTask == nil else { return }
+        guard !isStreamStarting else { return }
+        isStreamStarting = true
+        defer { isStreamStarting = false }
         let url = URL(string: "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async")!
         var request = URLRequest(url: url)
         request.setValue(apiKey, forHTTPHeaderField: "X-Api-Key")
@@ -80,9 +93,11 @@ final class DoubaoSTTService: TranscriptionService {
         frame.append(json)
         try await task.send(.data(frame))
 
-        // 接收结果
+        // 接收结果：每返回一版文本立即产出（onPartialTranscript + stream），
+        // 实现「边说边出」的逐句中间结果；最终结果再收尾一次。
         let resultCont = self.streamResultContinuation
-        Task {
+        let partialHandler = self.onPartialTranscript
+        Task { [weak self] in
             var finalText = ""
             while true {
                 let message: URLSessionWebSocketTask.Message
@@ -91,9 +106,11 @@ final class DoubaoSTTService: TranscriptionService {
                 } catch {
                     if !finalText.isEmpty {
                         resultCont?.yield(finalText)
+                        Task { @MainActor in partialHandler?(finalText) }
                     } else {
                         LogCollector.record(module: "语音识别", "豆包流式识别连接中断：\(AppErrorText.localized(error.localizedDescription))")
                     }
+                    self?.lastPartialText = finalText
                     resultCont?.finish()
                     return
                 }
@@ -107,6 +124,10 @@ final class DoubaoSTTService: TranscriptionService {
                 }
                 if let text = parsed.text, !text.isEmpty {
                     finalText = text
+                    self?.lastPartialText = finalText
+                    // 中间结果：逐句实时回传（语音大卡实时转写显示用）
+                    resultCont?.yield(finalText)
+                    Task { @MainActor in partialHandler?(finalText) }
                 }
                 if parsed.isFinal {
                     resultCont?.yield(finalText)
@@ -117,20 +138,27 @@ final class DoubaoSTTService: TranscriptionService {
         }
     }
 
+    /// 把录音分帧送入豆包流式 STT（16kHz Float32 → s16le 分帧）。未启动流式会话时自动补建。
+    /// 转写中间结果通过 `onPartialTranscript` 回调逐句返回。
     func feedStreaming(samples: [Float]) async throws {
-        guard let sender = streamSender, !samples.isEmpty else { return }
+        guard !samples.isEmpty else { return }
+        if streamSender == nil {
+            try await startStreaming()
+        }
+        guard let sender = streamSender else { return }
         let pcm = Self.samplesToPCM16(samples)
         try await sender.feed(pcm: pcm)
     }
 
+    /// 结束流式会话并返回最终转写文本。
+    /// 流被异常中断时返回最近一版中间结果（诚实兜底，不伪造文本）。
     func finishStreaming() async throws -> String {
-        guard let sender = streamSender else { return "" }
+        guard let sender = streamSender else { return lastPartialText }
         try await sender.finish()
         var result = ""
         if let stream = streamResult {
             for try await text in stream {
                 result = text
-                break
             }
         }
         streamTask?.cancel(with: .goingAway, reason: nil)
@@ -138,7 +166,9 @@ final class DoubaoSTTService: TranscriptionService {
         streamSender = nil
         streamResult = nil
         streamResultContinuation = nil
-        return result
+        let finalText = result.isEmpty ? lastPartialText : result
+        lastPartialText = ""
+        return finalText
     }
 
     func cancelStreaming() {
@@ -148,8 +178,8 @@ final class DoubaoSTTService: TranscriptionService {
         streamResultContinuation?.finish()
         streamResult = nil
         streamResultContinuation = nil
+        lastPartialText = ""
     }
-
     init(apiKey: String, language: String? = nil, resourceID: String = "volc.seedasr.sauc.duration") {
         self.apiKey = apiKey
         self.language = language

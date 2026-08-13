@@ -89,6 +89,10 @@ public final class HeartTargetEditViewController: UITableViewController, PHPicke
   private var avatarImage: UIImage?
   private var name = ""
   private var bio = ""
+  /// 长记忆（保存时随档案写入）；nil 语义：展示区为空
+  private var memories: [String] = []
+  /// 标记本次 PHPicker 用途：true=截图生成长记忆；false=选头像
+  private var pendingMemoryOCR = false
 
   private let nameField = UITextField()
   private let bioView = UITextView()
@@ -101,6 +105,7 @@ public final class HeartTargetEditViewController: UITableViewController, PHPicke
     name = profile?.name ?? ""
     bio = profile?.bio ?? ""
     avatarImage = profile?.avatarImage
+    memories = profile?.memories ?? []
   }
 
   required init?(coder: NSCoder) {
@@ -125,6 +130,7 @@ public final class HeartTargetEditViewController: UITableViewController, PHPicke
     profile.name = trimmedName
     profile.bio = bio.trimmingCharacters(in: .whitespacesAndNewlines)
     profile.avatarData = avatarImage?.jpegData(compressionQuality: 0.8)
+    profile.memories = memories
     service.upsert(profile)
     navigationController?.popViewController(animated: true)
   }
@@ -150,27 +156,75 @@ public final class HeartTargetEditViewController: UITableViewController, PHPicke
     provider.loadObject(ofClass: UIImage.self) { [weak self] object, _ in
       DispatchQueue.main.async {
         guard let self, let image = object as? UIImage else { return }
-        self.avatarImage = image
-        self.avatarCellImageView.image = image
-        self.tableView.reloadRows(at: [IndexPath(row: 0, section: 0)], with: .none)
+        if self.pendingMemoryOCR {
+          self.pendingMemoryOCR = false
+          self.recognizeMemoryImage(image)
+        } else {
+          self.avatarImage = image
+          self.avatarCellImageView.image = image
+          self.tableView.reloadRows(at: [IndexPath(row: 0, section: 0)], with: .none)
+        }
       }
     }
+  }
+
+  /// 从截图生成长记忆：选图 → 本地 OCR → 追加到 memories（保存档案时一并写入）。
+  private func pickMemoryImage() {
+    pendingMemoryOCR = true
+    var config = PHPickerConfiguration()
+    config.filter = .images
+    config.selectionLimit = 1
+    let picker = PHPickerViewController(configuration: config)
+    picker.delegate = self
+    present(picker, animated: true)
+  }
+
+  private func recognizeMemoryImage(_ image: UIImage) {
+    VisionOCRService.shared.recognizeText(in: image) { [weak self] result in
+      DispatchQueue.main.async {
+        guard let self else { return }
+        switch result {
+        case .success(let text):
+          let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+          if trimmed.isEmpty {
+            self.showAlert(title: "未识别到文字", message: "截图里没有识别到文字，请换一张更清晰的聊天截图。")
+          } else {
+            self.memories.append(trimmed)
+            self.tableView.reloadData()
+            self.showAlert(title: "已添加长记忆", message: "识别到 \(trimmed.count) 个字符，保存档案时一并写入。")
+          }
+        case .failure(let error):
+          self.showAlert(title: "识别失败", message: error.localizedDescription)
+        }
+      }
+    }
+  }
+
+  private func showAlert(title: String, message: String) {
+    let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
+    alert.addAction(UIAlertAction(title: "好", style: .default))
+    present(alert, animated: true)
   }
 
   // MARK: - Table
 
   public override func numberOfSections(in tableView: UITableView) -> Int {
-    existing == nil ? 2 : 3
+    existing == nil ? 3 : 4
   }
 
   public override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-    section == 1 ? 2 : 1
+    switch section {
+    case 1: return 2
+    case 2: return memories.count + 1
+    default: return 1
+    }
   }
 
   public override func tableView(_ tableView: UITableView, titleForHeaderInSection section: Int) -> String? {
     switch section {
     case 0: return "头像"
     case 1: return "信息（名称与描述会作为 AI 聊天对象背景）"
+    case 2: return "长记忆（对话与截图自动沉淀，会作为聊天背景）"
     default: return nil
     }
   }
@@ -215,6 +269,21 @@ public final class HeartTargetEditViewController: UITableViewController, PHPicke
         cell.contentView.addSubview(bioView)
       }
       return cell
+    case 2:
+      if indexPath.row < memories.count {
+        cell.textLabel?.text = memories[indexPath.row]
+        cell.textLabel?.font = .systemFont(ofSize: 13)
+        cell.textLabel?.numberOfLines = 0
+        cell.textLabel?.textColor = .label
+        cell.accessoryType = .none
+        cell.selectionStyle = .none
+      } else {
+        cell.textLabel?.text = "从截图生成长记忆"
+        cell.textLabel?.font = .systemFont(ofSize: 15, weight: .semibold)
+        cell.textLabel?.textColor = .systemBlue
+        cell.accessoryType = .disclosureIndicator
+      }
+      return cell
     default:
       let delete = UIButton(type: .system)
       delete.setTitle("删除档案", for: .normal)
@@ -230,6 +299,7 @@ public final class HeartTargetEditViewController: UITableViewController, PHPicke
   public override func tableView(_ tableView: UITableView, heightForRowAt indexPath: IndexPath) -> CGFloat {
     if indexPath.section == 0 { return 80 }
     if indexPath.section == 1 { return indexPath.row == 0 ? 50 : 100 }
+    if indexPath.section == 2 { return indexPath.row < memories.count ? 64 : 44 }
     return 44
   }
 
@@ -237,6 +307,8 @@ public final class HeartTargetEditViewController: UITableViewController, PHPicke
     tableView.deselectRow(at: indexPath, animated: true)
     if indexPath.section == 0 {
       pickAvatar()
+    } else if indexPath.section == 2 && indexPath.row == memories.count {
+      pickMemoryImage()
     }
   }
 

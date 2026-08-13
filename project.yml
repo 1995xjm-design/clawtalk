@@ -39,13 +39,16 @@ targets:
       - ClawTalkShared
     resources:
       - ClawTalk/Resources
-      # Rime 内置资源随 ClawTalk/Resources 打包进主 App（修复键盘设置页「导入数据异常」）
+      # Rime 内置资源单独用文件夹引用打包，生成 ClawTalk.app/SharedSupport/ 目录（键盘设置页部署需要）
+      - path: ClawTalk/Resources/SharedSupport
+        type: folder
     dependencies:
       - package: KeychainAccess
       - package: MarkdownUI
       - package: HamsterKit
       - package: HamsterUIKit
       - package: HamsteriOS
+      - target: ClawTalkWatchApp
       - target: ClawTalkKeyboard
       - target: ClawTalkWidget
       - target: ClawTalkShareExtension
@@ -99,6 +102,10 @@ targets:
         BGTaskSchedulerPermittedIdentifiers:
           - com.openclaw.clawtalk.bgrefresh
         NSHealthShareUsageDescription: ClawTalk reads health data (steps) when your AI agent needs it.
+        NSLocationAlwaysAndWhenInUseUsageDescription: ClawTalk uses your location for home/leave reminders and travel.
+        NSLocalNetworkUsageDescription: ClawTalk connects to your computer on the local network for file transfer and memory sync.
+        NSBonjourServices:
+          - _http._tcp
         CFBundleURLTypes:
           - CFBundleURLName: com.openclaw.clawtalk
             CFBundleURLSchemes:

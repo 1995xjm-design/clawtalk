@@ -1,9 +1,12 @@
 import SwiftUI
 import UIKit
-import Photos
 import AVFoundation
 import Contacts
+import CoreLocation
+import CoreMotion
 import EventKit
+import HealthKit
+import Photos
 import UserNotifications
 
 /// 隐私与访问权限：展示各项权限授权状态。
@@ -18,6 +21,13 @@ struct PrivacyPermissionsView: View {
     @State private var calendarStatus = ""
     @State private var remindersStatus = ""
     @State private var notificationStatus = ""
+    @State private var locationStatus = ""
+    @State private var motionStatus = ""
+    @State private var healthStatus = ""
+
+    /// 系统无查询 API 的权限项：如实展示「需在系统设置查看」，点击跳转系统设置。
+    private var localNetworkStatus: String { "需在系统设置查看" }
+    private var keyboardStatus: String { "需在系统设置查看" }
 
     var body: some View {
         List {
@@ -29,6 +39,11 @@ struct PrivacyPermissionsView: View {
                 permissionRow("日历", icon: "calendar", status: calendarStatus, kind: .calendar)
                 permissionRow("提醒", icon: "bell", status: remindersStatus, kind: .reminders)
                 permissionRow("通知", icon: "bell.badge", status: notificationStatus, kind: .notifications)
+                permissionRow("定位（始终允许）", icon: "location.fill", status: locationStatus, kind: .location)
+                permissionRow("运动与健身", icon: "figure.walk", status: motionStatus, kind: .motion)
+                permissionRow("健康读取", icon: "heart.text.square", status: healthStatus, kind: .health)
+                permissionRow("本地网络", icon: "network", status: localNetworkStatus, kind: .localNetwork)
+                permissionRow("键盘采集", icon: "keyboard", status: keyboardStatus, kind: .keyboard)
             } header: {
                 Text("权限状态")
             } footer: {
@@ -51,7 +66,7 @@ struct PrivacyPermissionsView: View {
 
     /// 权限类型：与系统授权 API 一一对应。
     private enum PermissionKind {
-        case photos, camera, microphone, contacts, calendar, reminders, notifications
+        case photos, camera, microphone, contacts, calendar, reminders, notifications, location, motion, health, localNetwork, keyboard
     }
 
     private func permissionRow(_ title: String, icon: String, status: String, kind: PermissionKind) -> some View {
@@ -72,7 +87,7 @@ struct PrivacyPermissionsView: View {
         switch status {
         case "未请求":
             request(kind)
-        case "已拒绝", "受限", "未知":
+        case "已拒绝", "受限", "未知", "需在系统设置查看":
             openSystemSettings()
         default:
             break
@@ -109,12 +124,38 @@ struct PrivacyPermissionsView: View {
             UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { _, _ in
                 Task { @MainActor in refresh() }
             }
+        case .location:
+            CLLocationManager().requestAlwaysAuthorization()
+            // 定位授权结果由系统异步回调，稍等后刷新状态
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                Task { @MainActor in refresh() }
+            }
+        case .motion:
+            let manager = CMMotionActivityManager()
+            manager.startActivityUpdates(to: .main) { _ in
+                manager.stopActivityUpdates()
+                Task { @MainActor in refresh() }
+            }
+        case .health:
+            guard HKHealthStore.isHealthDataAvailable() else {
+                Task { @MainActor in refresh() }
+                return
+            }
+            let types: Set<HKObjectType> = [
+                HKObjectType.quantityType(forIdentifier: .stepCount)!,
+                HKObjectType.quantityType(forIdentifier: .heartRate)!,
+            ]
+            HKHealthStore().requestAuthorization(toShare: [], read: types) { _, _ in
+                Task { @MainActor in refresh() }
+            }
+        case .localNetwork, .keyboard:
+            openSystemSettings()
         }
     }
 
     private func statusColor(_ status: String) -> Color {
         switch status {
-        case "已授权", "部分访问", "仅写入", "临时授权":
+        case "已授权", "部分访问", "仅写入", "临时授权", "始终允许", "使用期间":
             return .green
         case "未请求":
             return .secondary
@@ -136,6 +177,9 @@ struct PrivacyPermissionsView: View {
                 notificationStatus = text
             }
         }
+        locationStatus = Self.locationStatusText()
+        motionStatus = Self.motionStatusText()
+        healthStatus = Self.healthStatusText()
     }
 
     private func openSystemSettings() {
@@ -208,6 +252,40 @@ struct PrivacyPermissionsView: View {
         @unknown default: return "未知"
         }
     }
+
+    private static func locationStatusText() -> String {
+        switch CLLocationManager().authorizationStatus {
+        case .authorizedAlways: return "始终允许"
+        case .authorizedWhenInUse: return "使用期间"
+        case .denied: return "已拒绝"
+        case .restricted: return "受限"
+        case .notDetermined: return "未请求"
+        @unknown default: return "未知"
+        }
+    }
+
+    private static func motionStatusText() -> String {
+        switch CMMotionActivityManager.authorizationStatus() {
+        case .authorized: return "已授权"
+        case .denied: return "已拒绝"
+        case .restricted: return "受限"
+        case .notDetermined: return "未请求"
+        @unknown default: return "未知"
+        }
+    }
+
+    private static func healthStatusText() -> String {
+        guard HKHealthStore.isHealthDataAvailable(),
+              let stepType = HKObjectType.quantityType(forIdentifier: .stepCount) else {
+            return "不可用"
+        }
+        switch HKHealthStore().authorizationStatus(for: stepType) {
+        case .notDetermined: return "未请求"
+        case .sharingDenied: return "已拒绝"
+        case .sharingAuthorized: return "已授权"
+        @unknown default: return "未知"
+        }
+    }
 }
 
 /// 胶囊形权限开关：按当前权限状态渲染（未请求=授权；已拒绝=前往设置；已授权=已开启）。
@@ -216,11 +294,11 @@ private struct CapsulePermissionControl: View {
     let action: () -> Void
 
     private var isGranted: Bool {
-        ["已授权", "部分访问", "仅写入", "临时授权"].contains(status)
+        ["已授权", "部分访问", "仅写入", "临时授权", "始终允许", "使用期间"].contains(status)
     }
 
     private var isDenied: Bool {
-        ["已拒绝", "受限", "未知"].contains(status)
+        ["已拒绝", "受限", "未知", "需在系统设置查看"].contains(status)
     }
 
     private var fillColor: Color {

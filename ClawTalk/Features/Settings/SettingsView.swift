@@ -20,6 +20,9 @@ struct SettingsView: View {
     @State private var showPairingResult = false
     @State private var deepSeekKey: String = SecureStorage.shared.getString("deepseek_api_key") ?? ""
     @State private var memorySyncMessage: String?
+    @State private var setupCodeInput = ""
+    @State private var isPairing = false
+    @State private var isRequestingPairingCode = false
 
 
     // MARK: - 唤醒词编辑（本地 UUID 列表，避免 ForEach(id: \.offset) 删除/编辑越界崩溃）
@@ -55,6 +58,7 @@ struct SettingsView: View {
         NavigationStack {
             Form {
                 connectionSection
+                pairingSection
             keyboardSection
                 skinSection
                 voiceSettingsSection
@@ -184,6 +188,116 @@ struct SettingsView: View {
         }
         showPairingResult = true
     }
+
+    // MARK: - WS 设备配对（输入 setup code / 获取配对码指令）
+
+    /// 用输入的配对码开始配对：写入网关地址 + bootstrapToken，走 bootstrap 握手。
+    private func startPairingWithSetupCode() {
+        let raw = setupCodeInput.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let code = GatewaySetupCode.parse(raw) else {
+            pairingMessage = "无法识别配对码：请粘贴 openclaw qr 输出的完整配对码（base64 或 JSON 均可）。"
+            showPairingResult = true
+            return
+        }
+        isPairing = true
+        let httpURL = GatewaySetupCode.httpForm(of: code.url)
+        store.settings.gatewayURL = httpURL
+        store.settings.bootstrapToken = code.bootstrapToken
+        store.settings.useWebSocket = true
+        store.save()
+        Task { @MainActor in
+            defer { isPairing = false }
+            await testPairing(bootstrapToken: code.bootstrapToken)
+        }
+    }
+
+    /// 通过现有指令通道让网关返回 setup code 显示（openclaw qr 生成配对码）。
+    private func requestPairingCodeFromGateway() {
+        let gw = store.settings.gatewayURL
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        guard !gw.isEmpty else {
+            pairingMessage = "请先配置网关地址，再获取配对码。"
+            showPairingResult = true
+            return
+        }
+        guard !store.gatewayToken.isEmpty else {
+            pairingMessage = "请先配置网关令牌，再获取配对码。"
+            showPairingResult = true
+            return
+        }
+        InstructionChannels.ensureChannel(name: "日志诊断", systemEmoji: "🩺", sessionKey: InstructionChannels.diagnostics)
+        isRequestingPairingCode = true
+        let instruction = """
+        请在电脑端运行 openclaw qr 命令生成配对码（base64 字符串），
+        把输出的完整配对码原样回复给我（不要省略、不要转义、不要加解释），回复只需包含配对码本身。
+        """
+        Task {
+            defer { isRequestingPairingCode = false }
+            do {
+                let reply = try await OpenClawClient().chat(
+                    messages: [Message(role: .user, content: instruction)],
+                    gatewayURL: gw,
+                    token: store.gatewayToken,
+                    sessionKey: InstructionChannels.diagnostics
+                )
+                pairingMessage = reply
+                // 若回复本身就是配对码，直接填入输入框方便一键配对
+                if GatewaySetupCode.parse(reply) != nil {
+                    setupCodeInput = reply
+                }
+            } catch {
+                pairingMessage = "获取配对码失败：\(AppErrorText.localized(error.localizedDescription))"
+            }
+            showPairingResult = true
+        }
+    }
+
+    private var pairingSection: some View {
+        Section {
+            TextField("粘贴配对码（openclaw qr 输出的 setup code）", text: $setupCodeInput, axis: .vertical)
+                .lineLimit(1...3)
+                .autocorrectionDisabled()
+                .textInputAutocapitalization(.never)
+                .font(.caption)
+
+            Button {
+                startPairingWithSetupCode()
+            } label: {
+                if isPairing {
+                    HStack(spacing: 8) {
+                        ProgressView().scaleEffect(0.8)
+                        Text("正在配对…")
+                    }
+                } else {
+                    Label("开始配对", systemImage: "link.badge.plus")
+                }
+            }
+            .disabled(
+                setupCodeInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                    || isPairing
+            )
+
+            Button {
+                requestPairingCodeFromGateway()
+            } label: {
+                if isRequestingPairingCode {
+                    HStack(spacing: 8) {
+                        ProgressView().scaleEffect(0.8)
+                        Text("正在向网关获取配对码…")
+                    }
+                } else {
+                    Label("获取配对码指令", systemImage: "qrcode")
+                }
+            }
+            .disabled(isRequestingPairingCode)
+        } header: {
+            Text("配对设备")
+        } footer: {
+            Text("电脑端运行 openclaw qr 生成配对码（base64），粘贴后点「开始配对」完成设备配对；没有配对码时可先点「获取配对码指令」让网关生成。")
+        }
+    }
+
     // MARK: - 皮肤 / 语音 / 语音助手通道
 
     private var skinSection: some View {

@@ -221,52 +221,83 @@ struct SkinSettingsView: View {
     }
 }
 
-/// 灵动岛样式预览卡。
+/// 灵动岛样式预览卡：模拟「锁屏顶部灵动岛」视觉（黑胶囊 + 相机挖孔）+ 当前风格卡片文案。
+/// 纯 SwiftUI 绘制，不实际启动 Live Activity；点选档位立即重绘（绑定 store 直接驱动）。
 private struct LiveActivityPreviewCard: View {
     let style: LiveActivityStyle
     let channelName: String
     let statusText: String
 
     var body: some View {
-        Group {
-            switch style {
-            case .minimal:
-                Text(statusText)
-                    .font(.headline)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
-            case .standard:
-                Text("\(channelName) · \(statusText)")
-                    .font(.headline)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
-            case .detailed:
-                VStack(alignment: .leading, spacing: 2) {
-                    HStack(spacing: 6) {
-                        Text("💬")
-                        Text(channelName)
-                            .font(.headline)
+        VStack(spacing: 0) {
+            // 顶部灵动岛：黑胶囊 + 相机挖孔
+            ZStack {
+                Capsule()
+                    .fill(Color.black)
+                    .frame(width: 116, height: 32)
+                HStack(spacing: 14) {
+                    Circle()
+                        .fill(Color.black)
+                        .frame(width: 12, height: 12)
+                        .overlay(Circle().strokeBorder(Color(white: 0.22), lineWidth: 1))
+                    Circle()
+                        .fill(Color(white: 0.16))
+                        .frame(width: 7, height: 7)
+                }
+            }
+            .frame(height: 46)
+            .padding(.top, 10)
+
+            // 当前档位的卡片内容
+            Group {
+                switch style {
+                case .minimal:
+                    Text(statusText)
+                        .font(.headline)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                case .standard:
+                    Text("\(channelName) · \(statusText)")
+                        .font(.headline)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                case .detailed:
+                    VStack(alignment: .leading, spacing: 2) {
+                        HStack(spacing: 6) {
+                            Text("💬")
+                            Text(channelName)
+                                .font(.headline)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.8)
+                        }
+                        Text(statusText)
+                            .font(.subheadline)
+                            .foregroundStyle(.white.opacity(0.85))
                             .lineLimit(1)
                             .minimumScaleFactor(0.8)
                     }
-                    Text(statusText)
-                        .font(.subheadline)
-                        .foregroundStyle(.white.opacity(0.85))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.8)
                 }
             }
+            .foregroundStyle(.white)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 18)
+            .padding(.vertical, 12)
+            .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(Color.black))
+            .overlay(
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .strokeBorder(.white.opacity(0.14), lineWidth: 1)
+            )
+            .padding(.horizontal, 12)
+            .padding(.bottom, 12)
         }
-        .foregroundStyle(.white)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 18)
-        .padding(.vertical, 12)
-        .background(Capsule().fill(Color.black))
-        .overlay(Capsule().strokeBorder(.white.opacity(0.14), lineWidth: 1))
+        .frame(maxWidth: .infinity)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Color(.secondarySystemBackground))
+        )
         .accessibilityLabel("灵动岛样式预览：\(style.displayName)")
     }
 }
-
 /// 深/浅/跟随系统 → preferredColorScheme（nil=跟随系统）。
 extension AppSettings {
     var preferredColorScheme: ColorScheme? {
