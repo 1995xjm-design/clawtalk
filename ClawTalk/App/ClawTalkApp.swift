@@ -4,7 +4,6 @@ import Combine
 import UIKit
 import UserNotifications
 import WidgetKit
-import WatchConnectivity
 
 @main
 struct ClawTalkApp: App {
@@ -29,8 +28,6 @@ struct ClawTalkApp: App {
     @State private var syncedChannelsSignature: String?
     @State private var selectedTab = 1
     @State private var activeChatRoute: ChatRoute?
-    @State private var deepLinkPairingMessage: String?
-    private let watchSessionCoordinator = ClawTalkWatchSessionCoordinator.shared
 
     private enum ChatRoute: Hashable {
         case chat
@@ -163,13 +160,10 @@ struct ClawTalkApp: App {
             return
         }
         Task {
-            let transfer = FileTransferViewModel(settings: settingsStore)
-            // uploadFile 内部已自动重试 2 次（间隔 3 秒、6 秒）
-            let ok = await transfer.uploadFile(fileURL: url, suggestedName: name)
+            let ok = await FileTransferViewModel(settings: settingsStore).uploadFile(fileURL: url, suggestedName: name)
             LogCollector.resetPendingUploadCount()
             if !ok {
-                let hint = transfer.lastUploadFailure?.friendlyText ?? "请检查电脑端文件服务是否启动、网络是否同一网络/Tailscale"
-                LogCollector.record(module: "日志上报", "自动上传日志失败（已自动重试）：\(hint)")
+                LogCollector.record(module: "日志上报", "自动上传日志失败：\(name)")
             }
         }
     }
@@ -232,29 +226,7 @@ struct ClawTalkApp: App {
             }
             .tint(.openClawRed)
             .preferredColorScheme(settingsStore.settings.preferredColorScheme)
-            .alert("WS 配对", isPresented: Binding(
-                get: { deepLinkPairingMessage != nil },
-                set: { if !$0 { deepLinkPairingMessage = nil } }
-            )) {
-                Button("好", role: .cancel) {}
-            } message: {
-                Text(deepLinkPairingMessage ?? "")
-            }
             .task {
-                // 手表 WCSession 接线：激活会话 + 绑定消息处理闭包
-                watchSessionCoordinator.activate()
-                watchSessionCoordinator.onSendText = { [self] text, channelName in
-                    await sendWatchText(text, channelName: channelName)
-                }
-                watchSessionCoordinator.onWake = { [self] channelName in
-                    await handleWatchWake(channelName: channelName)
-                }
-                watchSessionCoordinator.onRequestMessages = { [self] channelName in
-                    watchMessagesPayload(channelName: channelName)
-                }
-                watchSessionCoordinator.onRequestChannels = { [self] in
-                    watchChannelsPayload()
-                }
                 // 推送与后台刷新接线：首次申请通知权限、注册 APNs、注册 BGAppRefreshTask
                 await PushManager.shared.requestNotificationPermissionIfNeeded()
                 await ensureRemoteNotificationsRegistered()
@@ -679,155 +651,12 @@ struct ClawTalkApp: App {
 
     private func handleDeepLink(_ url: URL) {
         guard DeepLinkHandler.handle(url, settings: settingsStore),
-              let payload = DeepLinkHandler.parse(url)
+              let payload = DeepLinkHandler.parse(url),
+              payload.action == .open,
+              let name = payload.channelName
         else { return }
-
-        // WS 配对深链：clawtalk://pair?gateway=...&setupCode=... → 写入 bootstrapToken 并走 bootstrap 配对
-        if payload.action == .pair,
-           let setupCode = payload.setupCode,
-           !setupCode.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            settingsStore.settings.bootstrapToken = setupCode
-            settingsStore.save()
-            Task { @MainActor in
-                await performDeepLinkPairing(setupCode: setupCode)
-            }
-            return
-        }
-
-        guard payload.action == .open,
-              let name = payload.channelName else { return }
         if let channel = channelStore.channels.first(where: { $0.name == name }) {
             selectChannel(channel)
-        }
-    }
-
-    /// WS 配对深链：用 setup code（bootstrapToken）走 bootstrap 握手，成功后写入长期 deviceToken。
-    @MainActor
-    private func performDeepLinkPairing(setupCode: String) async {
-        let resolved = settingsStore.settings.resolvedWebSocketURL
-        guard !resolved.isEmpty, let wsURL = URL(string: resolved) else {
-            deepLinkPairingMessage = "配对失败：无效的网关地址"
-            return
-        }
-        let gateway = GatewayWebSocket(
-            url: wsURL,
-            token: nil,
-            bootstrapToken: setupCode,
-            deviceTokenHandler: { [settingsStore] deviceToken in
-                Task { @MainActor in
-                    settingsStore.gatewayToken = deviceToken
-                    settingsStore.save()
-                }
-            }
-        )
-        do {
-            try await gateway.connect()
-            await gateway.shutdown()
-            deepLinkPairingMessage = "配对成功，网关令牌已更新"
-        } catch {
-            await gateway.shutdown()
-            deepLinkPairingMessage = "配对失败：\(AppErrorText.localized(error.localizedDescription))"
-        }
-    }
-
-    // MARK: - 手表 WCSession 请求处理
-
-    /// 手表「发送文本」：聊天页开着该频道走 ViewModel；否则走网关 WebSocket（不等待完整回复）。
-    private func sendWatchText(_ text: String, channelName: String?) async -> Bool {
-        let channel: Channel
-        if let name = channelName, let matched = channelStore.channels.first(where: { $0.name == name }) {
-            channel = matched
-        } else if let first = channelStore.channels.first {
-            channel = first
-        } else {
-            channel = .default
-        }
-        if let vm = chatViewModel, vm.channel.id == channel.id, vm.isVisible {
-            vm.sendText(text)
-            return true
-        }
-        guard settingsStore.settings.useWebSocket else { return false }
-        if gatewayConnection.connectionState == .disconnected {
-            await gatewayConnection.connect(
-                resolvedURL: settingsStore.settings.resolvedWebSocketURL,
-                token: settingsStore.gatewayToken
-            )
-        }
-        guard gatewayConnection.connectionState == .connected else { return false }
-        do {
-            _ = try await gatewayConnection.chatSend(
-                sessionKey: shareSessionKey(for: channel),
-                message: text
-            )
-            return true
-        } catch {
-            return false
-        }
-    }
-
-    /// 手表「唤醒」：与语音唤醒命中同流程（停唤醒 → 选/建频道 → 免提对话 → 播报「在呢」）。
-    @MainActor
-    private func handleWatchWake(channelName: String?) async -> Bool {
-        guard settingsStore.settings.voiceInputEnabled else { return false }
-        if let name = channelName,
-           let matched = channelStore.channels.first(where: { $0.name == name }) {
-            if chatViewModel == nil || chatViewModel?.channel.id != matched.id {
-                selectChannel(matched, restartVoiceWake: false)
-            }
-        } else if chatViewModel == nil {
-            ensureDefaultChannel()
-        }
-        guard let vm = chatViewModel,
-              !vm.isConversationMode,
-              vm.state == .idle
-        else { return false }
-        vm.enterConversationMode()
-        speakAck()
-        return true
-    }
-
-    /// 手表「请求频道」：返回频道 JSON 数组（字段与 watch 侧 WatchChannel 一致）。
-    private func watchChannelsPayload() -> [[String: Any]] {
-        channelStore.channels.map { channel -> [String: Any] in
-            [
-                "id": channel.id.uuidString,
-                "name": channel.name,
-                "agentId": channel.agentId,
-            ]
-        }
-    }
-
-    /// 手表「请求消息」：返回指定频道最近 30 条消息（timestamp 用 timeIntervalSinceReferenceDate，
-    /// 与 watch 侧 JSONDecoder 默认 Date 策略一致）。
-    private func watchMessagesPayload(channelName: String?) -> (String, [[String: Any]]) {
-        let channel: Channel
-        if let name = channelName, let matched = channelStore.channels.first(where: { $0.name == name }) {
-            channel = matched
-        } else if let first = channelStore.channels.first {
-            channel = first
-        } else {
-            return (channelName ?? "", [])
-        }
-        let messages = ConversationStore.shared.load(channelId: channel.id).suffix(30)
-        let list = messages.map { msg -> [String: Any] in
-            [
-                "id": msg.id.uuidString,
-                "role": msg.role.rawValue,
-                "content": String(msg.content.prefix(500)),
-                "timestamp": msg.timestamp.timeIntervalSinceReferenceDate,
-                "channelName": channel.name,
-            ]
-        }
-        return (channel.name, list)
-    }
-
-    /// 手表主动推送：频道列表 / 当前频道最近消息（内容未变化不重复推送，随小组件同步循环调用）。
-    private func pushWatchIfNeeded() {
-        watchSessionCoordinator.pushChannels(channelStore.channels)
-        let channel = selectedChannel ?? chatViewModel?.channel ?? channelStore.channels.first
-        if let channel {
-            let messages = ConversationStore.shared.load(channelId: channel.id).suffix(20)
-            watchSessionCoordinator.pushMessages(Array(messages), channelName: channel.name)
         }
     }
 
@@ -1034,13 +863,11 @@ struct ClawTalkApp: App {
     private func runWidgetAndShareSyncLoop() async {
         syncChannelsToShare()
         updateWidgetIfNeeded()
-        pushWatchIfNeeded()
         while !Task.isCancelled {
             try? await Task.sleep(nanoseconds: 3_000_000_000)
             guard !Task.isCancelled else { return }
             syncChannelsToShare()
             updateWidgetIfNeeded()
-            pushWatchIfNeeded()
         }
     }
 
@@ -1062,162 +889,4 @@ private struct EnableSwipeBack: UIViewControllerRepresentable {
     }
     func updateUIViewController(_ uiViewController: UIViewController, context: Context) {}
 }
-}
-
-// MARK: - 手表 WCSession 接线（iPhone 主 App 侧；watch 侧代码在 ClawTalkWatchApp，勿改）
-
-/// iPhone 主 App 侧 WCSession 管理器：激活会话、处理手表请求（sendText/wake/requestMessages/requestChannels）、
-/// 主动推送频道/消息到手表、记录配对状态。
-/// 协议契约见 ClawTalkWatchApp/Extension/WatchSessionManager.swift 顶部注释。
-final class ClawTalkWatchSessionCoordinator: NSObject, WCSessionDelegate {
-    static let shared = ClawTalkWatchSessionCoordinator()
-
-    /// 处理手表「发送文本」请求：返回是否成功（回复 {ok, message}）。
-    var onSendText: ((_ text: String, _ channelName: String?) async -> Bool)?
-    /// 处理手表「唤醒」请求。
-    var onWake: ((_ channelName: String?) async -> Bool)?
-    /// 手表请求某频道最近消息 → 返回 (频道名, 消息 JSON 数组)。
-    var onRequestMessages: ((_ channelName: String?) -> (String, [[String: Any]]))?
-    /// 手表请求频道列表 → 返回频道 JSON 数组。
-    var onRequestChannels: (() -> [[String: Any]])?
-
-    private var activated = false
-    private var channelsSignature = ""
-    private var messagesSignature = ""
-
-    private override init() { super.init() }
-
-    /// 激活 WCSession（App 启动时调用一次）。
-    func activate() {
-        guard WCSession.isSupported() else {
-            LogCollector.record(module: "手表", "当前设备不支持 WatchConnectivity")
-            return
-        }
-        let session = WCSession.default
-        session.delegate = self
-        session.activate()
-    }
-
-    /// 推送频道列表到手表（内容未变化时不重复推送；手表不可达时用 transferUserInfo 排队）。
-    func pushChannels(_ channels: [Channel]) {
-        guard activated else { return }
-        let signature = channels.map { "\($0.id.uuidString)|\($0.name)|\($0.agentId)" }.joined(separator: "\n")
-        guard signature != channelsSignature else { return }
-        channelsSignature = signature
-        let list: [[String: Any]] = channels.map {
-            ["id": $0.id.uuidString, "name": $0.name, "agentId": $0.agentId]
-        }
-        send(payload: ["kind": "channels", "channels": list])
-    }
-
-    /// 推送指定频道最近消息到手表（内容未变化时不重复推送）。
-    func pushMessages(_ messages: [Message], channelName: String) {
-        guard activated else { return }
-        let signature = messages.map { "\($0.id.uuidString)|\($0.content.prefix(40))" }.joined(separator: "\n")
-        guard signature != messagesSignature else { return }
-        messagesSignature = signature
-        let list: [[String: Any]] = messages.map { msg in
-            [
-                "id": msg.id.uuidString,
-                "role": msg.role.rawValue,
-                "content": String(msg.content.prefix(500)),
-                "timestamp": msg.timestamp.timeIntervalSinceReferenceDate,
-                "channelName": channelName,
-            ]
-        }
-        send(payload: ["kind": "messages", "channelName": channelName, "messages": list])
-    }
-
-    // MARK: - 发送
-
-    private func send(payload: [String: Any]) {
-        guard activated else { return }
-        if WCSession.default.isReachable {
-            WCSession.default.sendMessage(payload, replyHandler: nil, errorHandler: nil)
-        } else {
-            WCSession.default.transferUserInfo(payload)
-        }
-    }
-
-    // MARK: - WCSessionDelegate
-
-    func session(_ session: WCSession, activationDidCompleteWith activationState: WCSessionActivationState, error: Error?) {
-        activated = activationState == .activated
-        let stateText: String
-        switch activationState {
-        case .activated: stateText = "已激活"
-        case .inactive: stateText = "未激活（inactive）"
-        case .notActivated: stateText = "未激活"
-        @unknown default: stateText = "未知"
-        }
-        let errorText = error.map { "（\(AppErrorText.localized($0.localizedDescription)))" } ?? ""
-        LogCollector.record(
-            module: "手表",
-            "WCSession \(stateText)\(errorText)，配对手表：\(session.isPaired ? "已配对" : "未配对")，可达：\(session.isReachable ? "是" : "否")"
-        )
-    }
-
-    func sessionDidBecomeInactive(_ session: WCSession) {
-        activated = false
-    }
-
-    func sessionDidDeactivate(_ session: WCSession) {
-        // 系统要求：deactivate 后必须重新 activate，才能继续使用。
-        activated = false
-        WCSession.default.activate()
-    }
-
-    func sessionReachabilityDidChange(_ session: WCSession) {
-        LogCollector.record(
-            module: "手表",
-            "手表可达性变化：\(session.isReachable ? "可达" : "不可达")（已配对：\(session.isPaired ? "是" : "否")）"
-        )
-    }
-
-    func session(_ session: WCSession, didReceiveMessage message: [String: Any]) {
-        handleIncoming(message, replyHandler: nil)
-    }
-
-    func session(_ session: WCSession, didReceiveMessage message: [String: Any], replyHandler: @escaping ([String: Any]) -> Void) {
-        handleIncoming(message, replyHandler: replyHandler)
-    }
-
-    func session(_ session: WCSession, didReceiveUserInfo userInfo: [String: Any]) {
-        handleIncoming(userInfo, replyHandler: nil)
-    }
-
-    // MARK: - 请求处理
-
-    private func handleIncoming(_ message: [String: Any], replyHandler: (([String: Any]) -> Void)?) {
-        guard let kind = message["kind"] as? String else { return }
-        let channelName = message["channelName"] as? String
-        switch kind {
-        case "sendText":
-            guard let text = message["text"] as? String else {
-                replyHandler?(["ok": false, "message": "缺少文本内容"])
-                return
-            }
-            let handler = onSendText
-            Task { @MainActor in
-                let ok = await handler?(text, channelName) ?? false
-                replyHandler?(["ok": ok, "message": ok ? "已发送" : "发送失败，请检查网关连接"])
-            }
-        case "wake":
-            let handler = onWake
-            Task { @MainActor in
-                let ok = await handler?(channelName) ?? false
-                replyHandler?(["ok": ok, "message": ok ? "已唤醒" : "唤醒失败"])
-            }
-        case "requestMessages":
-            let handler = onRequestMessages
-            let (name, list) = handler?(channelName) ?? (channelName ?? "", [])
-            replyHandler?(["kind": "messages", "channelName": name, "messages": list])
-        case "requestChannels":
-            let handler = onRequestChannels
-            let list = handler?() ?? []
-            replyHandler?(["kind": "channels", "channels": list])
-        default:
-            break
-        }
-    }
 }
