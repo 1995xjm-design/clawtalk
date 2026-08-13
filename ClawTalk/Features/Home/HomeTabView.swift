@@ -18,7 +18,7 @@ struct HomeTabView: View {
     /// H1：实时语音入口回调（由 App 层接线弹 RealtimeVoiceView 全屏页；nil = 不显示入口）。
     private let onOpenRealtimeVoice: (() -> Void)?
     /// S10：4 列弹性网格（小卡 1 列 / 中卡 2 列 / 大卡 4 列，对齐 iOS 小组件比例）。
-    private let columns = Array(repeating: GridItem(.flexible(), spacing: 12), count: 4)
+    private let columns = Array(repeating: GridItem(.flexible(), spacing: 12), count: 2) // 明哥要求：一行 2 个
 
     @State private var assistantViewModel: VoiceAssistantViewModel?
 
@@ -238,8 +238,7 @@ struct HomeTabView: View {
 
         if isEditingCards {
             cardContent(for: kind, size: size)
-                .gridCellColumns(size.gridColumns)
-                .overlay(alignment: .topLeading) {
+                    .overlay(alignment: .topLeading) {
                     removeOverlay(kind)
                 }
                 .overlay(alignment: .bottomTrailing) {
@@ -274,7 +273,6 @@ struct HomeTabView: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .gridCellColumns(size.gridColumns)
             .highPriorityGesture(
                 LongPressGesture(minimumDuration: 0.45)
                     .onEnded { _ in
