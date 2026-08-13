@@ -796,8 +796,11 @@ private final class KeyboardSettingsHostViewController: UIViewController {
     }
 
     /// 加载键盘设置页。容器/页面创建失败时抛错，由调用方兜底，绝不导致主程序崩溃。
+    /// 包一层 UINavigationController：HamsteriOS 设置页子页跳转依赖 navigationController?.pushViewController，
+    /// 裸嵌入 SwiftUI 时 navigationController 为 nil，子页按钮会「点了没反应」。
     private func loadSettingsViewController() throws -> UIViewController {
-        HamsterAppDependencyContainer.shared.makeSettingsViewController()
+        let settingsVC = HamsterAppDependencyContainer.shared.makeSettingsViewController()
+        return UINavigationController(rootViewController: settingsVC)
     }
 
     private func embed(_ settingsVC: UIViewController) {
