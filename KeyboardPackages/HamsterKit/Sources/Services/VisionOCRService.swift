@@ -12,11 +12,13 @@ public class VisionOCRService {
 
   public func recognizeText(in image: UIImage, completion: @escaping (Result<String, Error>) -> Void) {
     guard let cgImage = image.cgImage else {
+      ClawLog.record(module: "键盘OCR", "OCR 识别失败：图像无效")
       completion(.failure(OCRError.invalidImage))
       return
     }
     let request = VNRecognizeTextRequest { request, error in
       if let error {
+        ClawLog.record(module: "键盘OCR", "OCR 识别失败：\(error.localizedDescription)")
         DispatchQueue.main.async { completion(.failure(error)) }
         return
       }
@@ -33,6 +35,7 @@ public class VisionOCRService {
       do {
         try handler.perform([request])
       } catch {
+        ClawLog.record(module: "键盘OCR", "OCR 识别失败：\(error.localizedDescription)")
         DispatchQueue.main.async { completion(.failure(error)) }
       }
     }

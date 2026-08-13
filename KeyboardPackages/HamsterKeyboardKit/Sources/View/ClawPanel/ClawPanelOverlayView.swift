@@ -421,6 +421,7 @@ public final class ClawPanelOverlayView: UIView {
       DispatchQueue.main.async {
         guard let self, self.isMicHeld else { return }
         guard granted else {
+          ClawLog.record(module: "键盘面板", "语音权限未授权，无法使用语音输入")
           self.showResultMessage("需要麦克风和语音识别权限，请在系统设置中开启")
           return
         }
@@ -438,6 +439,7 @@ public final class ClawPanelOverlayView: UIView {
                 self.appendTextToInput(trimmed)
               }
             case .failure(let error):
+              ClawLog.record(module: "键盘面板", "语音识别失败：\(error.localizedDescription)")
               self.showResultMessage("语音识别失败：\(error.localizedDescription)")
             }
           }
@@ -497,6 +499,7 @@ public final class ClawPanelOverlayView: UIView {
         self.resultTextView.text = reply
         self.copyButton.isHidden = false
       case .failure(let error):
+        ClawLog.record(module: "键盘面板", "AI 分析失败：\(error.localizedDescription)")
         self.resultTextView.text = "分析失败：\(error.localizedDescription)"
       }
     }
@@ -586,6 +589,7 @@ extension ClawPanelOverlayView: PHPickerViewControllerDelegate {
             self.appendTextToInput(trimmed)
           }
         case .failure(let error):
+          ClawLog.record(module: "键盘面板", "OCR 识别失败：\(error.localizedDescription)")
           self.showResultMessage("识别失败：\(error.localizedDescription)")
         }
       }

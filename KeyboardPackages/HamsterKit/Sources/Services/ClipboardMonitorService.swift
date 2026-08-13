@@ -118,7 +118,7 @@ public class ClipboardMonitorService {
         try line.write(to: url, atomically: false, encoding: .utf8)
       }
     } catch {
-      // 键盘扩展不能崩溃，静默失败
+      ClawLog.record(module: "键盘数据", "写入剪贴板记录失败：\(error.localizedDescription)")
     }
   }
 

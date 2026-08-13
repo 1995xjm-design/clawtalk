@@ -19,7 +19,6 @@ protocol SubViewControllerFactory {
   func makeUploadInputSchemaViewController() -> UploadInputSchemaViewController
   func makeAppleCloudViewController() -> AppleCloudViewController
   func makeBackupViewController() -> BackupViewController
-  func makeAboutViewController() -> AboutViewController
   func makeRimeViewController() -> RimeViewController
   func makeClawTalkViewController() -> ClawTalkViewController
   func makeAutoInsightViewController() -> AutoInsightViewController
@@ -84,16 +83,13 @@ open class MainViewController: UISplitViewController {
   private lazy var heartTargetSettingsViewController: HeartTargetSettingsViewController
     = subViewControllerFactory.makeHeartTargetSettingsViewController()
 
-  private lazy var aboutViewController: AboutViewController
-    = subViewControllerFactory.makeAboutViewController()
-
   private lazy var primaryNavigationViewController: UINavigationController = {
     let vc = UINavigationController(rootViewController: settingsViewController)
     return vc
   }()
 
   private lazy var secondaryNavigationViewController: UINavigationController = {
-    let vc = UINavigationController(rootViewController: aboutViewController)
+    let vc = UINavigationController(rootViewController: UIViewController())
     return vc
   }()
 
@@ -200,8 +196,6 @@ extension MainViewController {
       presentInputMethodSettingsViewController()
     case .heartTargets:
       presentHeartTargetSettingsViewController()
-    case .about:
-      presentAboutViewController()
     case .main:
       presentMainViewController()
     default:
@@ -276,10 +270,6 @@ extension MainViewController {
 
   func presentHeartTargetSettingsViewController() {
     presentViewController(heartTargetSettingsViewController)
-  }
-
-  func presentAboutViewController() {
-    presentViewController(aboutViewController)
   }
 
   private func presentViewController(_ vc: UIViewController) {

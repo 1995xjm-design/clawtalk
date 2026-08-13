@@ -64,7 +64,8 @@ public final class ClawSuggestionEngine {
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
           self.suggestions = Array(lines.prefix(3))
-        case .failure:
+        case .failure(let error):
+          ClawLog.record(module: "键盘建议", "AI 建议生成失败：\(error.localizedDescription)")
           self.suggestions = []
         }
       }

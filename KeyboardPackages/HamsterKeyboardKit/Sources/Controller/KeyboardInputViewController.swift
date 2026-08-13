@@ -609,6 +609,7 @@ open class KeyboardInputViewController: UIInputViewController, KeyboardControlle
     let handled = rimeContext.tryHandleInputText(text)
     if !handled {
       Logger.statistics.error("try handle input text: \(text), handle false")
+      ClawLog.record(module: "键盘", "RIME 无法处理输入文本：\(text)")
       insertTextPatch(text)
       return
     }
@@ -1065,7 +1066,9 @@ private extension KeyboardInputViewController {
     DispatchQueue.main.async { [weak self] in
       guard let context = self?.autocompleteContext else { return }
       switch result {
-      case .failure(let error): context.lastError = error
+      case .failure(let error):
+        ClawLog.record(module: "键盘", "自动补全失败：\(error.localizedDescription)")
+        context.lastError = error
       case .success(let result): context.suggestions = result
       }
     }

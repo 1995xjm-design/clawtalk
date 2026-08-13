@@ -82,7 +82,7 @@ public class ClawTalkDataService {
         try line.write(to: url, atomically: false, encoding: .utf8)
       }
     } catch {
-      // 键盘扩展不能崩溃，静默失败
+      ClawLog.record(module: "键盘数据", "写入会话记录失败：\(error.localizedDescription)")
     }
   }
 
@@ -183,6 +183,7 @@ public class ClawTalkDataService {
     do {
       try fileManager.createDirectory(at: clawTalkiCloudURL, withIntermediateDirectories: true)
     } catch {
+      ClawLog.record(module: "键盘数据", "iCloud 创建目录失败：\(error.localizedDescription)")
       completion(.failure(error))
       return
     }
@@ -209,7 +210,9 @@ public class ClawTalkDataService {
             try self.fileManager.copyItem(at: localURL, to: destURL)
           }
           uploadedCount += 1
-        } catch {}
+        } catch {
+          ClawLog.record(module: "键盘数据", "iCloud 上传文件失败（\(filename)）：\(error.localizedDescription)")
+        }
         progress?(Double(index + 1) / Double(total))
       }
       DispatchQueue.main.async {

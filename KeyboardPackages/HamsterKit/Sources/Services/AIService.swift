@@ -166,6 +166,7 @@ public class AIService {
     let provider = selectedProvider
     let key = apiKey(for: provider)
     guard !key.isEmpty else {
+      ClawLog.record(module: "键盘AI", "\(provider.rawValue) API Key 未配置")
       completion(.failure(AIError.noAPIKey(provider)))
       return
     }
@@ -209,19 +210,23 @@ public class AIService {
       let status = (response as? HTTPURLResponse)?.statusCode ?? 0
       if let error = error {
         log.log("✗ network error: \(error.localizedDescription)", level: .error, tag: "AI")
+        ClawLog.record(module: "键盘AI", "AI 网络错误：\(error.localizedDescription)")
         DispatchQueue.main.async { completion(.failure(error)) }; return
       }
       guard let data else {
         log.log("✗ empty response (HTTP \(status))", level: .error, tag: "AI")
+        ClawLog.record(module: "键盘AI", "AI 空响应（HTTP \(status)）")
         DispatchQueue.main.async { completion(.failure(AIError.emptyResponse)) }; return
       }
       let rawBody = String(data: data, encoding: .utf8) ?? "<binary>"
       guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
         log.log("✗ parse error (HTTP \(status)) body=\(rawBody.prefix(400))", level: .error, tag: "AI")
+        ClawLog.record(module: "键盘AI", "AI 解析失败（HTTP \(status)）")
         DispatchQueue.main.async { completion(.failure(AIError.parseError)) }; return
       }
       if let errObj = json["error"] as? [String: Any], let msg = errObj["message"] as? String {
         log.log("✗ API error (HTTP \(status)): \(msg) | raw=\(rawBody.prefix(400))", level: .error, tag: "AI")
+        ClawLog.record(module: "键盘AI", "AI API 错误（HTTP \(status)）：\(msg)")
         DispatchQueue.main.async { completion(.failure(AIError.apiError(msg))) }; return
       }
       guard let choices = json["choices"] as? [[String: Any]],
@@ -229,6 +234,7 @@ public class AIService {
             let content = message["content"] as? String
       else {
         log.log("✗ unexpected JSON (HTTP \(status)) body=\(rawBody.prefix(400))", level: .error, tag: "AI")
+        ClawLog.record(module: "键盘AI", "AI 响应结构异常（HTTP \(status)）")
         DispatchQueue.main.async { completion(.failure(AIError.parseError)) }; return
       }
       var usage: AIUsage?
@@ -278,25 +284,30 @@ public class AIService {
       let status = (response as? HTTPURLResponse)?.statusCode ?? 0
       if let error = error {
         log.log("✗ network error: \(error.localizedDescription)", level: .error, tag: "AI")
+        ClawLog.record(module: "键盘AI", "AI 网络错误：\(error.localizedDescription)")
         DispatchQueue.main.async { completion(.failure(error)) }; return
       }
       guard let data else {
         log.log("✗ empty response (HTTP \(status))", level: .error, tag: "AI")
+        ClawLog.record(module: "键盘AI", "AI 空响应（HTTP \(status)）")
         DispatchQueue.main.async { completion(.failure(AIError.emptyResponse)) }; return
       }
       let rawBody = String(data: data, encoding: .utf8) ?? "<binary>"
       guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
         log.log("✗ parse error (HTTP \(status)) body=\(rawBody.prefix(400))", level: .error, tag: "AI")
+        ClawLog.record(module: "键盘AI", "AI 解析失败（HTTP \(status)）")
         DispatchQueue.main.async { completion(.failure(AIError.parseError)) }; return
       }
       if let errObj = json["error"] as? [String: Any], let msg = errObj["message"] as? String {
         log.log("✗ API error (HTTP \(status)): \(msg) | raw=\(rawBody.prefix(400))", level: .error, tag: "AI")
+        ClawLog.record(module: "键盘AI", "AI API 错误（HTTP \(status)）：\(msg)")
         DispatchQueue.main.async { completion(.failure(AIError.apiError(msg))) }; return
       }
       guard let content = json["content"] as? [[String: Any]],
             let text = content.first(where: { $0["type"] as? String == "text" })?["text"] as? String
       else {
         log.log("✗ unexpected JSON (HTTP \(status)) body=\(rawBody.prefix(400))", level: .error, tag: "AI")
+        ClawLog.record(module: "键盘AI", "AI 响应结构异常（HTTP \(status)）")
         DispatchQueue.main.async { completion(.failure(AIError.parseError)) }; return
       }
       var usage: AIUsage?

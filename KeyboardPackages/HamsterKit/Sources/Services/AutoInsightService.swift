@@ -341,6 +341,7 @@ public class AutoInsightService {
       log.log("通知权限请求结果：\(granted ? "已授权" : "已拒绝")", tag: "AutoInsight")
     } catch {
       log.log("通知权限请求失败：\(error.localizedDescription)", level: .error, tag: "AutoInsight")
+      ClawLog.record(module: "键盘洞察", "通知权限请求失败：\(error.localizedDescription)")
     }
   }
 
@@ -356,6 +357,7 @@ public class AutoInsightService {
         log.log("通知权限请求结果：\(granted ? "已授权" : "已拒绝")", tag: "AutoInsight")
       } catch {
         log.log("通知权限请求失败：\(error.localizedDescription)", level: .error, tag: "AutoInsight")
+        ClawLog.record(module: "键盘洞察", "通知权限请求失败：\(error.localizedDescription)")
       }
       settings = await center.notificationSettings()
     }

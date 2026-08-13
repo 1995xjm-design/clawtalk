@@ -1,5 +1,6 @@
 import AVFoundation
 import Foundation
+import HamsterKit
 import Speech
 
 /// 语音输入服务：按住说话 → SFSpeechRecognizer（zh-Hans）转文字
@@ -26,6 +27,7 @@ public final class ClawVoiceInputService: NSObject {
         return
       }
       guard status == .authorized else {
+        ClawLog.record(module: "键盘语音", "语音识别权限未授权（状态 \(status.rawValue)）")
         completion(false)
         return
       }
@@ -34,6 +36,7 @@ public final class ClawVoiceInputService: NSObject {
       case .granted:
         completion(true)
       case .denied:
+        ClawLog.record(module: "键盘语音", "麦克风权限未授权")
         completion(false)
       default:
         session.requestRecordPermission { granted in
@@ -49,6 +52,7 @@ public final class ClawVoiceInputService: NSObject {
   public func start(completion: @escaping (Result<String, Error>) -> Void) {
     stop()
     guard let recognizer, recognizer.isAvailable else {
+      ClawLog.record(module: "键盘语音", "语音识别器不可用")
       completion(.failure(ClawVoiceError.recognizerUnavailable))
       return
     }
@@ -61,6 +65,7 @@ public final class ClawVoiceInputService: NSObject {
     let inputNode = audioEngine.inputNode
     let format = inputNode.outputFormat(forBus: 0)
     guard format.sampleRate > 0 else {
+      ClawLog.record(module: "键盘语音", "麦克风输入格式无效")
       completion(.failure(ClawVoiceError.audioUnavailable))
       return
     }
@@ -76,6 +81,7 @@ public final class ClawVoiceInputService: NSObject {
       try audioEngine.start()
     } catch {
       inputNode.removeTap(onBus: 0)
+      ClawLog.record(module: "键盘语音", "录音启动失败：\(error.localizedDescription)")
       completion(.failure(error))
       return
     }
@@ -91,6 +97,7 @@ public final class ClawVoiceInputService: NSObject {
         completion(.success(result.bestTranscription.formattedString))
       } else if error != nil {
         self.cleanup()
+        ClawLog.record(module: "键盘语音", "语音识别失败：\(error?.localizedDescription ?? ClawVoiceError.unknown.localizedDescription)")
         completion(.failure(error ?? ClawVoiceError.unknown))
       }
     }

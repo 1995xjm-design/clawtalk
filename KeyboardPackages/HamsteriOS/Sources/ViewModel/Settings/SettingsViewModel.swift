@@ -52,6 +52,9 @@ public class SettingsViewModel: ObservableObject {
   func navigateToGoogleDrive() { navigate(.googleDrive) }
   func navigateToDebugLog() { navigate(.debugLog) }
 
+  /// RIME 数据是否就绪（部署失败时置为 false，RIME 相关设置项诚实标注“数据未就绪”）
+  @Published var rimeDataReady = true
+
   var tableReloadSubject = PassthroughSubject<Bool, Never>()
   var tableReloadPublished: AnyPublisher<Bool, Never> {
     tableReloadSubject.eraseToAnyPublisher()
@@ -195,18 +198,9 @@ public class SettingsViewModel: ObservableObject {
           icon: UIImage(systemName: "r.square")!,
           text: "RIME",
           accessoryType: .disclosureIndicator,
+          navigationLinkLabel: { [unowned self] in self.rimeDataReady ? "" : "数据未就绪" },
           navigationAction: { [unowned self] in
             self.navigate(.rime)
-          }
-        ),
-      ]),
-      .init(title: "关于", items: [
-        .init(
-          icon: UIImage(systemName: "info.circle")!,
-          text: "关于",
-          accessoryType: .disclosureIndicator,
-          navigationAction: { [unowned self] in
-            self.navigate(.about)
           }
         ),
       ]),
@@ -241,29 +235,35 @@ extension SettingsViewModel {
     // PATCH: 仓1.0版本处理
     if let v1FirstRunning = UserDefaults.hamster._firstRunningForV1, v1FirstRunning == false {
       await ProgressHUD.animate("迁移 1.0 配置中……", interaction: false)
+      do {
+        var appConfig = HamsterConfigurationStore.shared.applicationConfiguration
 
-      var appConfig = HamsterConfigurationStore.shared.applicationConfiguration
+        // 读取 1.0 配置参数
+        _setupConfigurationForV1Update(configuration: &appConfig)
 
-      // 读取 1.0 配置参数
-      _setupConfigurationForV1Update(configuration: &appConfig)
+        // merge 1.0 配置参数
+        var configuration = HamsterConfigurationStore.shared.configuration
+        configuration = try configuration.merge(with: appConfig, uniquingKeysWith: { _, appConfig in appConfig })
 
-      // merge 1.0 配置参数
-      var configuration = HamsterConfigurationStore.shared.configuration
-      configuration = try configuration.merge(with: appConfig, uniquingKeysWith: { _, appConfig in appConfig })
+        // 部署 RIME
+        try rimeViewModel.rimeContext.deployment(configuration: &configuration)
 
-      // 部署 RIME
-      try rimeViewModel.rimeContext.deployment(configuration: &configuration)
+        // 修改应用首次运行标志
+        UserDefaults.standard.isFirstRunning = false
 
-      // 修改应用首次运行标志
-      UserDefaults.standard.isFirstRunning = false
+        /// 删除 V1 标识
+        UserDefaults.hamster._removeFirstRunningForV1()
 
-      /// 删除 V1 标识
-      UserDefaults.hamster._removeFirstRunningForV1()
+        HamsterConfigurationStore.shared.configuration = configuration
+        HamsterConfigurationStore.shared.applicationConfiguration = appConfig
 
-      HamsterConfigurationStore.shared.configuration = configuration
-      HamsterConfigurationStore.shared.applicationConfiguration = appConfig
-
-      await ProgressHUD.success("迁移完成", interaction: false, delay: 1.5)
+        await ProgressHUD.success("迁移完成", interaction: false, delay: 1.5)
+      } catch {
+        // 迁移失败不阻断设置页：标记 RIME 未就绪并记录日志
+        rimeDataReady = false
+        Logger.statistics.error("migrate 1.0 config error: \(error.localizedDescription)")
+        await ProgressHUD.failed("迁移数据异常，其余设置仍可使用", interaction: false, delay: 2)
+      }
       return
     }
 
@@ -321,11 +321,16 @@ extension SettingsViewModel {
 
       await ProgressHUD.success(alreadyDeployed ? "已就绪" : "部署完成", interaction: false, delay: 1.5)
     } catch {
-      // 失败也要清除部署中标记，避免卡死，下次启动重试
+      // 失败不阻断设置页：清除部署中标记，记录日志（App Group 共享 + OSLog），标记 RIME 数据未就绪
       UserDefaults.hamster.set(false, forKey: "clawTalk_rime_deploy_in_progress")
+      rimeDataReady = false
       Logger.statistics.error("rime init file directory error: \(error.localizedDescription)")
-      await ProgressHUD.failed("导入数据异常", interaction: false, delay: 2)
-      throw error
+      if let sharedDefaults = UserDefaults(suiteName: HamsterConstants.appGroupName) {
+        sharedDefaults.set("RIME 初始化失败: \(error.localizedDescription)", forKey: "clawtalk.keyboardInitError")
+        sharedDefaults.set(Date().timeIntervalSince1970, forKey: "clawtalk.keyboardInitErrorTime")
+      }
+      await ProgressHUD.failed("RIME 数据未就绪，其余设置仍可使用", interaction: false, delay: 2)
+      tableReloadSubject.send(true)
     }
   }
 
@@ -468,3 +473,4 @@ extension SettingsViewModel {
   static let _SlideLeft = "←" // 表示左滑 Leftwards Arrow: https://www.compart.com/en/unicode/U+2190
   static let _SlideRight = "→" // 表示右滑 Rightwards Arrow: https://www.compart.com/en/unicode/U+2192
 }
+
