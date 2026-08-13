@@ -57,36 +57,38 @@ public extension URL {
 public extension URL {
   // 应用iCloud文件夹
   // 注意：appendingPathComponent("Documents")是非常重要的一点，如果没有它，你的文件夹将不会显示在iCloud Drive里面。
-  static var iCloudDocumentURL: URL? = {
+  // v049 修复：每次调用实时获取（不再缓存一次），iCloud 未登录/容器不可用时返回 nil，调用方 guard 跳过，绝不强制解包崩溃。
+  static var iCloudDocumentURL: URL? {
     if let icloudURL = FileManager.default.url(forUbiquityContainerIdentifier: nil) {
       return icloudURL.appendingPathComponent("Documents")
     }
     return nil
-  }()
-
-  // TODO: 这里需要重写
-  // iCloud中RIME使用文件路径
-  static var iCloudRimeURL: URL {
-    iCloudDocumentURL!.appendingPathComponent("RIME")
   }
 
-  // iCloud中 RIME sharedSupport 路径
-  static var iCloudSharedSupportURL: URL {
-    iCloudRimeURL.appendingPathComponent(HamsterConstants.rimeSharedSupportPathName)
+  // iCloud中RIME使用文件路径（可选；容器不可用时为 nil，调用方必须 guard）
+  static var iCloudRimeURL: URL? {
+    guard let documentURL = iCloudDocumentURL else { return nil }
+    return documentURL.appendingPathComponent("RIME")
   }
 
-  // iCloud中 RIME 方案 userData 路径
-  static var iCloudUserDataURL: URL {
-    iCloudRimeURL.appendingPathComponent(HamsterConstants.rimeUserPathName)
+  // iCloud中 RIME sharedSupport 路径（可选）
+  static var iCloudSharedSupportURL: URL? {
+    iCloudRimeURL?.appendingPathComponent(HamsterConstants.rimeSharedSupportPathName)
   }
 
-  // iCloud 中 RIME 方案同步路径
-  static var iCloudRimeSyncURL: URL {
-    iCloudRimeURL.appendingPathComponent("sync")
+  // iCloud中 RIME 方案 userData 路径（可选）
+  static var iCloudUserDataURL: URL? {
+    iCloudRimeURL?.appendingPathComponent(HamsterConstants.rimeUserPathName)
   }
 
-  // iCloud 中 软件备份路径
-  static var iCloudBackupsURL: URL {
-    iCloudDocumentURL!.appendingPathComponent("backups")
+  // iCloud 中 RIME 方案同步路径（可选）
+  static var iCloudRimeSyncURL: URL? {
+    iCloudRimeURL?.appendingPathComponent("sync")
+  }
+
+  // iCloud 中 软件备份路径（可选）
+  static var iCloudBackupsURL: URL? {
+    guard let documentURL = iCloudDocumentURL else { return nil }
+    return documentURL.appendingPathComponent("backups")
   }
 }
