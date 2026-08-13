@@ -797,7 +797,6 @@ struct GlobalVoiceInputFloating: View {
     }
 
     @ViewBuilder
-    @ViewBuilder
     private var buttonIcon: some View {
         switch viewModel.state {
         case .idle:
