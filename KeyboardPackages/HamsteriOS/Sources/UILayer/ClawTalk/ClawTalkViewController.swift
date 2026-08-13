@@ -3,7 +3,7 @@ import SwiftUI
 import UIKit
 
 public class ClawTalkViewController: NibLessViewController {
-  public init() {
+  public override init() {
     super.init(nibName: nil, bundle: nil)
   }
   private let viewModel = ClawTalkViewModel()

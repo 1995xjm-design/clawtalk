@@ -3,7 +3,7 @@ import SwiftUI
 import UIKit
 
 public class AutoInsightViewController: NibLessViewController {
-  public init() {
+  public override init() {
     super.init(nibName: nil, bundle: nil)
   }
   public override func loadView() {
