@@ -48,7 +48,6 @@ targets:
       - package: HamsterKit
       - package: HamsterUIKit
       - package: HamsteriOS
-      - target: ClawTalkWatchApp
       - target: ClawTalkKeyboard
       - target: ClawTalkWidget
       - target: ClawTalkShareExtension
