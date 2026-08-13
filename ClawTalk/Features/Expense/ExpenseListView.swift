@@ -199,6 +199,7 @@ struct ExpenseListView: View {
     @State private var manualNote = ""
     @State private var manualError: String?
 
+    private let settingsStore: SettingsStore
     private let hapticsEnabled: Bool
     /// 按住多久算开始录音（0.3 秒，与 TalkButton 一致）
     private let holdThreshold: UInt64 = 300_000_000
@@ -211,6 +212,7 @@ struct ExpenseListView: View {
         let resolvedStore = store ?? ExpenseStore()
         _store = State(initialValue: resolvedStore)
         _recording = State(initialValue: ExpenseRecordingController(settingsStore: settingsStore))
+        self.settingsStore = settingsStore
         self.onBack = onBack
         self.hapticsEnabled = settingsStore.settings.hapticsEnabled
     }
