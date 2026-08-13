@@ -8,7 +8,7 @@ public class ClawTalkViewController: NibLessViewController {
   }
   private let viewModel = ClawTalkViewModel()
 
-  override func viewDidLoad() {
+  public override func viewDidLoad() {
     super.viewDidLoad()
     title = "Now ClawTalk"
 

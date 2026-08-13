@@ -6,12 +6,12 @@ public class AutoInsightViewController: NibLessViewController {
   public init() {
     super.init(nibName: nil, bundle: nil)
   }
-  override func loadView() {
+  public override func loadView() {
     view = UIView()
     title = "每日洞察"
   }
 
-  override func viewDidLoad() {
+  public override func viewDidLoad() {
     super.viewDidLoad()
     let host = UIHostingController(rootView: AutoInsightRootView())
     addChild(host)
