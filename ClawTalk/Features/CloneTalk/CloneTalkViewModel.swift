@@ -41,10 +41,9 @@ final class CloneTalkViewModel {
         self.settingsStore = settingsStore
         self.memoryStore = memoryStore ?? MemoryProfileStore(settings: settingsStore)
         loadDrafts()
-        // 档案只读使用：聚合后统计条数用于提示（失败静默，不阻塞生成）
-        if self.memoryStore.profiles.isEmpty {
-            self.memoryStore.refreshFromConversations()
-        }
+        // v049 修复：不在 init 里同步 refreshFromConversations（遍历全部对话会阻塞主线程，
+        // 主页 NavigationLink 直达 destination 会被 SwiftUI 预构建 → 启动黑屏）。
+        // 改为 generate 前懒刷新（见 generate()）。
         profileCount = self.memoryStore.profiles.count
     }
 
@@ -59,6 +58,11 @@ final class CloneTalkViewModel {
         if let until = retryBlockedUntil, Date() < until {
             errorMessage = "连续失败次数过多，请 \(Int(until.timeIntervalSinceNow) + 1) 秒后再试"
             return
+        }
+        // 懒刷新档案（生成前）：首次进入未聚合时补齐口吻参考；用户点击时触发，不阻塞启动
+        if self.memoryStore.profiles.isEmpty {
+            self.memoryStore.refreshFromConversations()
+            profileCount = self.memoryStore.profiles.count
         }
         isGenerating = true
         didSaveCurrent = false
