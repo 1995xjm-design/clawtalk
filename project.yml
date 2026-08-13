@@ -57,7 +57,7 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: app.lgm.7517
         PROVISIONING_PROFILE_SPECIFIER: 7517
         MARKETING_VERSION: "1.2.2"
-        CURRENT_PROJECT_VERSION: 5
+        CURRENT_PROJECT_VERSION: 7
         TARGETED_DEVICE_FAMILY: "1,2"
         KNOWN_REGIONS:
           - Base
@@ -213,7 +213,7 @@ targets:
         PROVISIONING_PROFILE_SPECIFIER: 7517ext
         TARGETED_DEVICE_FAMILY: "4"
         MARKETING_VERSION: "1.2.2"
-        CURRENT_PROJECT_VERSION: 5
+        CURRENT_PROJECT_VERSION: 7
     info:
       path: ClawTalkWatchApp/Resources/Info.plist
       properties:
@@ -237,7 +237,7 @@ targets:
         CODE_SIGN_ENTITLEMENTS: ClawTalkWatchApp/ClawTalkWatch.entitlements
         TARGETED_DEVICE_FAMILY: "4"
         MARKETING_VERSION: "1.2.2"
-        CURRENT_PROJECT_VERSION: 5
+        CURRENT_PROJECT_VERSION: 7
     info:
       path: ClawTalkWatchApp/Resources/Extension-Info.plist
       properties:
