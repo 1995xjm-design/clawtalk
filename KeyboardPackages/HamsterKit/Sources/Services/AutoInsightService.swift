@@ -207,7 +207,7 @@ public class AutoInsightService {
 
   /// 个人背景：优先手填配置；为空时自动读 App Group 记忆摘要（clawtalk.memory.summary）
   /// + 最近 ClawTalk 键盘对话文本，让洞察更贴个人语境。
-  private func resolveBackgroundSection(_ cfg: AutoInsightConfig) -> String {
+  func resolveBackgroundSection(_ cfg: AutoInsightConfig) -> String {
     if !cfg.personalBackground.isEmpty {
       return "\n用户个人背景：\(cfg.personalBackground)\n"
     }
