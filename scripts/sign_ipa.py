@@ -110,8 +110,10 @@ def main():
             z.extractall(work)
 
         payload = os.path.join(work, "Payload")
-        # 主 App 是唯一带 PlugIns 的 .app（watch app 为 watchOS 10 单 app 模型，无 PlugIns）
-        apps = [d for d in os.listdir(payload) if d.endswith(".app") and not d.endswith("WatchApp.app")]
+        # 主 App 是唯一带 PlugIns 的 .app（watch app 为 watchOS 10 单 app 模型，无 PlugIns，内嵌在主 App/Watch 内）
+        apps = [d for d in os.listdir(payload) if d.endswith(".app") and os.path.isdir(os.path.join(payload, d, "PlugIns"))]
+        if not apps:
+            apps = [d for d in os.listdir(payload) if d.endswith(".app") and not d.endswith("WatchApp.app")]
         app_name = apps[0]
         app_path = os.path.join(payload, app_name)
         plug_ins = os.path.join(app_path, "PlugIns")
@@ -148,20 +150,22 @@ def main():
                         "--timestamp=none", app_path], check=True)
         print("signed app:", app_name)
 
-        # --- sign other standalone apps (watchOS 10 single-app model: no PlugIns) ---
-        for other in sorted(os.listdir(payload)):
-            if not other.endswith(".app") or other == app_name:
-                continue
-            other_path = os.path.join(payload, other)
+        # --- sign embedded watch app (ClawTalk.app/Watch/*.app, watchOS 10 single-app model) ---
+        watch_dir = os.path.join(app_path, "Watch")
+        if os.path.isdir(watch_dir):
             watch_ent = extract_entitlements(args.ext_profile)
             watch_ent_path = os.path.join(tmp, "watch_ent.plist")
             with open(watch_ent_path, "wb") as f:
                 plistlib.dump(watch_ent, f)
-            shutil.copy(args.ext_profile, os.path.join(other_path, "embedded.mobileprovision"))
-            subprocess.run(["codesign", "--force", "--sign", identity,
-                            "--entitlements", watch_ent_path,
-                            "--timestamp=none", other_path], check=True)
-            print("signed other app:", other)
+            for watch_app in sorted(os.listdir(watch_dir)):
+                if not watch_app.endswith(".app"):
+                    continue
+                watch_app_path = os.path.join(watch_dir, watch_app)
+                shutil.copy(args.ext_profile, os.path.join(watch_app_path, "embedded.mobileprovision"))
+                subprocess.run(["codesign", "--force", "--sign", identity,
+                                "--entitlements", watch_ent_path,
+                                "--timestamp=none", watch_app_path], check=True)
+                print("signed watch app:", watch_app)
 
         # --- verify ---
         subprocess.run(["codesign", "--verify", "--deep", "--strict", app_path], check=True)

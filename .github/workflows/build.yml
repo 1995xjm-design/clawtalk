@@ -108,7 +108,8 @@ jobs:
       - name: Package .ipa (unsigned)
         run: |
           set -o pipefail
-          APP_PATH=$(find build-dd/Build/Products -name "*.app" -maxdepth 2 | head -1)
+          # 明确取主 App（Products 下还有 ClawTalkWatchApp.app，head -1 会取错）
+          APP_PATH=$(find build-dd/Build/Products -name "ClawTalk.app" -maxdepth 3 | head -1)
           echo "APP_PATH=$APP_PATH"
           ls -la "$APP_PATH"
           # 确认键盘扩展已嵌入
