@@ -58,6 +58,10 @@ targets:
         MARKETING_VERSION: "1.2.2"
         CURRENT_PROJECT_VERSION: 5
         TARGETED_DEVICE_FAMILY: "1,2"
+        KNOWN_REGIONS:
+          - Base
+          - en
+          - zh-Hans
     info:
       path: ClawTalk/Resources/Info.plist
       properties:

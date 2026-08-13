@@ -44,11 +44,11 @@ struct ChannelListView: View {
                                     .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
 
                                 VStack(alignment: .leading, spacing: 2) {
-                                    Text("文件传输助手")
+                                    Text(String(localized: "File Transfer"))
                                         .font(.body)
                                         .fontWeight(.medium)
                                         .foregroundStyle(.primary)
-                                    Text("电脑端文件收发")
+                                    Text(String(localized: "Send and receive files from your computer"))
                                         .font(.caption)
                                         .foregroundStyle(.secondary)
                                 }
@@ -74,11 +74,11 @@ struct ChannelListView: View {
                                     .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
 
                                 VStack(alignment: .leading, spacing: 2) {
-                                    Text("网关会话")
+                                    Text(String(localized: "Gateway Sessions"))
                                         .font(.body)
                                         .fontWeight(.medium)
                                         .foregroundStyle(.primary)
-                                    Text("电脑端全部会话 · 点会话接着聊")
+                                    Text(String(localized: "All sessions on your computer · tap to continue"))
                                         .font(.caption)
                                         .foregroundStyle(.secondary)
                                 }
@@ -93,7 +93,7 @@ struct ChannelListView: View {
                         }
                         .buttonStyle(.plain)
                     } header: {
-                        Text("系统频道")
+                        Text(String(localized: "System Channels"))
                     }
 
                     ForEach(visibleChannels) { channel in
@@ -128,10 +128,10 @@ struct ChannelListView: View {
                         .buttonStyle(.plain)
                         .contextMenu {
                             Button(action: { editingChannel = channel }) {
-                                Label("编辑频道", systemImage: "pencil")
+                                Label(String(localized: "Edit Channel"), systemImage: "pencil")
                             }
                             Button(role: .destructive, action: { channelStore.delete(channel) }) {
-                                Label("删除频道", systemImage: "trash")
+                                Label(String(localized: "Delete Channel"), systemImage: "trash")
                             }
                         }
                     }
@@ -157,7 +157,7 @@ struct ChannelListView: View {
                                 Image(systemName: "plus")
                                     .font(.body)
                                     .fontWeight(.semibold)
-                                Text("新建频道")
+                                Text(String(localized: "New Channel"))
                                     .font(.body)
                                     .fontWeight(.semibold)
                                 Spacer()
@@ -179,7 +179,7 @@ struct ChannelListView: View {
                                 .scaledToFit()
                                 .frame(width: 80, height: 80)
                                 .opacity(0.6)
-                            Text("还没有频道")
+                            Text(String(localized: "No channels yet"))
                                 .font(.headline)
                                 .foregroundStyle(.secondary)
                         }

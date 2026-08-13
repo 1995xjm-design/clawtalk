@@ -1,6 +1,94 @@
 {
   "sourceLanguage": "en",
   "strings": {
+    "All sessions on your computer · tap to continue": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "电脑端全部会话 · 点会话接着聊"
+          }
+        }
+      }
+    },
+    "File Transfer": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "文件传输助手"
+          }
+        }
+      }
+    },
+    "Gateway Sessions": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "网关会话"
+          }
+        }
+      }
+    },
+    "Gateway token invalid or expired": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "网关令牌无效或已过期：请到设置重新扫码配对（openclaw qr）"
+          }
+        }
+      }
+    },
+    "Home": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "主页"
+          }
+        }
+      }
+    },
+    "OK": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "确定"
+          }
+        }
+      }
+    },
+    "Send and receive files from your computer": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "电脑端文件收发"
+          }
+        }
+      }
+    },
+    "System Channels": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "系统频道"
+          }
+        }
+      }
+    },
     "AI 聊天回复键盘": {
       "extractionState": "manual",
       "localizations": {

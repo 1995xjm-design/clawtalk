@@ -14,6 +14,11 @@ struct DiagnosticsView: View {
     @State private var filesError: String?
     @State private var diagnosis: ConnectionDiagnostics.Result?
     @State private var isDiagnosing = false
+    // C3：电脑端待确认修复建议（手机确认修复流程）
+    @State private var pendingFixes: [PendingFix] = []
+    @State private var isFetchingFixes = false
+    @State private var fixesStatus: String?
+    @State private var sendingFixID: String?
 
     private var logText: String {
         LogCollector.load()
@@ -120,6 +125,70 @@ struct DiagnosticsView: View {
                 Text("把错误日志发送到电脑端 OpenClaw（会进入「日志诊断」频道），让它分析原因和给出解决方法，可回到该频道继续追问。")
             }
 
+            Section {
+                if isFetchingFixes {
+                    HStack(spacing: 8) {
+                        ProgressView()
+                        Text("正在获取…")
+                            .foregroundStyle(.secondary)
+                    }
+                } else if let fixesStatus {
+                    Text(fixesStatus)
+                        .foregroundStyle(.secondary)
+                } else if pendingFixes.isEmpty {
+                    Text("暂无待确认修复建议。")
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(pendingFixes) { fix in
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(fix.summary)
+                                .font(.subheadline.weight(.semibold))
+                            if let detail = fix.detail, !detail.isEmpty {
+                                Text(detail)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                    .textSelection(.enabled)
+                            }
+                            HStack(spacing: 10) {
+                                Button {
+                                    sendFixDecision(fix, decision: "consent")
+                                } label: {
+                                    if sendingFixID == fix.id {
+                                        ProgressView()
+                                    } else {
+                                        Label("同意修复", systemImage: "checkmark.circle")
+                                    }
+                                }
+                                .buttonStyle(.borderedProminent)
+                                .tint(.openClawRed)
+                                .disabled(sendingFixID != nil)
+
+                                Button {
+                                    sendFixDecision(fix, decision: "ignore")
+                                } label: {
+                                    Label("忽略", systemImage: "xmark.circle")
+                                }
+                                .buttonStyle(.bordered)
+                                .disabled(sendingFixID != nil)
+                            }
+                        }
+                        .padding(.vertical, 2)
+                    }
+                }
+            } header: {
+                HStack {
+                    Text("待确认修复")
+                    Spacer()
+                    Button {
+                        Task { await loadPendingFixes() }
+                    } label: {
+                        Image(systemName: "arrow.clockwise")
+                    }
+                    .disabled(isFetchingFixes)
+                }
+            } footer: {
+                Text("电脑端分析日志后生成的修复建议。点「同意修复」会把同意指令发到电脑端 inbound；已同意或已忽略的问题不会重复出现。")
+            }
             if let resultText {
                 Section("OpenClaw 分析") {
                     Text(resultText)
@@ -191,6 +260,7 @@ struct DiagnosticsView: View {
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
             logs = LogCollector.load().reversed()
+            Task { await loadPendingFixes() }
         }
     }
 
@@ -282,9 +352,221 @@ struct DiagnosticsView: View {
         f.dateFormat = "MM-dd HH:mm:ss"
         return f.string(from: date)
     }
+
+    // MARK: - C3 待确认修复（手机确认修复流程）
+
+    /// 从电脑端文件服务（8899）拉取待确认修复清单。
+    /// 优先尝试候选文件名直连，再按文件列表前缀匹配；服务不可达或没有文件时诚实显示空态。
+    private func loadPendingFixes() async {
+        let transfer = FileTransferViewModel(settings: settings)
+        let base = transfer.serverBaseURL
+        guard !base.isEmpty else {
+            fixesStatus = "未配置网关，无法获取修复建议。"
+            return
+        }
+        isFetchingFixes = true
+        defer { isFetchingFixes = false }
+
+        guard await Self.serverReachable(base: base) else {
+            fixesStatus = "无法获取修复建议：电脑端文件服务不可达。"
+            return
+        }
+
+        let candidates = [
+            "clawtalk-fix-pending.json",
+            "fix-pending.json",
+            "inbound-pending.json",
+            "clawtalk-fixes.json"
+        ]
+        for name in candidates {
+            if let data = await Self.download(base: base, name: name) {
+                let fixes = Self.parsePendingFixes(data)
+                if !fixes.isEmpty {
+                    applyPendingFixes(fixes)
+                    return
+                }
+            }
+        }
+
+        if let names = await Self.fileList(base: base) {
+            let match = names.first { name in
+                name.hasPrefix("clawtalk-fix-")
+                    || name.hasPrefix("fix-pending")
+                    || name.hasPrefix("pending-fix")
+            }
+            if let name = match, let data = await Self.download(base: base, name: name) {
+                let fixes = Self.parsePendingFixes(data)
+                if !fixes.isEmpty {
+                    applyPendingFixes(fixes)
+                    return
+                }
+            }
+        }
+
+        fixesStatus = "暂无待确认修复建议。"
+    }
+
+    /// 过滤掉已在本地同意/忽略的问题后展示。
+    private func applyPendingFixes(_ fixes: [PendingFix]) {
+        let shown = fixes.filter { Self.decision(for: $0.id) == nil }
+        pendingFixes = shown
+        fixesStatus = shown.isEmpty ? "暂无待确认修复建议。" : nil
+    }
+
+    /// 把「同意修复 / 忽略」指令写文件上传到电脑端 inbound（复用文件传输助手上传接口）。
+    private func sendFixDecision(_ fix: PendingFix, decision: String) {
+        guard !settings.settings.gatewayURL.isEmpty else {
+            filesError = "请先配置网关地址和令牌。"
+            return
+        }
+        sendingFixID = fix.id
+        filesMessage = nil
+        filesError = nil
+
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyyMMdd-HHmmss"
+        let name = "clawtalk-fix-\(decision)-\(formatter.string(from: Date())).txt"
+        let actionLabel = decision == "consent" ? "同意" : "忽略"
+        let instruction = decision == "consent"
+            ? "请修复此问题（问题 ID: \(fix.id)），完成后按交付流程出 FIX 报告并更新 outbox。"
+            : "此问题已忽略，无需处理。"
+        let content = """
+        ClawTalk 修复\(actionLabel)
+        问题 ID: \(fix.id)
+        摘要: \(fix.summary)
+        说明: \(fix.detail ?? "（无）")
+        时间: \(Self.fmt(Date()))
+        App 版本: \(LogCollector.currentVersion)
+        指令: \(instruction)
+        """
+
+        let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(name)
+        do {
+            try content.write(to: tempURL, atomically: true, encoding: .utf8)
+        } catch {
+            sendingFixID = nil
+            filesError = "\(actionLabel)指令写入失败：\(AppErrorText.localized(error.localizedDescription))"
+            return
+        }
+
+        let transfer = FileTransferViewModel(settings: settings)
+        Task {
+            let ok = await transfer.uploadFile(fileURL: tempURL, suggestedName: name)
+            try? FileManager.default.removeItem(at: tempURL)
+            sendingFixID = nil
+            if ok {
+                Self.record(decision, for: fix.id)
+                pendingFixes.removeAll { $0.id == fix.id }
+                filesMessage = "已发送修复\(actionLabel)（问题 \(fix.id)）"
+            } else {
+                filesError = transfer.errorMessage ?? "发送失败，请确认电脑端文件服务已启动。"
+            }
+        }
+    }
+
+    private static func serverReachable(base: String) async -> Bool {
+        guard let url = URL(string: base + "/api/status") else { return false }
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 5
+        guard let (data, response) = try? await URLSession.shared.data(for: request),
+              let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode),
+              (try? JSONDecoder().decode(StatusProbe.self, from: data))?.ok == true else { return false }
+        return true
+    }
+
+    private static func fileList(base: String) async -> [String]? {
+        guard let url = URL(string: base + "/api/files") else { return nil }
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 8
+        guard let (data, response) = try? await URLSession.shared.data(for: request),
+              let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode),
+              let decoded = try? JSONDecoder().decode(FileListProbe.self, from: data) else { return nil }
+        return decoded.files?.map(\.name)
+    }
+
+    private static func download(base: String, name: String) async -> Data? {
+        guard let encoded = name.addingPercentEncoding(withAllowedCharacters: .alphanumerics),
+              let url = URL(string: "\(base)/download?path=\(encoded)") else { return nil }
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 8
+        guard let (data, response) = try? await URLSession.shared.data(for: request),
+              let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else { return nil }
+        return data
+    }
+
+    private static func parsePendingFixes(_ data: Data) -> [PendingFix] {
+        if let envelope = try? JSONDecoder().decode(PendingFixEnvelope.self, from: data),
+           let fixes = envelope.fixes, !fixes.isEmpty {
+            return fixes
+        }
+        return (try? JSONDecoder().decode([PendingFix].self, from: data)) ?? []
+    }
+
+    // 本地决策记录：UserDefaults，key = clawtalk.fix.decision.<问题ID>
+    private static let fixDecisionKeyPrefix = "clawtalk.fix.decision."
+
+    private static func decision(for id: String) -> String? {
+        UserDefaults.standard.string(forKey: fixDecisionKeyPrefix + id)
+    }
+
+    private static func record(_ decision: String, for id: String) {
+        UserDefaults.standard.set(decision, forKey: fixDecisionKeyPrefix + id)
+    }
 }
 
-// MARK: - 一键诊断
+
+// MARK: - C3 待确认修复数据模型
+
+/// 电脑端生成的修复建议条目（兼容 {"fixes": [...]} 或裸数组）。
+struct PendingFix: Identifiable, Decodable, Equatable {
+    let id: String
+    let summary: String
+    let detail: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id, summary, title, detail, description
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        let rawID = (try? c.decode(String.self, forKey: .id)) ?? ""
+        summary = (try? c.decode(String.self, forKey: .summary))
+            ?? (try? c.decode(String.self, forKey: .title))
+            ?? "未命名问题"
+        detail = (try? c.decode(String.self, forKey: .detail))
+            ?? (try? c.decode(String.self, forKey: .description))
+        id = rawID.isEmpty ? Self.fallbackID(for: summary) : rawID
+    }
+
+    /// 无 id 时用摘要生成确定性 ID（跨启动稳定，用于去重）。
+    private static func fallbackID(for summary: String) -> String {
+        var hash: UInt64 = 0xcbf29ce484222325
+        for byte in summary.utf8 {
+            hash ^= UInt64(byte)
+            hash &*= 0x100000001b3
+        }
+        return "s-\(String(hash, radix: 16))"
+    }
+}
+
+/// 兼容 {"fixes": [...]} 包装。
+private struct PendingFixEnvelope: Decodable {
+    let fixes: [PendingFix]?
+}
+
+/// 文件服务状态探测。
+private struct StatusProbe: Decodable {
+    let ok: Bool?
+}
+
+/// 文件服务文件列表探测。
+private struct FileListProbe: Decodable {
+    struct Item: Decodable {
+        let name: String
+    }
+
+    let files: [Item]?
+}// MARK: - 一键诊断
 
 /// 一键诊断：串行执行 DNS 解析 → 端口连通 → TLS 握手 → WebSocket 连接 → HTTP 鉴权 五项检查。
 struct ConnectionDiagnostics {

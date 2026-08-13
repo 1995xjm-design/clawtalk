@@ -119,7 +119,7 @@ struct ClawTalkApp: App {
             mainZStack
                 .toolbar(isChatPresented ? .hidden : .visible, for: .tabBar)
                 .tabItem {
-                    Label("频道", systemImage: "message.fill")
+                    Label(String(localized: "Channels"), systemImage: "message.fill")
                 }
                 .tag(0)
 
@@ -133,7 +133,7 @@ struct ClawTalkApp: App {
                 ToolsView(settings: settingsStore, gatewayConnection: gatewayConnection, nodeConnection: nodeConnection)
             }
             .tabItem {
-                Label("主页", systemImage: "square.grid.2x2")
+                Label(String(localized: "Home"), systemImage: "square.grid.2x2")
             }
             .tag(1)
         }
