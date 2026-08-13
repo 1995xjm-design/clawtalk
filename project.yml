@@ -23,6 +23,12 @@ packages:
     from: "2.4.0"
   HamsterKeyboardKit:
     path: KeyboardPackages/HamsterKeyboardKit
+  HamsterKit:
+    path: KeyboardPackages/HamsterKit
+  HamsterUIKit:
+    path: KeyboardPackages/HamsterUIKit
+  HamsteriOS:
+    path: KeyboardPackages/HamsteriOS
 
 targets:
   ClawTalk:
@@ -36,6 +42,9 @@ targets:
     dependencies:
       - package: KeychainAccess
       - package: MarkdownUI
+      - package: HamsterKit
+      - package: HamsterUIKit
+      - package: HamsteriOS
       - target: ClawTalkKeyboard
       - target: ClawTalkWidget
       - target: ClawTalkShareExtension

@@ -1145,14 +1145,34 @@ private struct LiveActivityPreviewCard: View {
     }
 }
 
-/// 键盘设置占位页（键盘包融合中，下一版接入完整键盘设置）。
+/// 键盘设置页：UIViewControllerRepresentable 包 HamsteriOS 完整设置页（工程级整合）。
 struct KeyboardSettingsPlaceholderView: View {
     var body: some View {
-        ContentUnavailableView {
-            Label("ClawTalk 键盘设置", systemImage: "keyboard.badge.ellipsis")
-        } description: {
-            Text("键盘功能融合中，下一版接入完整设置。")
-        }
+        KeyboardSettingsHost()
+    }
+}
+
+private struct KeyboardSettingsHost: UIViewControllerRepresentable {
+    func makeUIViewController(context: Context) -> UIViewController {
+        KeyboardSettingsHostViewController()
+    }
+    func updateUIViewController(_ uiViewController: UIViewController, context: Context) {}
+}
+
+private final class KeyboardSettingsHostViewController: UIViewController {
+    private var child: UIViewController?
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        let container = HamsterAppDependencyContainer()
+        let settingsVC = container.makeSettingsViewController()
+        addChild(settingsVC)
+        settingsVC.view.frame = view.bounds
+        settingsVC.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        view.addSubview(settingsVC.view)
+        settingsVC.didMove(toParent: self)
+        child = settingsVC
+    }
+}
         .navigationTitle("键盘设置")
         .navigationBarTitleDisplayMode(.inline)
     }

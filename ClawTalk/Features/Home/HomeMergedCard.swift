@@ -110,7 +110,7 @@ struct HomeMergedCard: View {
     private var minHeight: CGFloat {
         switch size {
         case .small: return 100
-        case .medium: return 128
+        case .medium: return 170 // 方块卡片：一行 2 个，高≈宽（明哥要求）
         case .large: return 150
         }
     }
