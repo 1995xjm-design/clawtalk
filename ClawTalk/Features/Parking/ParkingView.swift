@@ -70,6 +70,9 @@ struct ParkingView: View {
             noteEditSheet
         }
         .alert("无法记录停车位置", isPresented: $showSettingsGuide) {
+            Button("再次请求定位") {
+                requestAuthorizationAgain()
+            }
             Button("去设置") {
                 openSettings()
             }
@@ -84,6 +87,10 @@ struct ParkingView: View {
             Button("好", role: .cancel) {}
         } message: {
             Text(store.errorMessage ?? "")
+        }
+        .overlay(alignment: .bottom) {
+            GlobalVoiceInputFloating(settingsStore: SettingsStore())
+                .padding(.bottom, 20)
         }
     }
 
@@ -146,6 +153,32 @@ struct ParkingView: View {
             startLocationCapture()
         @unknown default:
             statusMessage = "定位状态未知，请稍后重试"
+        }
+    }
+
+    /// 「再次请求定位」：未决定时重新弹系统授权框；已拒绝时系统不允许 App 内再次弹窗，
+    /// 保持引导并提示去系统设置（诚实，不假装能弹窗）。
+    private func requestAuthorizationAgain() {
+        guard CLLocationManager.locationServicesEnabled() else {
+            settingsGuideReason = "定位服务已在系统设置中关闭，请到系统设置里打开定位开关后再试。"
+            showSettingsGuide = true
+            return
+        }
+        let manager = CLLocationManager()
+        switch manager.authorizationStatus {
+        case .notDetermined:
+            manager.requestWhenInUseAuthorization()
+            settingsGuideReason = "已再次请求定位授权，请在系统弹窗中允许后再次点击「记录」。"
+            showSettingsGuide = true
+        case .denied, .restricted:
+            settingsGuideReason = "定位权限已在系统设置中关闭，App 内无法再次弹出授权。请到系统设置允许 ClawTalk 使用定位后再试。"
+            showSettingsGuide = true
+        case .authorizedWhenInUse, .authorizedAlways:
+            showSettingsGuide = false
+            startLocationCapture()
+        @unknown default:
+            settingsGuideReason = "定位状态未知，请稍后重试"
+            showSettingsGuide = true
         }
     }
 

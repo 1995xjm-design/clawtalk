@@ -6,12 +6,15 @@ enum KBStoreError: LocalizedError {
     case emptyQuestion
     case notConfigured
     case emptyAgentReply
+    case memoryToolUnavailable(String)
 
     var errorDescription: String? {
         switch self {
         case .emptyQuestion: return "问题不能为空。"
         case .notConfigured: return "请先在设置中配置 OpenClaw 网关。"
         case .emptyAgentReply: return "智能体没有返回有效回答。"
+        case .memoryToolUnavailable(let names):
+            return "网关记忆工具未启用（尝试：\(names)）。请先在网关侧启用记忆工具（memory-core），或先到「我的记忆」沉淀资料后再试。"
         }
     }
 }
@@ -157,18 +160,33 @@ final class KBStore {
     // MARK: - 记忆库检索（与 MemorySearchTabViewModel.search 同款调用）
 
     private func searchMemory(_ query: String) async throws -> [MemorySearchEntry] {
-        let data = try await client.invokeTool(
-            tool: "memory_search",
-            args: [
-                "query": .string(query),
-                "maxResults": .int(8),
-                "minScore": .double(0.15)
-            ],
-            gatewayURL: gatewayURL,
-            token: token
-        )
-        let wrapper = try JSONDecoder().decode(ToolResultWrapper<MemorySearchResults>.self, from: data)
-        return wrapper.details?.results ?? []
+        // 网关记忆工具名可能随版本不同（memory_search / memory-core 官方 slot tools），
+        // 逐一尝试：工具不存在（toolNotFound）时继续下一个，其余错误（网络/鉴权）直接抛出。
+        let candidateTools = ["memory_search", "memory-core"]
+        var notFoundNames: [String] = []
+        for tool in candidateTools {
+            do {
+                let data = try await client.invokeTool(
+                    tool: tool,
+                    args: [
+                        "query": .string(query),
+                        "maxResults": .int(8),
+                        "minScore": .double(0.15)
+                    ],
+                    gatewayURL: gatewayURL,
+                    token: token
+                )
+                let wrapper = try JSONDecoder().decode(ToolResultWrapper<MemorySearchResults>.self, from: data)
+                return wrapper.details?.results ?? []
+            } catch let error as OpenClawError {
+                if case .toolNotFound = error {
+                    notFoundNames.append(tool)
+                    continue
+                }
+                throw error
+            }
+        }
+        throw KBStoreError.memoryToolUnavailable(notFoundNames.joined(separator: "、"))
     }
 
     // MARK: - agent 增强（可选）

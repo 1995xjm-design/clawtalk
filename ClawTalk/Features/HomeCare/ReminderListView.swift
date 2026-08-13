@@ -15,11 +15,20 @@ struct ReminderListView: View {
 
     // 语音输入（复用现有语音栈：AudioCaptureManager + TranscriptionService，只读引用）
     @State private var captureManager = AudioCaptureManager()
-    @State private var stt: any TranscriptionService = AppleSTTService()
+    @State private var stt: any TranscriptionService = ReminderListView.makeSTT()
     @State private var isVoiceRecording = false
     @State private var isTranscribing = false
     @State private var voiceAlert: VoiceReminderAlert?
 
+    /// 按 SettingsStore.sttProvider 创建 STT（跟随语音设置里的提供商；无豆包 Key 回退 Apple）
+    private static func makeSTT() -> any TranscriptionService {
+        let settings = SettingsStore().settings
+        if settings.sttProvider == .doubao,
+           let key = SecureStorage.shared.doubaoAPIKey, !key.isEmpty {
+            return DoubaoSTTService(apiKey: key, language: settings.whisperLanguage)
+        }
+        return AppleSTTService(language: settings.whisperLanguage)
+    }
     init(store: CareReminderStore? = nil, autoOpenAdd: Bool = false) {
         _store = State(initialValue: store ?? CareReminderStore())
         _showAdd = State(initialValue: autoOpenAdd)
@@ -139,6 +148,10 @@ struct ReminderListView: View {
                     .padding(.vertical, 6)
                     .background(.bar)
             }
+        }
+        .overlay(alignment: .bottom) {
+            GlobalVoiceInputFloating(settingsStore: SettingsStore())
+                .padding(.bottom, 20)
         }
     }
 

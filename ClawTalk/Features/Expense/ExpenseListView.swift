@@ -259,6 +259,10 @@ struct ExpenseListView: View {
         .sheet(isPresented: $showManualSheet) {
             manualSheet
         }
+        .overlay(alignment: .bottom) {
+            GlobalVoiceInputFloating(settingsStore: settingsStore)
+                .padding(.bottom, 20)
+        }
     }
 
     // MARK: - 导航栏

@@ -79,6 +79,10 @@ struct FileVaultView: View {
         .onAppear {
             _ = store.checkDue()
         }
+        .overlay(alignment: .bottom) {
+            GlobalVoiceInputFloating(settingsStore: SettingsStore())
+                .padding(.bottom, 20)
+        }
     }
 
     // MARK: - 诚实空状态

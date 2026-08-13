@@ -628,6 +628,10 @@ struct WritingComposeView: View {
                 WritingDetailView(draft: draft, store: viewModel.writingStore)
             }
         }
+        .overlay(alignment: .bottom) {
+            GlobalVoiceInputFloating(settingsStore: settingsStore)
+                .padding(.bottom, 120)
+        }
     }
 
     // MARK: - 导航栏

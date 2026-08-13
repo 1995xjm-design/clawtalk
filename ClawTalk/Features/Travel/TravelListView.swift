@@ -115,6 +115,10 @@ struct TravelListView: View {
         .onAppear {
             voiceController.restoreWakeListening()
         }
+        .overlay(alignment: .bottom) {
+            GlobalVoiceInputFloating(settingsStore: settingsStore)
+                .padding(.bottom, 20)
+        }
     }
 
     // MARK: - 出行行

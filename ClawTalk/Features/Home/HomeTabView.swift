@@ -15,7 +15,8 @@ struct HomeTabView: View {
     private let chatViewModel: ChatViewModel?
     /// N0：主页空白处长按 → 工具页（由 App 层接线弹 ToolsView）。
     private let onOpenTools: (() -> Void)?
-
+    /// H1：实时语音入口回调（由 App 层接线弹 RealtimeVoiceView 全屏页；nil = 不显示入口）。
+    private let onOpenRealtimeVoice: (() -> Void)?
     /// S10：4 列弹性网格（小卡 1 列 / 中卡 2 列 / 大卡 4 列，对齐 iOS 小组件比例）。
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 12), count: 4)
 
@@ -47,24 +48,33 @@ struct HomeTabView: View {
     /// S10：编辑态抖动驱动。
     @State private var wobbleTick = false
 
-    /// 今日日记数：TODO(主智能体接线) Diary 组暂无 DiaryStore 类，日记数据在
-    /// VoiceDiaryViewModel.entries；等日记组接口就绪后改为「entries 中 date 为今天的条数」。
-    @State private var todayDiaryCount = 0
+    /// J3：语音日记数据源（今日日记数/待办数统计；与日记组共用 entries 持久化）。
+    @State private var diaryViewModel: VoiceDiaryViewModel?
 
-    /// 待办数：TODO(主智能体接线) 待办数数据源待定（可参考 DailyBriefView 用
-    /// RemindersCapability 读系统待办，或接日记组待办联动），就绪后替换。
-    @State private var todayTodoCount = 0
+    /// J3：今日日记数——语音日记 entries 中今天创建的条数（含日记/待办/灵感类别）。
+    private var todayDiaryCount: Int {
+        guard let diaryViewModel else { return 0 }
+        return diaryViewModel.entries.filter { Calendar.current.isDateInToday($0.date) }.count
+    }
+
+    /// J3：今日待办数——语音日记中自动归类为待办且今天创建的条数（诚实来源：本地日记待办联动）。
+    private var todayTodoCount: Int {
+        guard let diaryViewModel else { return 0 }
+        return diaryViewModel.entries.filter { $0.category == .todo && Calendar.current.isDateInToday($0.date) }.count
+    }
 
     init(
         settings: SettingsStore,
         gatewayConnection: GatewayConnection? = nil,
         chatViewModel: ChatViewModel? = nil,
-        onOpenTools: (() -> Void)? = nil
+        onOpenTools: (() -> Void)? = nil,
+        onOpenRealtimeVoice: (() -> Void)? = nil
     ) {
         self.settings = settings
         self.gatewayConnection = gatewayConnection
         self.chatViewModel = chatViewModel
         self.onOpenTools = onOpenTools
+        self.onOpenRealtimeVoice = onOpenRealtimeVoice
         _careStore = State(initialValue: CareReminderStore())
         _habitStore = State(initialValue: HabitStore())
         _geofenceStore = State(initialValue: GeofenceStore())
@@ -77,12 +87,28 @@ struct HomeTabView: View {
             NavigationStack {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 20) {
-                        if let assistantViewModel {
-                            VoiceAssistantCardSlot(content: VoiceAssistantCardView(viewModel: assistantViewModel, settingsStore: settings))
-                                .padding(.horizontal, 16)
-                        } else {
-                            VoiceAssistantCardSlot()
-                                .padding(.horizontal, 16)
+                        Group {
+                            if let assistantViewModel {
+                                VoiceAssistantCardSlot(content: VoiceAssistantCardView(viewModel: assistantViewModel, settingsStore: settings))
+                            } else {
+                                VoiceAssistantCardSlot()
+                            }
+                        }
+                        .padding(.horizontal, 16)
+                        .overlay(alignment: .bottomTrailing) {
+                            if let onOpenRealtimeVoice {
+                                Button(action: onOpenRealtimeVoice) {
+                                    Image(systemName: "waveform.circle.fill")
+                                        .font(.system(size: 26))
+                                        .foregroundStyle(.white)
+                                        .frame(width: 46, height: 46)
+                                        .background(.ultraThinMaterial, in: Circle())
+                                        .overlay(Circle().stroke(.white.opacity(0.25), lineWidth: 1))
+                                        .shadow(color: .black.opacity(0.3), radius: 4, x: 0, y: 2)
+                                }
+                                .padding(14)
+                                .accessibilityLabel("实时语音")
+                            }
                         }
 
                         todayOverviewSection
@@ -90,6 +116,7 @@ struct HomeTabView: View {
                         cardsSection
                     }
                     .padding(.vertical, 16)
+                    .padding(.bottom, 240)
                 }
                 .scrollContentBackground(.hidden)
                 .background(.clear)
@@ -139,6 +166,18 @@ struct HomeTabView: View {
                     }
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.openClawRed)
+                } else {
+                    Button {
+                        withAnimation(.easeIn(duration: 0.15)) { isEditingCards = true }
+                    } label: {
+                        Image(systemName: "slider.horizontal.3")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(.openClawRed)
+                            .frame(width: 34, height: 34)
+                            .background(Circle().fill(Color(.systemGray5)))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("编辑卡片")
                 }
             }
 
@@ -232,10 +271,10 @@ struct HomeTabView: View {
                 destination(for: kind, size: size)
             } label: {
                 cardContent(for: kind, size: size)
-                    .gridCellColumns(size.gridColumns)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .gridCellColumns(size.gridColumns)
             .highPriorityGesture(
                 LongPressGesture(minimumDuration: 0.45)
                     .onEnded { _ in
@@ -448,10 +487,14 @@ struct HomeTabView: View {
         assistantViewModel = vm
     }
 
-    /// 今日概览接线：创建自动化数据源（本地任务实时读取；网关 cron 排程后回填 nextRunAt）。
+    /// 今日概览接线：创建自动化数据源（本地任务实时读取；网关 cron 排程后回填 nextRunAt）；
+    /// J3：同时创建语音日记数据源（今日日记数/待办数，与日记页同一份本地持久化）。
     private func configureOverviewIfNeeded() {
         guard automationViewModel == nil else { return }
         automationViewModel = AutomationViewModel(settings: settings)
+        if diaryViewModel == nil {
+            diaryViewModel = VoiceDiaryViewModel(settingsStore: settings, careReminderStore: careStore)
+        }
     }
 
     private static func timeText(_ date: Date) -> String {

@@ -44,6 +44,13 @@ final class ToolsViewModel {
     private let settings: SettingsStore
     private let gatewayConnection: GatewayConnection?
 
+    /// I1：网关记忆工具名候选（实测 2026-08-13：`memory_search` 是 OpenClaw 官方记忆工具名，
+    /// 当前网关 404 的根因是 openclaw.json 里 `plugins.slots.memory = "none"`（记忆模块未启用），
+    /// 不是工具名错误。这里保留候选列表，未来网关启用记忆模块后即恢复；若网关改名，
+    /// 直接追加候选名即可，无需改调用逻辑。
+    private let memorySearchToolCandidates = ["memory_search", "memory-core"]
+    private let memoryGetToolCandidates = ["memory_get", "memory-core"]
+
     init(settings: SettingsStore, gatewayConnection: GatewayConnection? = nil) {
         self.settings = settings
         self.gatewayConnection = gatewayConnection
@@ -118,19 +125,23 @@ final class ToolsViewModel {
         errorMessage = nil
 
         do {
-            let data = try await client.invokeTool(
-                tool: "memory_search",
+            let data = try await invokeMemoryTool(
+                candidates: memorySearchToolCandidates,
                 args: [
                     "query": .string(query),
                     "maxResults": .int(20),
                     "minScore": .double(0.15)
-                ],
-                gatewayURL: gatewayURL,
-                token: token
+                ]
             )
             // Result is {content, details} — details has the structured data
             let wrapper = try JSONDecoder().decode(ToolResultWrapper<MemorySearchResults>.self, from: data)
             memoryResults = wrapper.details?.results ?? []
+        } catch let error as OpenClawError {
+            if case .toolNotFound(let name) = error {
+                errorMessage = "网关记忆工具未启用（\(name)）。请确认 openclaw.json 已启用记忆模块（plugins.slots.memory 不为 none）后重试。"
+            } else {
+                errorMessage = error.localizedDescription
+            }
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -147,19 +158,52 @@ final class ToolsViewModel {
             if let from { args["from"] = .int(from) }
             if let lines { args["lines"] = .int(lines) }
 
-            let data = try await client.invokeTool(
-                tool: "memory_get",
-                args: args,
-                gatewayURL: gatewayURL,
-                token: token
+            let data = try await invokeMemoryTool(
+                candidates: memoryGetToolCandidates,
+                args: args
             )
             let wrapper = try JSONDecoder().decode(ToolResultWrapper<MemoryGetResult>.self, from: data)
             memoryFileContent = wrapper.details
+        } catch let error as OpenClawError {
+            if case .toolNotFound(let name) = error {
+                errorMessage = "网关记忆工具未启用（\(name)）。请确认 openclaw.json 已启用记忆模块后重试。"
+            } else {
+                errorMessage = error.localizedDescription
+            }
         } catch {
             errorMessage = error.localizedDescription
         }
 
         isLoading = false
+    }
+
+    /// I1：依次尝试候选工具名，跳过「工具不存在」的候选；全部不存在时抛出最后一个 toolNotFound。
+    private func invokeMemoryTool(
+        candidates: [String],
+        action: String? = nil,
+        args: [String: JSONValue]
+    ) async throws -> Data {
+        var lastError: Error = OpenClawError.toolNotFound(candidates.first ?? "memory")
+        for name in candidates {
+            do {
+                return try await client.invokeTool(
+                    tool: name,
+                    action: action,
+                    args: args,
+                    gatewayURL: gatewayURL,
+                    token: token
+                )
+            } catch let error as OpenClawError {
+                if case .toolNotFound = error {
+                    lastError = error
+                    continue
+                }
+                throw error
+            } catch {
+                throw error
+            }
+        }
+        throw lastError
     }
 
     // MARK: - Agents

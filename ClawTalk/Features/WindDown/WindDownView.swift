@@ -156,6 +156,10 @@ struct WindDownView: View {
             stopSpeaking()
             noisePlayer.stop()
         }
+        .overlay(alignment: .bottom) {
+            GlobalVoiceInputFloating(settingsStore: settings)
+                .padding(.bottom, 20)
+        }
     }
 
     // MARK: - 说晚安（TTS 温柔朗读）

@@ -392,6 +392,10 @@ struct SummarizeView: View {
         .navigationBarTitleDisplayMode(.inline)
         .onAppear { viewModel.checkSharedTextOnAppear() }
         .onDisappear { viewModel.discardActiveRecording() }
+        .overlay(alignment: .bottom) {
+            GlobalVoiceInputFloating(settingsStore: settingsStore)
+                .padding(.bottom, 120)
+        }
     }
 
     // MARK: - 内容区
@@ -436,16 +440,31 @@ struct SummarizeView: View {
             }
 
             if viewModel.text.isEmpty {
-                Text("粘贴、分享或按住底部麦克风口述一段长文，选择长度后点「生成摘要」。")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-                    .padding(.vertical, 24)
-                    .frame(maxWidth: .infinity)
-                    .background(
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .fill(Color(.secondarySystemGroupedBackground))
-                    )
+                VStack(spacing: 12) {
+                    Image(systemName: "doc.text")
+                        .font(.system(size: 34))
+                        .foregroundStyle(.secondary)
+                    Text("还没有摘要内容")
+                        .font(.headline)
+                    Text("粘贴文本、从其他 App 分享进来，\n或按住底部麦克风口述一段长文")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                    Button {
+                        viewModel.pasteFromClipboard()
+                    } label: {
+                        Label("从剪贴板粘贴", systemImage: "doc.on.clipboard")
+                            .font(.subheadline.weight(.semibold))
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(.blue)
+                }
+                .padding(.vertical, 24)
+                .frame(maxWidth: .infinity)
+                .background(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(Color(.secondarySystemGroupedBackground))
+                )
             } else {
                 TextEditor(text: $viewModel.text)
                     .frame(minHeight: 140)

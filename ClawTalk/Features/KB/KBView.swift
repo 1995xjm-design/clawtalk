@@ -156,6 +156,7 @@ struct KBView: View {
     @State private var showHoldHint = false
 
     private let hapticsEnabled: Bool
+    private let settingsStore: SettingsStore
     private let recordButtonSize: CGFloat = 56
     /// 按住多久算开始录音（0.3 秒，与文档口述/语音日记一致）。
     private let holdThreshold: UInt64 = 300_000_000
@@ -164,6 +165,7 @@ struct KBView: View {
         _store = State(initialValue: KBStore(settings: settings, agentId: agentId))
         _voiceRecorder = State(initialValue: KBVoiceRecorder(settingsStore: settings))
         self.hapticsEnabled = settings.settings.hapticsEnabled
+        self.settingsStore = settings
     }
 
     var body: some View {
@@ -181,6 +183,10 @@ struct KBView: View {
         .onDisappear {
             holdTimer?.cancel()
             voiceRecorder.discardActiveRecording()
+        }
+        .overlay(alignment: .bottom) {
+            GlobalVoiceInputFloating(settingsStore: settingsStore)
+                .padding(.bottom, 20)
         }
     }
 

@@ -26,9 +26,18 @@ struct HabitsView: View {
     // 编辑（行内滑动进入，自由勾选周几）
     @State private var editingHabit: Habit?
 
+    /// 按 SettingsStore.sttProvider 创建 STT（跟随语音设置里的提供商；无豆包 Key 回退 Apple）
+    private static func makeSTT() -> any TranscriptionService {
+        let settings = SettingsStore().settings
+        if settings.sttProvider == .doubao,
+           let key = SecureStorage.shared.doubaoAPIKey, !key.isEmpty {
+            return DoubaoSTTService(apiKey: key, language: settings.whisperLanguage)
+        }
+        return AppleSTTService(language: settings.whisperLanguage)
+    }
     init(store: HabitStore? = nil, stt: (any TranscriptionService)? = nil) {
         _store = State(initialValue: store ?? HabitStore())
-        _stt = State(initialValue: stt ?? AppleSTTService())
+        _stt = State(initialValue: stt ?? HabitsView.makeSTT())
     }
 
     var body: some View {
@@ -125,6 +134,10 @@ struct HabitsView: View {
         .onAppear {
             store.errorMessage = nil
             store.reload()
+        }
+        .overlay(alignment: .bottom) {
+            GlobalVoiceInputFloating(settingsStore: SettingsStore())
+                .padding(.bottom, 20)
         }
     }
 

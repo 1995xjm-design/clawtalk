@@ -85,6 +85,10 @@ struct AutomationListView: View {
                     .background(.bar)
             }
         }
+        .overlay(alignment: .bottom) {
+            GlobalVoiceInputFloating(settingsStore: settings ?? SettingsStore())
+                .padding(.bottom, 20)
+        }
     }
 
     // MARK: - 行

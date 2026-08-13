@@ -19,6 +19,7 @@ struct VoiceDiaryView: View {
     @State private var showHoldHint = false
 
     private let hapticsEnabled: Bool
+    private let settingsStore: SettingsStore
     private let recordButtonSize: CGFloat = 72
     /// 按住多久算开始录音（0.3 秒，与 TalkButton 一致）
     private let holdThreshold: UInt64 = 300_000_000
@@ -36,6 +37,7 @@ struct VoiceDiaryView: View {
         ))
         self.onBack = onBack
         self.hapticsEnabled = settingsStore.settings.hapticsEnabled
+        self.settingsStore = settingsStore
     }
 
     var body: some View {
@@ -55,6 +57,10 @@ struct VoiceDiaryView: View {
         }
         .background(Color(.systemBackground))
         .onDisappear { viewModel.discardActiveRecording() }
+        .overlay(alignment: .bottom) {
+            GlobalVoiceInputFloating(settingsStore: settingsStore)
+                .padding(.bottom, 120)
+        }
     }
 
     // MARK: - 导航栏

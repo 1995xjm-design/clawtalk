@@ -21,6 +21,7 @@ struct CaptureView: View {
     @State private var manualDestination: CaptureDestination = .diary
 
     private let hapticsEnabled: Bool
+    private let settingsStore: SettingsStore
     private let recordButtonSize: CGFloat = 72
     /// 按住多久算开始录音（0.3 秒，与 VoiceDiaryView 一致）
     private let holdThreshold: UInt64 = 300_000_000
@@ -40,6 +41,7 @@ struct CaptureView: View {
         ))
         self.onBack = onBack
         self.hapticsEnabled = settingsStore.settings.hapticsEnabled
+        self.settingsStore = settingsStore
     }
 
     var body: some View {
@@ -60,6 +62,10 @@ struct CaptureView: View {
         }
         .background(Color(.systemBackground))
         .onDisappear { viewModel.discardActiveRecording() }
+        .overlay(alignment: .bottom) {
+            GlobalVoiceInputFloating(settingsStore: settingsStore)
+                .padding(.bottom, 120)
+        }
     }
 
     // MARK: - 导航栏
