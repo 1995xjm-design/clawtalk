@@ -629,7 +629,7 @@ struct WritingComposeView: View {
             }
         }
         .overlay(alignment: .bottom) {
-            GlobalVoiceInputFloating(settingsStore: settingsStore)
+            GlobalVoiceInputFloating(settingsStore: SettingsStore())
                 .padding(.bottom, 120)
         }
     }
