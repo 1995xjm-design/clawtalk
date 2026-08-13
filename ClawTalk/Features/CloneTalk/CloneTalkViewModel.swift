@@ -43,11 +43,6 @@ final class CloneTalkViewModel {
             errorMessage = "先输入一句话，分身才知道要帮你写什么"
             return
         }
-        guard settingsStore.isConfigured else {
-            errorMessage = "尚未连接网关：请先配对或填写网关地址与令牌"
-            return
-        }
-
         isGenerating = true
         didSaveCurrent = false
         generatedText = ""
@@ -55,6 +50,48 @@ final class CloneTalkViewModel {
 
         let prompt = Self.buildPrompt(input: input, style: style, profiles: memoryStore.profiles)
 
+        if settingsStore.settings.voiceAgentChannel == .directDeepSeek {
+            await generateViaDeepSeek(prompt: prompt)
+        } else {
+            await generateViaGateway(prompt: prompt)
+        }
+        isGenerating = false
+    }
+
+    // MARK: - 直连 / 网关生成（T4）
+
+    /// 直连 DeepSeek 通道：本地档案 + 电脑快照注入，不依赖网关。
+    private func generateViaDeepSeek(prompt: String) async {
+        let system = MemoryPromptBuilder.build(
+            profiles: memoryStore.profiles,
+            computerSummary: MemorySyncService.shared.computerSummary,
+            dialogueSnippet: MemorySyncService.shared.recentDialogueSnippet,
+            recentDialogue: [],
+            purpose: "模仿用户口吻改写一句话"
+        )
+        do {
+            for try await delta in DeepSeekDirectClient.shared.stream(
+                messages: [DeepSeekChatMessage(role: "user", content: prompt)],
+                system: system
+            ) {
+                generatedText += delta
+            }
+            let trimmed = generatedText.trimmingCharacters(in: .whitespacesAndNewlines)
+            if trimmed.isEmpty {
+                errorMessage = "没有生成内容，请重试或换个说法"
+            }
+        } catch {
+            errorMessage = AppErrorText.localized(error.localizedDescription)
+            LogCollector.record(module: "AI 分身", "直连生成失败：\(error.localizedDescription)")
+        }
+    }
+
+    /// 网关通道（原实现）：OpenClawClient 流式生成。
+    private func generateViaGateway(prompt: String) async {
+        guard settingsStore.isConfigured else {
+            errorMessage = "尚未连接网关：请先配对或填写网关地址与令牌"
+            return
+        }
         do {
             let stream = client.stream(
                 messages: [Message(role: .user, content: prompt)],
@@ -84,7 +121,6 @@ final class CloneTalkViewModel {
             errorMessage = AppErrorText.localized(error.localizedDescription)
             LogCollector.record(module: "AI 分身", "生成失败：\(error.localizedDescription)")
         }
-        isGenerating = false
     }
 
     // MARK: - 草稿保存

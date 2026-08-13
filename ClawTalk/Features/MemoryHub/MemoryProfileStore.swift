@@ -259,6 +259,54 @@ final class MemoryProfileStore {
         "【\(entry.category.rawValue)】\(entry.summary)\n来源：\(entry.source)"
     }
 
+    // MARK: - 快照导出 / 导入（记忆互通，T4）
+
+    /// 全部档案条目（含事实类，供注入/同步使用；界面展示用 profiles）。
+    var allEntries: [MemoryProfile] {
+        entries
+    }
+
+    /// 导出全部档案条目为 JSON（供上传电脑 / 文件备份）。
+    func exportSnapshot() -> Data? {
+        try? JSONEncoder().encode(entries)
+    }
+
+    /// 导入电脑/外部档案快照并合并去重：
+    /// - 同一 id：保留 lastUpdated 较新的版本
+    /// - 不同 id 但来源+时间戳相同：跳过（同一快照重复拉取不重复入库）
+    /// - 其余追加，并写入聚合键保证 id 稳定
+    /// - 返回新增条数（更新旧条目不计入）
+    func importSnapshot(from data: Data) -> Int {
+        guard let imported = try? JSONDecoder().decode([MemoryProfile].self, from: data),
+              !imported.isEmpty else { return 0 }
+
+        var added = 0
+        var knownKeys = Set(entries.map(Self.externalKey))
+        for entry in imported {
+            if let index = entries.firstIndex(where: { $0.id == entry.id }) {
+                if entry.lastUpdated > entries[index].lastUpdated {
+                    entries[index] = entry
+                }
+                continue
+            }
+            let key = Self.externalKey(entry)
+            guard !knownKeys.contains(key) else { continue }
+            entries.append(entry)
+            knownKeys.insert(key)
+            keys["\(entry.category.rawValue)|外|\(entry.id.uuidString)"] = entry.id
+            added += 1
+        }
+
+        guard added > 0 else { return 0 }
+        save()
+        profiles = Self.ordered(entries)
+        return added
+    }
+
+    /// 外部去重键：来源 + 最近更新时间（秒级），用于避免同一快照重复入库。
+    private static func externalKey(_ entry: MemoryProfile) -> String {
+        "\(entry.source)|\(entry.lastUpdated.timeIntervalSince1970)"
+    }
     // MARK: - 持久化
 
     private func load() {

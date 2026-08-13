@@ -19,7 +19,6 @@ final class ToolsViewModel {
     var sessionHistory: SessionHistoryResult?
 
     // Browser
-    var browserScreenshot: UIImage?
     var desktopScreenshot: UIImage?
     var browserStatusText: String?
     var browserTabsText: String?
@@ -387,34 +386,6 @@ final class ToolsViewModel {
             browserStatusText = wrapper.content?.first?.text ?? "No status"
         } catch {
             errorMessage = error.localizedDescription
-        }
-
-        isLoading = false
-    }
-
-    func takeBrowserScreenshot() async {
-        isLoading = true
-        errorMessage = nil
-
-        do {
-            let data = try await client.invokeTool(
-                tool: "browser",
-                action: "screenshot",
-                args: ["type": .string("jpeg")],
-                gatewayURL: gatewayURL,
-                token: token
-            )
-            let wrapper = try JSONDecoder().decode(ToolResultWrapper<BrowserDetails>.self, from: data)
-            if let imageItem = wrapper.content?.first(where: { $0.type == "image" }),
-               let base64 = imageItem.image?.data,
-               let decoded = Data(base64Encoded: base64) {
-                browserScreenshot = UIImage(data: decoded)
-            } else if let textContent = wrapper.content?.first?.text,
-                      let decoded = Data(base64Encoded: textContent) {
-                browserScreenshot = UIImage(data: decoded)
-            }
-        } catch {
-            errorMessage = Self.isRateLimit(error) ? "网关限流（429），请稍后重试" : error.localizedDescription
         }
 
         isLoading = false

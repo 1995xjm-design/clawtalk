@@ -136,8 +136,22 @@ open class HamsterAppDependencyContainer {
       } catch {
         self.configuration = HamsterConfiguration()
         Logger.statistics.error("init SharedSupport error: \(error.localizedDescription)")
+        ClawLog.record(module: "键盘RIME", "首次启动 SharedSupport 初始化失败: \(error.localizedDescription)")
       }
       return
+    }
+
+    // 修复：非首次运行但沙盒缺 SharedSupport/hamster.yaml 时补解压，不依赖首次运行标志
+    // 场景：主 App 沙盒被系统清理/升级丢失 SharedSupport，但首次运行标志已非 true
+    let sharedSupportYaml = FileManager.sandboxSharedSupportDirectory.appendingPathComponent("hamster.yaml")
+    if !FileManager.default.fileExists(atPath: sharedSupportYaml.path) {
+      do {
+        try FileManager.initSandboxSharedSupportDirectory(override: true)
+        Logger.statistics.info("init SharedSupport (missing hamster.yaml) extracted")
+      } catch {
+        Logger.statistics.error("init SharedSupport (missing hamster.yaml) error: \(error.localizedDescription)")
+        ClawLog.record(module: "键盘RIME", "SharedSupport 缺失补解压失败: \(error.localizedDescription)")
+      }
     }
 
     // 非首次启动从 UserDefault 文件中加载

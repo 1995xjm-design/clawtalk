@@ -58,16 +58,6 @@ struct BrowserView: View {
 
                 // Screenshot section
                 Section {
-                    if let screenshot = viewModel.browserScreenshot {
-                        Image(uiImage: screenshot)
-                            .resizable()
-                            .scaledToFit()
-                            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                    .stroke(Color(.systemGray4), lineWidth: 1)
-                            )
-                    }
                     if let screenshot = viewModel.desktopScreenshot {
                         Image(uiImage: screenshot)
                             .resizable()
@@ -78,15 +68,6 @@ struct BrowserView: View {
                                     .stroke(Color(.systemGray4), lineWidth: 1)
                             )
                     }
-
-                    Button(action: {
-                        Task { await viewModel.takeBrowserScreenshot() }
-                    }) {
-                        Label("截取浏览器屏幕", systemImage: "camera")
-                            .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.bordered)
-                    .tint(.openClawRed)
 
                     Button(action: {
                         Task { await viewModel.takeDesktopScreenshot() }

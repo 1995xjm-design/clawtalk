@@ -41,6 +41,7 @@ enum AgentAPIMode: String, Codable, CaseIterable, Identifiable {
 enum Appearance: String, Codable, CaseIterable, Identifiable {
     case dark
     case light
+    case system
 
     /// Migrate unknown/legacy values back to the dark default.
     init(from decoder: Decoder) throws {
@@ -55,6 +56,13 @@ enum HomeThemeSource: String, Codable {
     case noWallpaper = "none"
     case systemWallpaper
     case customPhoto
+}
+
+enum VoiceAgentChannel: String, Codable, CaseIterable, Identifiable {
+    case gateway = "??"
+    case directDeepSeek = "?? DeepSeek"
+
+    var id: String { rawValue }
 }
 
 struct AppSettings: Codable {
@@ -79,6 +87,7 @@ struct AppSettings: Codable {
     var voiceOutputEnabled: Bool
     var voiceInputEnabled: Bool
     var agentAPIMode: AgentAPIMode
+    var voiceAgentChannel: VoiceAgentChannel
     var showTokenUsage: Bool
     var useWebSocket: Bool
     var webSocketPath: String
@@ -136,6 +145,7 @@ struct AppSettings: Codable {
         voiceOutputEnabled: true,
         voiceInputEnabled: true,
         agentAPIMode: .openResponses,
+        voiceAgentChannel: .gateway,
         showTokenUsage: false,
         useWebSocket: false,
         webSocketPath: "/ws",
@@ -196,6 +206,7 @@ struct AppSettings: Codable {
         voiceOutputEnabled: Bool,
         voiceInputEnabled: Bool,
         agentAPIMode: AgentAPIMode = .openResponses,
+        voiceAgentChannel: VoiceAgentChannel = .gateway,
         showTokenUsage: Bool = false,
         useWebSocket: Bool = false,
         webSocketPath: String = "/ws",
@@ -232,6 +243,7 @@ struct AppSettings: Codable {
         self.voiceOutputEnabled = voiceOutputEnabled
         self.voiceInputEnabled = voiceInputEnabled
         self.agentAPIMode = agentAPIMode
+        self.voiceAgentChannel = voiceAgentChannel
         self.showTokenUsage = showTokenUsage
         self.useWebSocket = useWebSocket
         self.webSocketPath = webSocketPath
@@ -275,6 +287,7 @@ struct AppSettings: Codable {
         voiceOutputEnabled = try container.decode(Bool.self, forKey: .voiceOutputEnabled)
         voiceInputEnabled = try container.decode(Bool.self, forKey: .voiceInputEnabled)
         agentAPIMode = try container.decodeIfPresent(AgentAPIMode.self, forKey: .agentAPIMode) ?? .openResponses
+        voiceAgentChannel = try container.decodeIfPresent(VoiceAgentChannel.self, forKey: .voiceAgentChannel) ?? .gateway
         showTokenUsage = try container.decodeIfPresent(Bool.self, forKey: .showTokenUsage) ?? false
         useWebSocket = try container.decodeIfPresent(Bool.self, forKey: .useWebSocket) ?? false
         hapticsEnabled = try container.decodeIfPresent(Bool.self, forKey: .hapticsEnabled) ?? true
@@ -318,7 +331,7 @@ struct AppSettings: Codable {
         case ttsProvider, sttProvider, fusionBackendURL, openclawVoice, doubaoVoiceID, edgeVoiceID
         case ttsSpeed, ttsPitch
         case wechatBridgeURL, whisperLanguage, voiceOutputEnabled, voiceInputEnabled
-        case agentAPIMode, showTokenUsage, useWebSocket
+        case agentAPIMode, voiceAgentChannel, showTokenUsage, useWebSocket
         case webSocketPath, webSocketPort // webSocketPort for legacy decode only
         case hapticsEnabled
         case appearance
@@ -351,6 +364,7 @@ struct AppSettings: Codable {
         try container.encode(voiceOutputEnabled, forKey: .voiceOutputEnabled)
         try container.encode(voiceInputEnabled, forKey: .voiceInputEnabled)
         try container.encode(agentAPIMode, forKey: .agentAPIMode)
+        try container.encode(voiceAgentChannel, forKey: .voiceAgentChannel)
         try container.encode(showTokenUsage, forKey: .showTokenUsage)
         try container.encode(useWebSocket, forKey: .useWebSocket)
         try container.encode(webSocketPath, forKey: .webSocketPath)

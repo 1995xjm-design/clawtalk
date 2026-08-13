@@ -138,6 +138,12 @@ public extension FileManager {
   // Bool 处理是否成功
   // Error: 处理失败的Error
   func unzip(_ zipURL: URL, dst: URL) async throws {
+    try unzipSync(zipURL, dst: dst, progress: nil)
+  }
+
+  /// 同步解压（带进度回调）
+  /// progress: 0...1，按解压后字节数计算真实百分比
+  func unzipSync(_ zipURL: URL, dst: URL, progress: ((Double) -> Void)? = nil) throws {
     var tempURL = zipURL
 
     // 检测是否为iCloudURL, 需要特殊处理
@@ -168,6 +174,10 @@ public extension FileManager {
       throw "读取Zip文件异常"
     }
 
+    // 统计解压后总字节数，用于真实进度（按文件内容字节计算）
+    let totalSize = archive.reduce(UInt64(0)) { $0 + $1.uncompressedSize }
+    var extractedSize: UInt64 = 0
+
     // 解压缩文件，已存在文件先删除在解压
     for entry in archive {
       let destinationEntryURL = dst.appendingPathComponent(entry.path)
@@ -175,6 +185,10 @@ public extension FileManager {
         try removeItem(at: destinationEntryURL)
       }
       _ = try archive.extract(entry, to: destinationEntryURL, skipCRC32: true)
+      extractedSize += entry.uncompressedSize
+      if let progress, totalSize > 0 {
+        progress(min(1.0, Double(extractedSize) / Double(totalSize)))
+      }
     }
 
     // 不在判断是否包含 schema 文件
@@ -358,6 +372,14 @@ public extension FileManager {
   // 沙盒 Document 目录下日志目录
   static var sandboxRimeLogDirectory: URL {
     sandboxDirectory.appendingPathComponent("RIMELogger", isDirectory: true)
+  }
+
+  /// 沙盒 Rime userData 目录是否就绪（目录存在且非空）
+  /// 用于部署兜底：已标记部署但文件被清理/损坏时需重新部署
+  static var isSandboxRimeUserDataReady: Bool {
+    guard FileManager.default.fileExists(atPath: sandboxUserDataDirectory.path) else { return false }
+    let contents = (try? FileManager.default.contentsOfDirectory(atPath: sandboxUserDataDirectory.path)) ?? []
+    return !contents.isEmpty
   }
 
   // 安装包ShareSupport资源目录

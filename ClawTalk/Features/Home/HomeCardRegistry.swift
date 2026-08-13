@@ -6,6 +6,7 @@ import UniformTypeIdentifiers
 /// 语音助手大卡常驻顶部（固定大卡）；以下 8 张为可配置卡（含「我的记忆」）。
 enum HomeCardKind: String, CaseIterable, Identifiable, Hashable, Codable {
     case memory
+    case cloneTalk
     case record
     case reminders
     case health
@@ -20,6 +21,7 @@ enum HomeCardKind: String, CaseIterable, Identifiable, Hashable, Codable {
     var title: String {
         switch self {
         case .memory: return "我的记忆"
+        case .cloneTalk: return "AI 分身"
         case .record: return "记录"
         case .reminders: return "提醒"
         case .health: return "健康"
@@ -34,6 +36,7 @@ enum HomeCardKind: String, CaseIterable, Identifiable, Hashable, Codable {
     var icon: String {
         switch self {
         case .memory: return "brain.head.profile"
+        case .cloneTalk: return "person.crop.circle.badge.clock"
         case .record: return "square.and.pencil"
         case .reminders: return "bell.badge.fill"
         case .health: return "heart.fill"
@@ -48,6 +51,7 @@ enum HomeCardKind: String, CaseIterable, Identifiable, Hashable, Codable {
     var tint: Color {
         switch self {
         case .memory: return .purple
+        case .cloneTalk: return .pink
         case .record: return .teal
         case .reminders: return .orange
         case .health: return .green
@@ -62,6 +66,7 @@ enum HomeCardKind: String, CaseIterable, Identifiable, Hashable, Codable {
     var summary: String {
         switch self {
         case .memory: return "个人档案 · 对话沉淀 · 记忆搜索"
+        case .cloneTalk: return "以你的口吻生成回复草稿"
         case .record: return "语音日记 · 捕捉 · 口述 · 写作 · 会议"
         case .reminders: return "提醒 · 纪念日 · 到家离开"
         case .health: return "健康 · 习惯打卡 · 健康周报"
@@ -197,5 +202,27 @@ enum HomeCardRegistry {
             kinds.insert(.memory, at: 0)
             storage = storageValue(for: kinds)
         }
+    }
+
+    /// 一次性迁移：老用户存储无「AI 分身」时插到记忆卡之后。
+    static func migrateCloneTalkCardIfNeeded(_ storage: inout String) {
+        let migratedKey = "home.cardsMigratedCloneTalkV1"
+        guard !UserDefaults.standard.bool(forKey: migratedKey) else { return }
+        UserDefaults.standard.set(true, forKey: migratedKey)
+        var kinds = enabledKinds(from: storage)
+        if !kinds.contains(.cloneTalk) {
+            if let memIdx = kinds.firstIndex(of: .memory) {
+                kinds.insert(.cloneTalk, at: memIdx + 1)
+            } else {
+                kinds.append(.cloneTalk)
+            }
+            storage = storageValue(for: kinds)
+        }
+    }
+
+    /// 统一迁移入口：主页读取卡片存储时调用。
+    static func runMigrations(_ storage: inout String) {
+        migrateMemoryCardIfNeeded(&storage)
+        migrateCloneTalkCardIfNeeded(&storage)
     }
 }

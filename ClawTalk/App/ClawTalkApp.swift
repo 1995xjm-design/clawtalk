@@ -225,7 +225,7 @@ struct ClawTalkApp: App {
                 }
             }
             .tint(.openClawRed)
-            .preferredColorScheme(settingsStore.settings.appearance == .dark ? .dark : .light)
+            .preferredColorScheme(settingsStore.settings.preferredColorScheme)
             .task {
                 // 推送与后台刷新接线：首次申请通知权限、注册 APNs、注册 BGAppRefreshTask
                 await PushManager.shared.requestNotificationPermissionIfNeeded()

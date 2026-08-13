@@ -110,6 +110,14 @@ final class VoiceAssistantViewModel {
     private let agentId: String
     /// 独立发送链路持有的 OpenClawClient（与 SyncChatViewModel 同模式）。
     private let openClaw = OpenClawClient()
+    /// 本地记忆档案（直连 DeepSeek 通道注入用；懒加载，读不到时诚实降级为无档案）。
+    private lazy var memoryStore: MemoryProfileStore = {
+        let store = MemoryProfileStore(settings: settings)
+        if store.profiles.isEmpty {
+            store.refreshFromConversations()
+        }
+        return store
+    }()
     /// 连续对讲内的上下文历史（独立路径；每轮结束后保留，最多 20 条）。
     private var conversationHistory: [Message] = []
 
@@ -510,10 +518,60 @@ final class VoiceAssistantViewModel {
     /// - 兼容路径（注入了 chatViewModel）：复用 ChatViewModel 的 sendText + messages 轮询，
     ///   并持续抑制其自带朗读（语音助手自己控制 TTS 场景音量/打断）。
     private func requestAgentReply(_ text: String) async throws -> String {
+        if settings.settings.voiceAgentChannel == .directDeepSeek {
+            return try await requestAgentReplyViaDeepSeek(text)
+        }
         if let chatViewModel {
             return try await requestAgentReplyViaChatViewModel(text, chatViewModel: chatViewModel)
         }
         return try await requestAgentReplyViaGateway(text)
+    }
+
+    /// 直连 DeepSeek 通道：本地档案 + 电脑快照 + 本轮上下文注入，不依赖网关。
+    private func requestAgentReplyViaDeepSeek(_ text: String) async throws -> String {
+        guard DeepSeekDirectClient.shared.apiKey != nil else {
+            throw VoiceAssistantError.notConfigured("未配置 DeepSeek API Key：请到 设置 → 语音助手通道 填写。")
+        }
+        conversationHistory.append(Message(role: .user, content: text))
+        trimConversationHistory()
+
+        var recentDialogue: [String] = []
+        for message in conversationHistory.suffix(8) {
+            let who = message.role == .user ? "我" : "助手"
+            recentDialogue.append("\(who)：\(message.content)")
+        }
+        let system = MemoryPromptBuilder.build(
+            profiles: memoryStore.profiles,
+            computerSummary: MemorySyncService.shared.computerSummary,
+            dialogueSnippet: MemorySyncService.shared.recentDialogueSnippet,
+            recentDialogue: recentDialogue,
+            purpose: "作为 ClawTalk 语音助手回答用户"
+        )
+        let chatMessages = conversationHistory.compactMap(DeepSeekChatMessage.from)
+
+        var reply = ""
+        let deadline = Date().addingTimeInterval(90)
+        do {
+            for try await delta in DeepSeekDirectClient.shared.stream(messages: chatMessages, system: system) {
+                try Task.checkCancellation()
+                if Date() > deadline {
+                    throw VoiceAssistantError.timeout
+                }
+                reply += delta
+            }
+        } catch {
+            removeConversationUserMessage(text)
+            throw error
+        }
+
+        let trimmed = reply.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            removeConversationUserMessage(text)
+            throw VoiceAssistantError.emptyReply
+        }
+        conversationHistory.append(Message(role: .assistant, content: trimmed))
+        trimConversationHistory()
+        return trimmed
     }
 
     /// 兼容路径：ChatViewModel sendText + 轮询 messages。

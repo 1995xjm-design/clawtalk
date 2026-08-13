@@ -41,7 +41,7 @@ struct OnboardingView: View {
             UIPageControl.appearance().pageIndicatorTintColor = UIColor(.openClawRed).withAlphaComponent(0.3)
         }
         .background(Color(.systemBackground))
-        .preferredColorScheme(settingsStore.settings.appearance == .dark ? .dark : .light)
+        .preferredColorScheme(settingsStore.settings.preferredColorScheme)
     }
 
     // MARK: - Welcome

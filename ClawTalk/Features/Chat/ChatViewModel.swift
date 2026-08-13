@@ -464,6 +464,12 @@ final class ChatViewModel {
         var runCancelled = false
 
         do {
+            if settings.settings.voiceAgentChannel == .directDeepSeek {
+                if !(images?.isEmpty ?? true) || file != nil {
+                    throw ChatError.agentError("直连 DeepSeek 模式暂不支持图片/文件附件，请切换到网关频道。")
+                }
+                try await sendMessageViaDeepSeek()
+            } else {
             guard settings.isConfigured else {
                 throw ChatError.notConfigured("请在设置中配置你的 OpenClaw 网关。")
             }
@@ -493,6 +499,7 @@ final class ChatViewModel {
                 }
             } else {
                 try await sendMessageViaHTTP(images: images)
+            }
             }
 
             notifySuccess()
@@ -570,6 +577,68 @@ final class ChatViewModel {
     }
 
     // MARK: - WebSocket Send Path
+
+    /// 直连 DeepSeek 通道：本地记忆快照 + DeepSeek API 生成回复（不依赖网关）。
+    private func sendMessageViaDeepSeek() async throws {
+        let history = messages.filter { !$0.isStreaming }
+        let chatMessages = history.compactMap(DeepSeekChatMessage.from)
+
+        var recentDialogue: [String] = []
+        for message in history.suffix(10) {
+            let who = message.role == .user ? "我" : "助手"
+            recentDialogue.append("\(who)：\(message.content)")
+        }
+        let memory = MemoryProfileStore(settings: settings)
+        let system = MemoryPromptBuilder.build(
+            profiles: memory.profiles,
+            computerSummary: MemorySyncService.shared.computerSummary,
+            dialogueSnippet: MemorySyncService.shared.recentDialogueSnippet,
+            recentDialogue: recentDialogue,
+            purpose: "回答用户的提问"
+        )
+
+        state = .streaming
+        var fullResponse = ""
+        let deadline = Date().addingTimeInterval(120)
+        for try await delta in DeepSeekDirectClient.shared.stream(messages: chatMessages, system: system) {
+            try Task.checkCancellation()
+            if Date() > deadline {
+                throw ChatError.networkError("DeepSeek 响应超时，请稍后重试")
+            }
+            fullResponse += delta
+            if let index = messages.lastIndex(where: { $0.role == .assistant && $0.isStreaming }) {
+                messages[index].content = fullResponse
+            }
+        }
+        let trimmed = fullResponse.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            throw ChatError.agentError("DeepSeek 没有返回内容，请重试或换个说法")
+        }
+        if let index = messages.lastIndex(where: { $0.role == .assistant && $0.isStreaming }) {
+            messages[index].content = trimmed
+            messages[index].isStreaming = false
+        }
+
+        // 可选朗读：与网关路径一致（语音输出开启且已配置 TTS 时朗读，失败不阻塞发送）。
+        if settings.settings.voiceOutputEnabled, speechService != nil {
+            do {
+                state = .speaking
+                try audioPlayback.start()
+                var chunks: [Data] = []
+                for try await chunk in (speechService?.streamSpeech(text: trimmed) ?? AsyncThrowingStream<Data, Error> { $0.finish() }) {
+                    chunks.append(chunk)
+                }
+                for chunk in chunks {
+                    audioPlayback.enqueue(pcmData: chunk)
+                }
+                audioPlayback.markStreamingDone()
+                await audioPlayback.waitUntilFinished()
+            } catch {
+                // 朗读失败不阻塞发送
+            }
+            audioPlayback.stop()
+        }
+    }
 
     private func sendMessageViaWebSocket(_ content: String, images: [Data]? = nil, audioAttachment: VoiceMessageAttachment? = nil, gateway: GatewayConnection) async throws {
         // Subscribe to chat events BEFORE sending to avoid missing any

@@ -43,6 +43,8 @@ struct HomeTabView: View {
 
     /// S10：卡片编辑态（长按卡片进入；点空白 / 「完成」退出）。
     @State private var isEditingCards = false
+    /// T4：主页「常用卡片」标题行「管理」按钮弹出卡片管理页。
+    @State private var isManagingCards = false
     /// S10：拖拽目标高亮卡片。
     @State private var targetedKind: HomeCardKind?
     /// S10：编辑态抖动驱动。
@@ -178,10 +180,24 @@ struct HomeTabView: View {
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel("编辑卡片")
+                    Button {
+                        isManagingCards = true
+                    } label: {
+                        Image(systemName: "square.grid.2x2")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(.openClawRed)
+                            .frame(width: 34, height: 34)
+                            .background(Circle().fill(Color(.systemGray5)))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("管理卡片")
                 }
             }
 
             cardGrid
+        }
+        .sheet(isPresented: $isManagingCards) {
+            HomeCardManagerView()
         }
         .padding(.horizontal, 16)
     }
@@ -367,7 +383,7 @@ struct HomeTabView: View {
     /// S10：老用户存储迁移——「我的记忆」并入网格并置于今日概览下方第一格（一次性）。
     private func migrateCardStorageIfNeeded() {
         var stored = enabledCardKindsStorage
-        HomeCardRegistry.migrateMemoryCardIfNeeded(&stored)
+        HomeCardRegistry.runMigrations(&stored)
         if stored != enabledCardKindsStorage {
             enabledCardKindsStorage = stored
         }

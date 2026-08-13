@@ -283,6 +283,14 @@ struct HomeMergedCardPage: View {
                     destination: AnyView(MemoryHubView(settings: settings, gatewayConnection: gatewayConnection))
                 )
             ]
+        case .cloneTalk:
+            return [
+                HomeSection(
+                    id: "clone-talk", title: "AI 分身", icon: "person.crop.circle.badge.clock", tint: .pink,
+                    subtitle: "以你的口吻生成回复草稿",
+                    destination: AnyView(CloneTalkView(settingsStore: settings))
+                )
+            ]
         case .record:
             return [
                 HomeSection(

@@ -2,12 +2,6 @@ import PhotosUI
 import SwiftUI
 import HamsteriOS
 
-/// 唤醒词编辑行：UUID 稳定 id（ForEach 删除/编辑不会因 index 越界崩溃）。
-private struct WakeWordEdit: Identifiable, Equatable {
-    let id = UUID()
-    var word: String
-}
-
 struct SettingsView: View {
     @Bindable var store: SettingsStore
     var gatewayConnection: GatewayConnection
@@ -16,35 +10,19 @@ struct SettingsView: View {
     @AppStorage("clawtalk_wechat_connected") private var wechatConnected = false
 
     @State private var connectionTestState: ConnectionTestState = .idle
-    @State private var previewService: (any SpeechService)?
-    @State private var previewPlayback: AudioPlaybackManager?
-    @State private var isPreviewing = false
-    @State private var previewErrorMessage: String?
     @State private var showResetConfirm = false
     @State private var pendingReset: ResetOption?
     @State private var gatewayProfileStore = GatewayProfileStore()
-    @State private var showAddWakeWord = false
-    @State private var newWakeWord = ""
     @State private var showScanPairing = false
     @State private var scanNotice: String?
     @State private var rescanToken = 0
     @State private var pairingMessage: String?
     @State private var showPairingResult = false
-    @State private var showThemePhotoPicker = false
-    @State private var themePhotoItem: PhotosPickerItem?
-    @State private var wakeWordEdits: [WakeWordEdit] = []
+    @State private var deepSeekKey: String = SecureStorage.shared.getString("deepseek_api_key") ?? ""
+    @State private var memorySyncMessage: String?
 
 
     // MARK: - 唤醒词编辑（本地 UUID 列表，避免 ForEach(id: \.offset) 删除/编辑越界崩溃）
-
-    private func syncWakeWordEdits() {
-        wakeWordEdits = store.settings.voiceWakeWords.map { WakeWordEdit(word: $0) }
-    }
-
-    private func commitWakeWords() {
-        store.settings.voiceWakeWords = wakeWordEdits.map(\.word)
-        store.save()
-    }
 
     /// 唤醒词列表变更且引擎正在监听时热更新（ClawTalkApp 只监听开关变化，词表变化需此处补齐）。
     private func hotReloadVoiceWakeKeywords() {
@@ -59,23 +37,6 @@ struct SettingsView: View {
         }
     }
 
-    private func removeWakeWord(_ edit: WakeWordEdit) {
-        wakeWordEdits.removeAll { $0.id == edit.id }
-        commitWakeWords()
-        hotReloadVoiceWakeKeywords()
-    }
-
-    private func addWakeWord(_ word: String) {
-        wakeWordEdits.append(WakeWordEdit(word: word))
-        commitWakeWords()
-        hotReloadVoiceWakeKeywords()
-    }
-
-    private func resetWakeWords() {
-        wakeWordEdits = [WakeWordEdit(word: "你好小爪")]
-        commitWakeWords()
-        hotReloadVoiceWakeKeywords()
-    }
     enum ResetOption: String, CaseIterable, Identifiable {
         case onboarding = "仅重置新手引导"
         case gateway = "重置引导并清除网关配置"
@@ -95,12 +56,10 @@ struct SettingsView: View {
             Form {
                 connectionSection
             keyboardSection
+                skinSection
+                voiceSettingsSection
+                voiceAgentSection
                 displaySection
-                appearanceSection
-                liveActivitySection
-                voiceSection
-                ttsSection
-                sttSection
                 wechatSection
                 dataSection
                 securitySection
@@ -120,6 +79,9 @@ struct SettingsView: View {
             }
             .navigationTitle("设置")
             .navigationBarTitleDisplayMode(.inline)
+            .onChange(of: deepSeekKey) { _, newValue in
+                SecureStorage.shared.setString(newValue.isEmpty ? nil : newValue, forKey: "deepseek_api_key")
+            }
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button {
@@ -141,28 +103,13 @@ struct SettingsView: View {
                         .fontWeight(.semibold)
                 }
             }
-            .alert("语音预览失败", isPresented: Binding(
-                get: { previewErrorMessage != nil },
-                set: { if !$0 { previewErrorMessage = nil } }
+            .alert("同步电脑记忆", isPresented: Binding(
+                get: { memorySyncMessage != nil },
+                set: { if !$0 { memorySyncMessage = nil } }
             )) {
                 Button("好", role: .cancel) {}
             } message: {
-                Text(previewErrorMessage ?? "")
-            }
-            .alert("添加唤醒词", isPresented: $showAddWakeWord) {
-                TextField("唤醒词", text: $newWakeWord)
-                Button("添加") {
-                    let word = newWakeWord.trimmingCharacters(in: .whitespacesAndNewlines)
-                    if !word.isEmpty {
-                        addWakeWord(word)
-                    }
-                    newWakeWord = ""
-                }
-                Button("取消", role: .cancel) {
-                    newWakeWord = ""
-                }
-            } message: {
-                Text("说出该词即可唤醒（建议 2-4 个字）。")
+                Text(memorySyncMessage ?? "")
             }
             .alert("扫码配对", isPresented: $showPairingResult) {
                 Button("好", role: .cancel) {}
@@ -237,106 +184,93 @@ struct SettingsView: View {
         }
         showPairingResult = true
     }
-    // MARK: - 外观（主页主题：内置壁纸/自定义照片/模糊强度）
+    // MARK: - 皮肤 / 语音 / 语音助手通道
 
-    private var appearanceSection: some View {
-        Section("外观") {
-            // 内置壁纸（横排缩略图，点选即应用）
-            HStack(spacing: 12) {
-                // 无壁纸（默认纯色，跟随深浅色）
-                Button {
-                    store.settings.homeThemeSource = .noWallpaper
-                    store.settings.homeWallpaperID = 0
-                    store.settings.homeWallpaperChosen = false
-                    store.settings.customWallpaperPath = nil
-                    store.save()
-                } label: {
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .fill(Color(.systemGroupedBackground))
-                        .frame(width: 54, height: 96)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                .strokeBorder(
-                                    store.settings.homeThemeSource == .noWallpaper
-                                        ? Color.accentColor : Color(.separator).opacity(0.5),
-                                    lineWidth: store.settings.homeThemeSource == .noWallpaper ? 2.5 : 1
-                                )
-                        )
-                        .overlay(
-                            Image(systemName: "rectangle.on.rectangle.slash")
-                                .font(.system(size: 16))
-                                .foregroundStyle(.secondary)
-                        )
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("无壁纸（默认纯色）")
-                ForEach(0..<HomeWallpaper.builtinCount, id: \.self) { id in
-                    Button {
-                        store.settings.homeThemeSource = .systemWallpaper
-                        store.settings.homeWallpaperID = id
-                        store.settings.homeWallpaperChosen = true
-                        store.save()
-                    } label: {
-                        if let image = HomeWallpaper.builtinImage(id: id, size: CGSize(width: 54, height: 96)) {
-                            Image(uiImage: image)
-                                .resizable()
-                                .scaledToFill()
-                                .frame(width: 54, height: 96)
-                                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                        .stroke(
-                                            store.settings.homeThemeSource == .systemWallpaper && store.settings.homeWallpaperID == id
-                                                ? Color.accentColor : Color.clear,
-                                            lineWidth: 2.5
-                                        )
-                                )
-                        }
-                    }
-                    .buttonStyle(.plain)
-                }
-                Spacer()
-            }
-            Button {
-                showThemePhotoPicker = true
+    private var skinSection: some View {
+        Section {
+            NavigationLink {
+                SkinSettingsView(store: store)
             } label: {
-                Label(
-                    store.settings.homeThemeSource == .customPhoto ? "更换自定义壁纸" : "从相册选择壁纸",
-                    systemImage: "photo.on.rectangle"
-                )
+                Label("皮肤", systemImage: "paintpalette")
             }
-            .photosPicker(isPresented: $showThemePhotoPicker, selection: $themePhotoItem, matching: .images)
-            .onChange(of: themePhotoItem) { _, item in
-                guard let item else { return }
-                Task {
-                    defer { themePhotoItem = nil }
-                    guard let data = try? await item.loadTransferable(type: Data.self) else { return }
-                    if let path = HomeWallpaper.saveCustomPhoto(data) {
-                        store.settings.customWallpaperPath = path
-                        store.settings.homeThemeSource = .customPhoto
-                        store.settings.homeWallpaperChosen = true
-                        store.save()
-                    }
-                }
-            }
-            HStack {
-                Text("模糊强度")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                Slider(value: $store.settings.homeBlurStrength, in: 0.1...1.0)
-            }
-            .onChange(of: store.settings.homeBlurStrength) { _, _ in
-                store.save()
-            }
-            Button("恢复默认壁纸") {
-                store.settings.homeThemeSource = .noWallpaper
-                store.settings.homeWallpaperID = 0
-                store.settings.homeWallpaperChosen = false
-                store.settings.customWallpaperPath = nil
-                store.save()
-            }
+        } header: {
+            Text("皮肤")
+        } footer: {
+            Text("主题（深色/浅色/跟随系统）、墙纸、全局毛玻璃与灵动岛样式。")
         }
     }
+
+    private var voiceSettingsSection: some View {
+        Section {
+            NavigationLink {
+                VoiceSettingsView(store: store)
+            } label: {
+                Label("语音设置", systemImage: "waveform.and.mic")
+            }
+        } header: {
+            Text("语音")
+        } footer: {
+            Text("语音输入/输出、文字转语音、语音转文字与语音唤醒。")
+        }
+    }
+
+    private var voiceAgentSection: some View {
+        Section {
+            Picker("通道", selection: $store.settings.voiceAgentChannel) {
+                ForEach(VoiceAgentChannel.allCases) { channel in
+                    Text(channel.rawValue).tag(channel)
+                }
+            }
+            .pickerStyle(.segmented)
+            if store.settings.voiceAgentChannel == .directDeepSeek {
+                SecureField("DeepSeek API Key", text: $deepSeekKey)
+                    .textContentType(.password)
+                Text("直连 DeepSeek 时使用，Key 保存在系统钥匙串（SecureStorage）。")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Button {
+                Task { @MainActor in
+                    memorySyncMessage = "正在同步电脑记忆…"
+                    let base = FileTransferViewModel(settings: store).serverBaseURL
+                    guard let url = URL(string: base) else {
+                        memorySyncMessage = "同步失败：文件服务地址不可用"
+                        return
+                    }
+                    let service = MemorySyncService.shared
+                    var ok = false
+                    if let exportData = MemoryProfileStore().exportSnapshot() {
+                        ok = await service.uploadPhoneSnapshot(exportData: exportData, baseURL: url)
+                    }
+                    let snapshot = await service.fetchComputerSnapshot(baseURL: url)
+                    if snapshot != nil, ok {
+                        memorySyncMessage = "记忆同步完成：档案已上传，电脑快照已拉取"
+                    } else if snapshot != nil {
+                        memorySyncMessage = "电脑快照已拉取，档案上传未完成（检查电脑文件服务）"
+                    } else {
+                        memorySyncMessage = ok ? "档案已上传，电脑快照拉取失败" : "同步失败：电脑文件服务不可达"
+                    }
+                }
+            } label: {
+                Label("同步电脑记忆", systemImage: "arrow.triangle.2.circlepath")
+            }
+        } header: {
+            Text("语音助手通道")
+        } footer: {
+            Text("网关=走 OpenClaw 网关回复；直连 DeepSeek=绕过网关直连模型（需 API Key），配合记忆快照离线可用。")
+        }
+    }
+
+    private var displaySection: some View {
+        Section {
+            Toggle("显示 Token 用量", isOn: $store.settings.showTokenUsage)
+        } header: {
+            Text("显示")
+        } footer: {
+            Text("在助手消息下显示输入/输出 Token 用量，需 Open Responses API 模式。")
+        }
+    }
+
     // MARK: - Connection
 
         private var keyboardSection: some View {
@@ -424,294 +358,17 @@ private var connectionSection: some View {
 
     // MARK: - Display
 
-    private var displaySection: some View {
-        Section {
-            Picker("外观", selection: $store.settings.appearance) {
-                Text("深色").tag(Appearance.dark)
-                Text("浅色").tag(Appearance.light)
-            }
-            .pickerStyle(.segmented)
-
-            Toggle("显示 Token 用量", isOn: $store.settings.showTokenUsage)
-
-            HStack {
-                Text("全局毛玻璃")
-                Spacer()
-                Button {
-                    store.settings.globalGlassEnabled.toggle()
-                    store.save()
-                } label: {
-                    Text(store.settings.globalGlassEnabled ? "已开启" : "关闭")
-                        .font(.caption.weight(.semibold))
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 5)
-                        .background(
-                            Capsule().fill(
-                                store.settings.globalGlassEnabled
-                                    ? Color.green.opacity(0.18)
-                                    : Color(.systemGray5)
-                            )
-                        )
-                        .foregroundStyle(store.settings.globalGlassEnabled ? Color.green : Color.secondary)
-                }
-                .buttonStyle(.plain)
-            }
-        } header: {
-            Text("显示")
-        } footer: {
-            Text("在助手消息下显示输入/输出 Token 用量，需 Open Responses API 模式。开启全局毛玻璃后，主页与频道背景启用磨砂材质（配合壁纸效果最佳）。")
-        }
-    }
 
     // MARK: - 灵动岛 / Live Activity
 
     /// 灵动岛/锁屏卡片风格与「随 agent 切换」设置。
-    private var liveActivitySection: some View {
-        Section {
-            Picker("风格", selection: $store.settings.liveActivityStyle) {
-                ForEach(LiveActivityStyle.allCases) { style in
-                    Text(style.displayName).tag(style)
-                }
-            }
-            .pickerStyle(.segmented)
-            .onChange(of: store.settings.liveActivityStyle) { _, _ in
-                refreshLiveActivityStyle()
-            }
-            VStack(alignment: .leading, spacing: 6) {
-                Text("样式预览（\(store.settings.liveActivityStyle.displayName)）")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                LiveActivityPreviewCard(
-                    style: store.settings.liveActivityStyle,
-                    channelName: "语音助手",
-                    statusText: "正在聆听…"
-                )
-            }
-            .padding(.vertical, 4)
-
-            Toggle("随 agent 切换", isOn: $store.settings.liveActivityFollowAgent)
-                .onChange(of: store.settings.liveActivityFollowAgent) { _, _ in
-                    refreshLiveActivityStyle()
-                }
-        } header: {
-            Text("灵动岛")
-        } footer: {
-            Text("免提对话期间的锁屏/灵动岛卡片风格：简约=仅状态；标准=频道名+状态；详细=图标+频道名+状态两行。开启「随 agent 切换」后，切换频道/agent 时卡片自动改为新 agent 名称。Live Activity 本地更新仅在 App 前台/后台任务期间生效（未配置 APNs 推送更新）。")
-        }
-    }
 
     // MARK: - Voice Toggle
 
-    private var voiceSection: some View {
-        Section {
-            Toggle("语音输入（语音转文字）", isOn: $store.settings.voiceInputEnabled)
-            Toggle("语音输出（文字转语音）", isOn: $store.settings.voiceOutputEnabled)
-            Toggle("语音助手显示实时转写", isOn: $store.settings.voiceAssistantShowTranscript)
-            Toggle("触感反馈", isOn: $store.settings.hapticsEnabled)
-            Toggle("语音唤醒", isOn: $store.settings.voiceWakeEnabled)
-            if store.settings.voiceWakeEnabled {
-                Picker("唤醒后进入的频道", selection: $store.settings.voiceWakeChannelID) {
-                    Text("自动（默认频道）").tag(nil as String?)
-                    ForEach(ChannelStore.shared.channels) { channel in
-                        Text(channel.name).tag(channel.id.uuidString as String?)
-                    }
-                }
-                VStack(alignment: .leading, spacing: 10) {
-                    ForEach($wakeWordEdits) { $edit in
-                        HStack(spacing: 8) {
-                            TextField("唤醒词", text: $edit.word)
-                                .autocorrectionDisabled()
-                                .textInputAutocapitalization(.never)
-                            Button {
-                                removeWakeWord(edit)
-                            } label: {
-                                Image(systemName: "minus.circle.fill")
-                                    .foregroundStyle(.red)
-                            }
-                            .buttonStyle(.borderless)
-                        }
-                    }
-                    HStack {
-                        Button("添加词") {
-                            newWakeWord = ""
-                            showAddWakeWord = true
-                        }
-                        Spacer()
-                        Button("重置默认") {
-                            resetWakeWords()
-                        }
-                    }
-                    .font(.subheadline)
-                }
-                .onAppear(perform: syncWakeWordEdits)
-                .onChange(of: wakeWordEdits) { _, _ in
-                    commitWakeWords()
-                }
-                Text("每个词一行，任一唤醒词命中即进入免提对话；唤醒后进入你选的频道。")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-        } header: {
-            Text("语音")
-        } footer: {
-            Text("关闭语音输出可纯文字聊天；语音输入使用设备端识别；语音唤醒需麦克风与语音识别权限；开启后前台/后台均可唤醒。")
-        }
-    }
 
     // MARK: - TTS Provider
 
-    private var ttsSection: some View {
-        Section {
-            Picker("提供商", selection: $store.settings.ttsProvider) {
-                ForEach(TTSProvider.allCases) { provider in
-                    Text(provider.rawValue).tag(provider)
-                }
-            }
 
-            switch store.settings.ttsProvider {
-            case .apple:
-                voicePreviewButton
-            case .doubao:
-                SecureField("豆包 API Key", text: $store.doubaoAPIKey)
-                    .textContentType(.password)
-                Picker("音色", selection: $store.settings.doubaoVoiceID) {
-                    Text("鸡汤妹妹 Hope 2.0").tag("zh_female_jitangmei_uranus_bigtts")
-                    Text("温柔淑女 2.0").tag("zh_female_wenroushunv_uranus_bigtts")
-                    Text("甜美小源 2.0").tag("zh_female_tianmeixiaoyuan_uranus_bigtts")
-                    Text("渊博小叔 2.0").tag("zh_male_yuanboxiaoshu_uranus_bigtts")
-                    Text("爽朗少年 Brayan 2.0").tag("zh_male_shaonianzixin_uranus_bigtts")
-                }
-                TextField("自定义音色 ID", text: $store.settings.doubaoVoiceID)
-                    .autocorrectionDisabled()
-                    .textInputAutocapitalization(.never)
-                Text("在豆包语音控制台「音色库」获取音色 ID。中文合成需账号开通。")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                voicePreviewButton
-            case .edge:
-                Picker("音色", selection: $store.settings.edgeVoiceID) {
-                    Text("晓晓（女）").tag("zh-CN-XiaoxiaoNeural")
-                    Text("小艺").tag("zh-CN-XiaoyiNeural")
-                    Text("云希（男）").tag("zh-CN-YunxiNeural")
-                    Text("云扬（男）").tag("zh-CN-YunyangNeural")
-                    Text("云健（男）").tag("zh-CN-YunjianNeural")
-                    Text("云夏（女）").tag("zh-CN-YunxiaNeural")
-                    Text("晓曼（粤语·女）").tag("zh-HK-HiuMaanNeural")
-                    Text("云龙（粤语·男）").tag("zh-HK-WanLungNeural")
-                    Text("晓佳（粤语·女）").tag("zh-HK-HiuGaaiNeural")
-                    Text("晓臻（台湾·女）").tag("zh-TW-HsiaoChenNeural")
-                }
-                Text("微软 Edge 免费接口，无需 API Key。晓墨（zh-CN-XiaomoNeural）已被微软移除（实测 Unsupported voice），用同为女声的「小艺」替代。")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                voicePreviewButton
-            }
-
-            if store.settings.ttsProvider != .doubao {
-                speedSlider
-                pitchSlider
-            }
-        } header: {
-            Text("文字转语音")
-        } footer: {
-            switch store.settings.ttsProvider {
-            case .apple:
-                Text("使用苹果系统内置语音，免费且支持离线，但自然度一般。")
-            case .doubao:
-                Text("豆包语音合成大模型（seed-tts-2.0），流式直连，音质自然。")
-            case .edge:
-                Text("微软 Edge 免费接口（非官方），无需 API Key；24kHz 高音质，需联网。")
-            }
-        }
-    }
-
-    private var ttsSpeedBinding: Binding<Double> {
-        Binding(
-            get: { Double(store.settings.ttsSpeed) },
-            set: { store.settings.ttsSpeed = Int($0.rounded()) }
-        )
-    }
-
-    private var ttsPitchBinding: Binding<Double> {
-        Binding(
-            get: { Double(store.settings.ttsPitch) },
-            set: { store.settings.ttsPitch = Int($0.rounded()) }
-        )
-    }
-
-    private var speedSlider: some View {
-        HStack {
-            Text("语速")
-                .frame(width: 44, alignment: .leading)
-            Slider(value: ttsSpeedBinding, in: -50...50, step: 5)
-            Text(speedValueText)
-                .frame(width: 44, alignment: .trailing)
-                .monospacedDigit()
-                .foregroundStyle(.secondary)
-        }
-    }
-
-    private var pitchSlider: some View {
-        HStack {
-            Text("音调")
-                .frame(width: 44, alignment: .leading)
-            Slider(value: ttsPitchBinding, in: -10...10, step: 1)
-            Text(pitchValueText)
-                .frame(width: 44, alignment: .trailing)
-                .monospacedDigit()
-                .foregroundStyle(.secondary)
-        }
-    }
-
-    private var speedValueText: String {
-        store.settings.ttsSpeed > 0 ? "+\(store.settings.ttsSpeed)" : "\(store.settings.ttsSpeed)"
-    }
-
-    private var pitchValueText: String {
-        store.settings.ttsPitch > 0 ? "+\(store.settings.ttsPitch)" : "\(store.settings.ttsPitch)"
-    }
-    // MARK: - STT Model
-
-    private var sttSection: some View {
-        Section {
-            Picker("提供商", selection: $store.settings.sttProvider) {
-                ForEach(STTProvider.allCases) { provider in
-                    Text(provider.rawValue).tag(provider)
-                }
-            }
-
-            switch store.settings.sttProvider {
-            case .apple:
-                Picker("识别语言", selection: $store.settings.whisperLanguage) {
-                    Text("中文").tag("zh")
-                    Text("跟随系统").tag("auto")
-                }
-                Text("使用 iOS 系统自带识别（支持中文、可离线），无需下载模型。")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            case .doubao:
-                SecureField("豆包 API Key", text: $store.doubaoAPIKey)
-                    .textContentType(.password)
-                Text("豆包流式语音识别大模型，支持普通话与方言（粤语等），需在豆包语音控制台开通。")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-        } header: {
-            Text("语音转文字")
-        } footer: {
-            if !store.settings.voiceInputEnabled {
-                Text("语音输入已关闭，请在上方开启以使用语音转文字。")
-            } else {
-                switch store.settings.sttProvider {
-                case .apple:
-                    Text("使用 iOS 系统识别，设备端离线运行，无需下载模型。")
-                case .doubao:
-                    Text("音频发送到豆包语音识别服务（网络识别，支持方言）。")
-                }
-            }
-        }
-        .disabled(!store.settings.voiceInputEnabled)
-    }
     // MARK: - WeChat Bind
 
     private var wechatSection: some View {
@@ -877,111 +534,6 @@ private var connectionSection: some View {
         }
     }
 
-    /// 灵动岛风格/「随 agent 切换」变更后，用当前卡片状态按新风格重刷。
-    private func refreshLiveActivityStyle() {
-        store.save()
-        ClawTalkLiveActivity.update(
-            statusText: "免提对话",
-            icon: "💬"
-        )
-    }
-
-    // MARK: - Voice Preview
-
-    private var voicePreviewButton: some View {
-        Button(action: { isPreviewing ? stopPreview() : startPreview() }) {
-            HStack {
-                Text(isPreviewing ? "Stop Preview" : "Preview Voice")
-                Spacer()
-                if isPreviewing {
-                    Image(systemName: "stop.circle.fill")
-                        .foregroundStyle(.openClawRed)
-                } else {
-                    Image(systemName: "play.circle.fill")
-                        .foregroundStyle(.openClawRed)
-                }
-            }
-        }
-        .disabled(previewDisabled)
-    }
-
-    private var previewDisabled: Bool {
-        switch store.settings.ttsProvider {
-        case .doubao:
-            return store.doubaoAPIKey.isEmpty
-        case .apple:
-            return false
-        case .edge:
-            return false
-        }
-    }
-    private func startPreview() {
-        let sampleText = "你好，这是你的语音预览。"
-
-        let tts: any SpeechService
-        switch store.settings.ttsProvider {
-        case .doubao:
-            tts = DoubaoTTSService(apiKey: store.doubaoAPIKey, voiceID: store.settings.doubaoVoiceID)
-        case .apple:
-            tts = AppleTTSService(speed: store.settings.ttsSpeed, pitch: store.settings.ttsPitch)
-        case .edge:
-            tts = EdgeTTSService(voiceID: store.settings.edgeVoiceID, speed: store.settings.ttsSpeed, pitch: store.settings.ttsPitch)
-        }
-        previewService = tts
-        isPreviewing = true
-
-        switch store.settings.ttsProvider {
-        case .apple:
-            // Apple TTS 通过 AVSpeechSynthesizer 直接发声。
-            // 必须真正消费流，AVSpeechSynthesizer 才会开始朗读。
-            Task {
-                do {
-                    for try await _ in tts.streamSpeech(text: sampleText) {}
-                } catch {
-                    let message = "语音预览失败：\(AppErrorText.localized(error.localizedDescription))"
-                    previewErrorMessage = message
-                    LogCollector.record(module: "语音预览", message)
-                }
-            }
-            // 保持原有 4 秒自动复位逻辑（Apple TTS 无完成回调）
-            Task {
-                try? await Task.sleep(for: .seconds(4))
-                if isPreviewing { isPreviewing = false }
-            }
-        default:
-            // 非 Apple TTS 走 PCM 播放
-            let playback = AudioPlaybackManager()
-            previewPlayback = playback
-
-            Task {
-                do {
-                    try playback.start()
-                    let audioStream = tts.streamSpeech(text: sampleText)
-                    for try await chunk in audioStream {
-                        playback.enqueue(pcmData: chunk)
-                    }
-                    playback.markStreamingDone()
-                    await playback.waitUntilFinished()
-                } catch {
-                    // 预览失败时明确提示用户，不再静默
-                    let message = "语音预览失败：\(AppErrorText.localized(error.localizedDescription))"
-                    previewErrorMessage = message
-                    LogCollector.record(module: "语音预览", message)
-                }
-                playback.stop()
-                isPreviewing = false
-                previewPlayback = nil
-            }
-        }
-    }
-
-    private func stopPreview() {
-        previewService?.stop()
-        previewPlayback?.stop()
-        previewPlayback = nil
-        previewService = nil
-        isPreviewing = false
-    }
 
     // MARK: - Security Info
 
@@ -1101,50 +653,6 @@ private var connectionSection: some View {
     }
 }
 /// 灵动岛模拟预览卡：按当前风格渲染黑底胶囊卡片（简约/标准/详细）。
-private struct LiveActivityPreviewCard: View {
-    let style: LiveActivityStyle
-    let channelName: String
-    let statusText: String
-
-    var body: some View {
-        Group {
-            switch style {
-            case .minimal:
-                Text(statusText)
-                    .font(.headline)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
-            case .standard:
-                Text("\(channelName) · \(statusText)")
-                    .font(.headline)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
-            case .detailed:
-                VStack(alignment: .leading, spacing: 2) {
-                    HStack(spacing: 6) {
-                        Text("💬")
-                        Text(channelName)
-                            .font(.headline)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.8)
-                    }
-                    Text(statusText)
-                        .font(.subheadline)
-                        .foregroundStyle(.white.opacity(0.85))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.8)
-                }
-            }
-        }
-        .foregroundStyle(.white)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 18)
-        .padding(.vertical, 12)
-        .background(Capsule().fill(Color.black))
-        .overlay(Capsule().strokeBorder(.white.opacity(0.14), lineWidth: 1))
-        .accessibilityLabel("灵动岛样式预览：\(style.displayName)")
-    }
-}
 
 /// 键盘设置页：UIViewControllerRepresentable 包 HamsteriOS 完整设置页（工程级整合）。
 struct KeyboardSettingsPlaceholderView: View {

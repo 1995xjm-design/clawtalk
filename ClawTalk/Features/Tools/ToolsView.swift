@@ -41,19 +41,6 @@ struct ToolsView: View {
                 }
 
                 Section {
-                    NavigationLink {
-                        HomeCardManagerView()
-                    } label: {
-                        Label("主页卡片管理", systemImage: "square.grid.2x2")
-                            .foregroundStyle(Color.openClawRed)
-                    }
-                } header: {
-                    Text("主页")
-                } footer: {
-                    Text("管理主页显示的卡片：移除的卡片可在这里重新加回，也可在主页长按编辑。")
-                }
-
-                Section {
                     toolRow(.models, label: "模型", icon: "sparkles") {
                         ModelsView(viewModel: viewModel)
                     }
@@ -62,20 +49,6 @@ struct ToolsView: View {
                         CapabilitiesView(settings: settings, nodeConnection: nodeConnection)
                     } label: {
                         Label("能力面板", systemImage: "square.stack.3d.up")
-                            .foregroundStyle(Color.openClawRed)
-                    }
-
-                    NavigationLink {
-                        CloneTalkView(settingsStore: settings)
-                    } label: {
-                        Label("AI 分身", systemImage: "person.crop.circle.badge.clock")
-                            .foregroundStyle(Color.openClawRed)
-                    }
-
-                    NavigationLink {
-                        CastPlayView()
-                    } label: {
-                        Label("投屏控制", systemImage: "airplayvideo")
                             .foregroundStyle(Color.openClawRed)
                     }
 
@@ -137,62 +110,5 @@ struct ToolsView: View {
             }
             .foregroundStyle(.secondary)
         }
-    }
-}
-
-/// 主页卡片管理：开关主页显示的卡片（与 HomeCardRegistry 同一存储，双向同步）。
-private struct HomeCardManagerView: View {
-    @AppStorage(HomeCardRegistry.storageKey) private var storage = HomeCardRegistry.defaultStorageValue
-
-    var body: some View {
-        let enabled = HomeCardRegistry.enabledKinds(from: storage)
-        List {
-            Section {
-                Text("主页卡片与本页实时同步。移除的卡片仍可在工具页找到并随时加回。")
-            }
-            ForEach(HomeCardKind.allCases) { kind in
-                Button {
-                    toggle(kind)
-                } label: {
-                    HStack(spacing: 12) {
-                        Image(systemName: kind.icon)
-                            .font(.title3)
-                            .foregroundStyle(kind.tint)
-                            .frame(width: 28)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(kind.title)
-                                .foregroundStyle(.primary)
-                            Text(kind.summary)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                        Spacer()
-                        if enabled.contains(kind) {
-                            Label("已在主页", systemImage: "checkmark.circle.fill")
-                                .font(.footnote)
-                                .foregroundStyle(.green)
-                        } else {
-                            Label("添加", systemImage: "plus.circle")
-                                .font(.footnote)
-                                .foregroundStyle(.orange)
-                        }
-                    }
-                }
-            }
-        }
-        .listStyle(.insetGrouped)
-        .navigationTitle("主页卡片管理")
-        .navigationBarTitleDisplayMode(.inline)
-    }
-
-    private func toggle(_ kind: HomeCardKind) {
-        var kinds = HomeCardRegistry.enabledKinds(from: storage)
-        if let index = kinds.firstIndex(of: kind) {
-            kinds.remove(at: index)
-        } else {
-            kinds.append(kind)
-        }
-        HomeCardRegistry.setEnabledKinds(kinds)
-        storage = HomeCardRegistry.storageValue(for: kinds)
     }
 }

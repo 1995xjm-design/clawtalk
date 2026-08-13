@@ -262,13 +262,11 @@ extension SettingsViewModel {
         // 迁移失败不阻断设置页：标记 RIME 未就绪并记录日志
         rimeDataReady = false
         Logger.statistics.error("migrate 1.0 config error: \(error.localizedDescription)")
+        ClawLog.record(module: "键盘RIME", "1.0 配置迁移失败: \(error.localizedDescription)")
         await ProgressHUD.failed("迁移数据异常，其余设置仍可使用", interaction: false, delay: 2)
       }
       return
     }
-
-    // 判断应用是否首次运行
-    guard UserDefaults.standard.isFirstRunning else { return }
 
     // 已部署标记：上次部署成功过就直接快速启动，不再全量编译（避免主程序黑屏）
     // 迁移旧 key（guru_rime_deployed → clawTalk_rime_deployed）
@@ -279,9 +277,20 @@ extension SettingsViewModel {
     }
     let alreadyDeployed = UserDefaults.hamster.bool(forKey: "clawTalk_rime_deployed")
 
+    // 杀进程兜底：上次部署被系统终止/手动杀进程时，清除残留的“部署中”标记并自动重试
+    let deployInterrupted = UserDefaults.hamster.bool(forKey: "clawTalk_rime_deploy_in_progress")
+    UserDefaults.hamster.set(false, forKey: "clawTalk_rime_deploy_in_progress")
+
+    // 部署兜底：已标记部署但沙盒 Rime 文件缺失（被清理/损坏）时也要重新部署
+    let rimeFilesReady = FileManager.isSandboxRimeUserDataReady
+
+    // 无需部署：非首次运行 + 已部署 + 沙盒文件齐全 + 无中断残留
+    let firstRunning = UserDefaults.standard.isFirstRunning
+    guard firstRunning || !alreadyDeployed || !rimeFilesReady || deployInterrupted else { return }
+
     // 部署中提示（后台执行，主程序不再卡死）
     await ProgressHUD.animate(
-      alreadyDeployed ? "正在准备输入方案……" : "初次启动，正在编译输入方案，请稍候……",
+      deployInterrupted ? "上次部署未完成，自动重试……" : (alreadyDeployed && rimeFilesReady ? "正在准备输入方案……" : "初次启动，正在编译输入方案，请稍候……"),
       interaction: false
     )
 
@@ -294,11 +303,24 @@ extension SettingsViewModel {
         DispatchQueue.global(qos: .userInitiated).async {
           do {
             var config = HamsterConfigurationStore.shared.configuration
-            if !alreadyDeployed {
-              try FileManager.initSandboxUserDataDirectory(override: true, unzip: true)
+            if !rimeFilesReady {
+              // 阶段 1：解压输入方案目录（真实进度，按解压后字节数百分比）
+              let unzipSrc = FileManager.appSharedSupportDirectory.appendingPathComponent(HamsterConstants.userDataZipFile)
+              if FileManager.default.fileExists(atPath: unzipSrc.path) {
+                DispatchQueue.main.async { ProgressHUD.progress(0, text: "正在解压输入方案 0%", interaction: false) }
+                try FileManager.default.unzipSync(unzipSrc, dst: FileManager.sandboxUserDataDirectory) { p in
+                  DispatchQueue.main.async {
+                    ProgressHUD.progress(CGFloat(p), text: "正在解压输入方案 \(Int(p * 100))%", interaction: false)
+                  }
+                }
+              } else {
+                try FileManager.initSandboxUserDataDirectory(override: true, unzip: true)
+              }
               try FileManager.initSandboxBackupDirectory(override: true)
             }
-            try self.rimeViewModel.rimeContext.deployment(configuration: &config, forceFullCheck: !alreadyDeployed)
+            // 阶段 2：编译输入方案
+            DispatchQueue.main.async { ProgressHUD.animate("正在编译输入方案……", interaction: false) }
+            try self.rimeViewModel.rimeContext.deployment(configuration: &config, forceFullCheck: !alreadyDeployed || !rimeFilesReady)
             UserDefaults.hamster.set(true, forKey: "clawTalk_rime_deployed")
             UserDefaults.hamster.set(false, forKey: "clawTalk_rime_deploy_in_progress")
             continuation.resume(returning: config)
@@ -325,6 +347,7 @@ extension SettingsViewModel {
       UserDefaults.hamster.set(false, forKey: "clawTalk_rime_deploy_in_progress")
       rimeDataReady = false
       Logger.statistics.error("rime init file directory error: \(error.localizedDescription)")
+      ClawLog.record(module: "键盘RIME", "RIME 初始化/部署失败: \(error.localizedDescription)")
       if let sharedDefaults = UserDefaults(suiteName: HamsterConstants.appGroupName) {
         sharedDefaults.set("RIME 初始化失败: \(error.localizedDescription)", forKey: "clawtalk.keyboardInitError")
         sharedDefaults.set(Date().timeIntervalSince1970, forKey: "clawtalk.keyboardInitErrorTime")
