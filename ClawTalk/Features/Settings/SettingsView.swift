@@ -1,5 +1,6 @@
 import PhotosUI
 import SwiftUI
+import HamsteriOS
 
 /// 唤醒词编辑行：UUID 稳定 id（ForEach 删除/编辑不会因 index 越界崩溃）。
 private struct WakeWordEdit: Identifiable, Equatable {
@@ -1167,7 +1168,7 @@ private final class KeyboardSettingsHostViewController: UIViewController {
         let settingsVC = container.makeSettingsViewController()
         addChild(settingsVC)
         settingsVC.view.frame = view.bounds
-        settingsVC.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        settingsVC.view.autoresizingMask = UIView.AutoresizingMask(arrayLiteral: [.flexibleWidth, .flexibleHeight])
         view.addSubview(settingsVC.view)
         settingsVC.didMove(toParent: self)
         child = settingsVC
