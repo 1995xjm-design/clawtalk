@@ -199,37 +199,21 @@ public extension RimeContext {
   func start(hasFullAccess: Bool) async {
     Rime.shared.setNotificationDelegate(self)
 
-    // ClawTalk minimal bootstrap: keyboard extension self-deploys Rime schemas
-    // from its own bundle (SharedSupport.zip + rime-ice.zip) into App Group,
-    // so simplified pinyin and Chinese nine-key (t9) work out of the box.
-    // Note: upgraded users may already have default.yaml; also check t9 schema.
-    let sharedSupportReady = FileManager.default.fileExists(atPath: FileManager.appGroupSharedSupportDirectoryURL.appendingPathComponent("default.yaml").path)
-    let t9Ready = FileManager.default.fileExists(atPath: FileManager.appGroupUserDataDirectoryURL.appendingPathComponent("t9.schema.yaml").path)
-    if !sharedSupportReady || !t9Ready {
-      do {
-        try FileManager.initSandboxSharedSupportDirectory(override: true)
-        try FileManager.initSandboxUserDataDirectory(override: true, unzip: true)
-        var config = try HamsterConfigurationRepositories.shared.loadConfiguration()
-        try deployment(configuration: &config)
-      } catch {
-        Logger.statistics.error("ClawTalk rime bootstrap error: \(error.localizedDescription)")
-      }
-    }
-
-    // ClawTalk fixed schema: t9 (Chinese nine-key) preferred, fallback full pinyin
-    let preferredSchema = schemas.first(where: { $0.schemaId == "t9" })
-      ?? schemas.first(where: { $0.schemaId == "luna_pinyin_simp" })
-      ?? schemas.first(where: { $0.schemaId == "luna_pinyin" })
-      ?? RimeSchema(schemaId: "t9", schemaName: "中文九键")
-    self.currentSchema = preferredSchema
-    self.latestSchema = nil
-    self.selectSchemas = [preferredSchema]
-
     // 启动
     Rime.shared.start(Rime.createTraits(
       sharedSupportDir: FileManager.appGroupSharedSupportDirectoryURL.path,
       userDataDir: hasFullAccess ? FileManager.appGroupUserDataDirectoryURL.path : FileManager.sandboxUserDataDirectory.path
     ))
+
+    // ClawTalk极简九宫格：默认使用 t9（中文九键），未就绪时回退雾凇全拼/简化全拼
+    let preferredSchema = schemas.first(where: { $0.schemaId == "t9" })
+      ?? schemas.first(where: { $0.schemaId == "rime_ice" })
+      ?? schemas.first(where: { $0.schemaId == "luna_pinyin_simp" })
+    if let preferredSchema {
+      self.currentSchema = preferredSchema
+      self.latestSchema = nil
+      self.selectSchemas = [preferredSchema]
+    }
 
     // 设置初始输入方案
     setupRimeInputSchema()
@@ -246,7 +230,7 @@ public extension RimeContext {
 
   /// RIME 部署
   /// 注意：仅可用于主 App 调用
-  func deployment(configuration: inout HamsterConfiguration) throws {
+  func deployment(configuration: inout HamsterConfiguration, forceFullCheck: Bool = true) throws {
     // 如果开启 iCloud，则先将 iCloud 下文件增量复制到 Sandbox
     if let enableAppleCloud = configuration.general?.enableAppleCloud, enableAppleCloud == true {
       let regex = configuration.general?.regexOnCopyFile ?? []
@@ -278,7 +262,7 @@ public extension RimeContext {
       Rime.shared.start(Rime.createTraits(
         sharedSupportDir: FileManager.sandboxSharedSupportDirectory.path,
         userDataDir: FileManager.sandboxUserDataDirectory.path
-      ), maintenance: true, fullCheck: true)
+      ), maintenance: true, fullCheck: forceFullCheck)
     }
     // 此 API 根据用户配置的 scheme_list 参数获取列表，当方案不提供 schema_list 参数时，获取为空
     var schemas = Rime.shared.getSchemas().sorted()
@@ -305,7 +289,7 @@ public extension RimeContext {
           Rime.shared.start(Rime.createTraits(
             sharedSupportDir: FileManager.sandboxSharedSupportDirectory.path,
             userDataDir: FileManager.sandboxUserDataDirectory.path
-          ), maintenance: true, fullCheck: true)
+          ), maintenance: true, fullCheck: forceFullCheck)
         }
       }
     }
@@ -1053,4 +1037,3 @@ public extension RimeContext {
     })
   }
 }
-

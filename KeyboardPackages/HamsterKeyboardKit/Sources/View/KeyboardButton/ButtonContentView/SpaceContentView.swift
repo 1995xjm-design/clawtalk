@@ -16,6 +16,20 @@ class SpaceContentView: NibLessView {
   private var spaceText: String
   private var style: KeyboardButtonStyle
   private var oldBounds: CGRect = .zero
+
+  /// loading text for space button (custom)
+  private var spaceButtonLoadingText: String? {
+    if keyboardContext.keyboardType.isAlphabetic { return "English" }
+    if keyboardContext.keyboardType.isChinese { return "简体拼音" }
+    return nil
+  }
+
+  /// loading text for space button (custom)
+  private var spaceButtonStableText: String? {
+    if keyboardContext.keyboardType.isAlphabetic { return "space" }
+    if keyboardContext.keyboardType.isChinese { return "空格" }
+    return nil
+  }
   /// 是否首次加载空格
   private var firstLoadingSpace = true
   private var subscriptions = Set<AnyCancellable>()
@@ -26,7 +40,9 @@ class SpaceContentView: NibLessView {
     label.numberOfLines = 1
     label.adjustsFontSizeToFitWidth = true
     label.minimumScaleFactor = 0.2
-    if keyboardContext.keyboardType.isCustom {
+    if let langText = spaceButtonLoadingText {
+      label.text = langText
+    } else if keyboardContext.keyboardType.isCustom {
       label.text = item.key?.label.loadingText ?? ""
       if keyboardContext.showCurrentInputSchemaNameOnLoadingTextForSpaceButton, let text = rimeContext.currentSchema?.schemaName {
         label.text = text
@@ -42,7 +58,9 @@ class SpaceContentView: NibLessView {
 
   private lazy var textView: TextContentView = {
     var spaceText = ""
-    if keyboardContext.keyboardType.isCustom {
+    if let langText = spaceButtonStableText {
+      spaceText = langText
+    } else if keyboardContext.keyboardType.isCustom {
       spaceText = item.key?.label.text ?? ""
       if keyboardContext.showCurrentInputSchemaNameForSpaceButton, let text = rimeContext.currentSchema?.schemaName {
         spaceText = text
@@ -146,7 +164,7 @@ class SpaceContentView: NibLessView {
         guard let optionState = $0 else { return }
         guard !self.firstLoadingSpace else { return }
         self.loadingLabel.alpha = 1
-        self.loadingLabel.text = optionState
+        self.loadingLabel.text = self.spaceButtonLoadingText ?? optionState
         self.textView.alpha = 0
         loadingAnimate()
       }

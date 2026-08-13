@@ -39,6 +39,15 @@ public enum HamsterConstants {
   /// 注意: 此值需要与info.plist中的参数保持一致
   public static let appURL = "hamster://dev.fuxiao.app.hamster"
 
+  /// Keyboard R-button opens the main app URL (point to ClawTalk deep link when integrating).
+  public static let appURLForMain = "hamster://app.lgm.7517/main"
+
+  /// Keyboard brain-icon opens the ClawTalk page URL (point to ClawTalk deep link when integrating).
+  public static let appURLForGuru = "hamster://app.lgm.7517/clawTalk"
+
+  /// Keyboard long-press AI opens the main app keyboard-settings page (ClawTalk deep link).
+  public static let appURLForKeyboardSettings = "clawtalk://keyboard-settings"
+
   // MARK: - Google Drive OAuth
   // 在 https://console.cloud.google.com/ 创建 iOS 类型 OAuth 2.0 Client
   // Bundle ID: com.donglingyong.Hamster

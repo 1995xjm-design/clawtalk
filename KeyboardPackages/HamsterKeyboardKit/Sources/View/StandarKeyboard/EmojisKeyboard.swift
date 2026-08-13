@@ -46,6 +46,16 @@ class EmojisKeyboard: NibLessView {
     return cv
   }()
 
+  private lazy var categoryScrollView: UIScrollView = {
+    let sv = UIScrollView()
+    sv.translatesAutoresizingMaskIntoConstraints = false
+    sv.showsHorizontalScrollIndicator = false
+    sv.showsVerticalScrollIndicator = false
+    sv.alwaysBounceHorizontal = true
+    sv.delegate = self
+    return sv
+  }()
+
   private lazy var categoryBar: UIStackView = {
     let sv = UIStackView()
     sv.axis = .horizontal
@@ -59,15 +69,6 @@ class EmojisKeyboard: NibLessView {
     let v = UIView()
     v.translatesAutoresizingMaskIntoConstraints = false
     return v
-  }()
-
-  private lazy var abcButton: UIButton = {
-    let btn = UIButton(type: .system)
-    btn.setTitle("ABC", for: .normal)
-    btn.titleLabel?.font = .systemFont(ofSize: 15, weight: .semibold)
-    btn.translatesAutoresizingMaskIntoConstraints = false
-    btn.addTarget(self, action: #selector(abcTapped), for: .touchUpInside)
-    return btn
   }()
 
   private lazy var deleteButton: UIButton = {
@@ -95,10 +96,10 @@ class EmojisKeyboard: NibLessView {
     let style = appearance.candidateBarStyle
     backgroundColor = appearance.backgroundStyle.backgroundColor
 
-    addSubview(categoryBar)
+    addSubview(categoryScrollView)
     addSubview(collectionView)
     addSubview(bottomBar)
-    bottomBar.addSubview(abcButton)
+    categoryScrollView.addSubview(categoryBar)
     bottomBar.addSubview(deleteButton)
 
     // 构建分类按钮
@@ -112,14 +113,19 @@ class EmojisKeyboard: NibLessView {
     }
     updateCategoryHighlight()
 
-    abcButton.tintColor = style.toolbarButtonFrontColor
     deleteButton.tintColor = style.toolbarButtonFrontColor
+    styleCapsule(deleteButton)
 
     NSLayoutConstraint.activate([
-      categoryBar.topAnchor.constraint(equalTo: topAnchor),
-      categoryBar.leadingAnchor.constraint(equalTo: leadingAnchor),
-      categoryBar.trailingAnchor.constraint(equalTo: trailingAnchor),
-      categoryBar.heightAnchor.constraint(equalToConstant: 36),
+      categoryScrollView.topAnchor.constraint(equalTo: topAnchor),
+      categoryScrollView.leadingAnchor.constraint(equalTo: leadingAnchor),
+      categoryScrollView.trailingAnchor.constraint(equalTo: trailingAnchor),
+      categoryScrollView.heightAnchor.constraint(equalToConstant: 36),
+
+      categoryBar.topAnchor.constraint(equalTo: categoryScrollView.topAnchor),
+      categoryBar.bottomAnchor.constraint(equalTo: categoryScrollView.bottomAnchor),
+      categoryBar.leadingAnchor.constraint(equalTo: categoryScrollView.leadingAnchor),
+      categoryBar.widthAnchor.constraint(equalToConstant: 48 * CGFloat(EmojiCategory.allCases.count)),
 
       collectionView.topAnchor.constraint(equalTo: categoryBar.bottomAnchor),
       collectionView.leadingAnchor.constraint(equalTo: leadingAnchor),
@@ -131,12 +137,18 @@ class EmojisKeyboard: NibLessView {
       bottomBar.bottomAnchor.constraint(equalTo: bottomAnchor),
       bottomBar.heightAnchor.constraint(equalToConstant: 40),
 
-      abcButton.leadingAnchor.constraint(equalTo: bottomBar.leadingAnchor, constant: 12),
-      abcButton.centerYAnchor.constraint(equalTo: bottomBar.centerYAnchor),
-
       deleteButton.trailingAnchor.constraint(equalTo: bottomBar.trailingAnchor, constant: -12),
       deleteButton.centerYAnchor.constraint(equalTo: bottomBar.centerYAnchor),
+      deleteButton.widthAnchor.constraint(equalToConstant: 42),
+      deleteButton.heightAnchor.constraint(equalToConstant: 32),
     ])
+  }
+
+  /// 胶囊底样式
+  private func styleCapsule(_ button: UIButton) {
+    button.backgroundColor = .secondarySystemFill
+    button.layer.cornerRadius = 16
+    button.layer.masksToBounds = true
   }
 
   // MARK: - Layout
@@ -181,11 +193,9 @@ class EmojisKeyboard: NibLessView {
     let index = sender.tag
     guard index < EmojiCategory.allCases.count else { return }
     selectedCategory = EmojiCategory.allCases[index]
-  }
-
-  @objc private func abcTapped() {
-    // 返回默认键盘类型
-    keyboardContext.setKeyboardType(keyboardContext.selectKeyboard)
+    let offsetX = CGFloat(index) * 48 - (categoryScrollView.bounds.width - 48) / 2
+    let clamped = min(max(offsetX, 0), categoryScrollView.contentSize.width - categoryScrollView.bounds.width)
+    categoryScrollView.setContentOffset(CGPoint(x: max(clamped, 0), y: 0), animated: true)
   }
 
   @objc private func deleteTapped() {
@@ -263,6 +273,23 @@ private class EmojiCell: UICollectionViewCell {
     didSet {
       contentView.backgroundColor = isHighlighted ? UIColor.systemGray4 : .clear
       contentView.layer.cornerRadius = 8
+    }
+  }
+}
+
+// MARK: - UIScrollViewDelegate
+
+extension EmojisKeyboard: UIScrollViewDelegate {
+  func scrollViewDidScroll(_ scrollView: UIScrollView) {
+    guard scrollView == categoryScrollView,
+          categoryScrollView.isDragging || categoryScrollView.isDecelerating
+    else { return }
+    let itemWidth: CGFloat = 48
+    let idx = Int(round(scrollView.contentOffset.x / itemWidth))
+    let clamped = min(max(idx, 0), EmojiCategory.allCases.count - 1)
+    let target = EmojiCategory.allCases[clamped]
+    if target != selectedCategory {
+      selectedCategory = target
     }
   }
 }

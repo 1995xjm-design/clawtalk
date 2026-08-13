@@ -63,6 +63,11 @@ open class StandardKeyboardAppearance: KeyboardAppearance {
     var style = KeyboardBackgroundStyle.standard
     style.backgroundColor = UIColor.white.withAlphaComponent(0.001)
 
+    // 中文九宫格：跟随主题（默认=苹果原生）键盘底色
+    if keyboardContext.keyboardType.isChineseNineGrid {
+      style.backgroundColor = ClawPanelPalette.keyboardBackground
+    }
+
     // 开启键盘配色
     if let hamsterColor = hamsterColor() {
       style.backgroundColor = hamsterColor.backColor
@@ -150,23 +155,30 @@ open class StandardKeyboardAppearance: KeyboardAppearance {
     }
   }
 
-  /// 咕噜输入法配色
+  /// ClawTalk输入法配色
   open func hamsterColor() -> HamsterKeyboardColor? {
-    guard keyboardContext.hamsterConfiguration?.keyboard?.enableColorSchema ?? false else { return nil }
+    let config = keyboardContext.hamsterConfiguration?.keyboard
+    let schemaName = keyboardContext.hasDarkColorScheme
+      ? (config?.useColorSchemaForDark ?? "")
+      : (config?.useColorSchemaForLight ?? "")
+
+    // ClawTalk: 面板配色跟随当前主题（未启用配色 = 系统默认/苹果原生）
+    ClawPanelPalette.update(
+      theme: ClawTalkThemePresets.theme(forSchemaName: schemaName),
+      userInterfaceStyle: keyboardContext.colorScheme
+    )
+
+    guard config?.enableColorSchema ?? false else { return nil }
 
     // 配色缓存
     if let cacheHamsterKeyboardColor = cacheHamsterKeyboardColor[keyboardContext.traitCollection.userInterfaceStyle] {
       return cacheHamsterKeyboardColor
     }
 
-    var schemaName: String? = nil
-    if keyboardContext.hasDarkColorScheme {
-      schemaName = keyboardContext.hamsterConfiguration?.keyboard?.useColorSchemaForDark
-    } else {
-      schemaName = keyboardContext.hamsterConfiguration?.keyboard?.useColorSchemaForLight
-    }
-
-    guard let schema = keyboardContext.hamsterConfiguration?.keyboard?.colorSchemas?.first(where: { $0.schemaName == schemaName }) else { return nil }
+    // 优先查配置 colorSchemas；找不到时回落到 ClawTalk 内置主题预设
+    let schema = config?.colorSchemas?.first(where: { $0.schemaName == schemaName })
+      ?? ClawTalkThemePresets.schema(named: schemaName)
+    guard let schema else { return nil }
 
     let hamsterColor = HamsterKeyboardColor(colorSchema: schema, userInterfaceStyle: keyboardContext.colorScheme)
     self.cacheHamsterKeyboardColor[keyboardContext.traitCollection.userInterfaceStyle] = hamsterColor
@@ -467,6 +479,9 @@ open class StandardKeyboardAppearance: KeyboardAppearance {
     }
     if let override = buttonFontSizePadOverride(for: action) { return override }
     if let override = buttonFontSizeActionOverride(for: action) { return override }
+    if case .chineseNineGrid = action {
+      return 15
+    }
     if action == .returnLastKeyboard || action == .cleanSpellingArea {
       return 16
     }
@@ -490,6 +505,9 @@ open class StandardKeyboardAppearance: KeyboardAppearance {
 
     if let override = buttonFontSizePadOverride(for: action) { return override }
     if let override = buttonFontSizeActionOverride(for: action) { return override }
+    if case .chineseNineGrid = key.action {
+      return 15
+    }
     if action == .returnLastKeyboard || action == .cleanSpellingArea {
       return 16
     }
@@ -545,6 +563,7 @@ open class StandardKeyboardAppearance: KeyboardAppearance {
     case .backspace: return .regular
     case .character(let char): return char.isLowercased ? .light : nil
     case .symbol(let symbol): return symbol.char.isLowercased ? .light : nil
+    case .chineseNineGrid: return .regular
     // default: return buttonImage(for: action) != nil ? .light : nil
     default: return nil
     }
@@ -556,6 +575,7 @@ open class StandardKeyboardAppearance: KeyboardAppearance {
     case .backspace: return .regular
     case .character(let char): return char.isLowercased ? .light : nil
     case .symbol(let symbol): return symbol.char.isLowercased ? .light : nil
+    case .chineseNineGrid: return .regular
     // default: return buttonImage(for: action) != nil ? .light : nil
     default: return nil
     }
@@ -632,6 +652,10 @@ extension KeyboardAction {
     }
     if isUppercasedShiftAction { return buttonBackgroundColorForPressedState(for: context) }
     if isSystemAction || isSymbolOfDarkAction || isCharacterOfDarkAction || isCleanSpellingArea {
+      // 中文九宫格：系统键与键盘背景同色
+      if context.keyboardType.isChineseNineGrid, !context.hasDarkColorScheme {
+        return ClawPanelPalette.keyboardBackground
+      }
       return HamsterUIColor.shared.standardDarkButtonBackground(for: context)
     }
     if isPrimaryAction { return UIColor.systemBlue }
@@ -643,13 +667,13 @@ extension KeyboardAction {
   func buttonBackgroundColorForPressedState(for context: KeyboardContext) -> UIColor {
     // 数字九宫格分类符号按键颜色调整
     if isClassifySymbolicOfLight {
-      return context.hasDarkColorScheme ? HamsterUIColor.shared.standardButtonBackground(for: context) : .white
+      return context.hasDarkColorScheme ? HamsterUIColor.shared.standardButtonBackground(for: context) : UIColor(red: 174 / 255, green: 174 / 255, blue: 178 / 255, alpha: 1)
     }
 
     if isSystemAction || isSymbolOfDarkAction || isCharacterOfDarkAction || isCleanSpellingArea {
-      return context.hasDarkColorScheme ? HamsterUIColor.shared.standardButtonBackground(for: context) : .white
+      return context.hasDarkColorScheme ? HamsterUIColor.shared.standardButtonBackground(for: context) : UIColor(red: 174 / 255, green: 174 / 255, blue: 178 / 255, alpha: 1)
     }
-    if isPrimaryAction { return context.hasDarkColorScheme ? HamsterUIColor.shared.standardDarkButtonBackground(for: context) : .white }
+    if isPrimaryAction { return context.hasDarkColorScheme ? HamsterUIColor.shared.standardDarkButtonBackground(for: context) : UIColor(red: 174 / 255, green: 174 / 255, blue: 178 / 255, alpha: 1) }
     if isUppercasedShiftAction { return HamsterUIColor.shared.standardDarkButtonBackground(for: context) }
     return HamsterUIColor.shared.standardDarkButtonBackground(for: context)
   }
@@ -684,6 +708,10 @@ extension KeyboardAction {
   /// 空闲状态下按键的前景色
   func buttonForegroundColorForIdleState(for context: KeyboardContext) -> UIColor {
     let standard = HamsterUIColor.shared.standardButtonForeground(for: context)
+    // 中文九宫格：九键字母 ClawTalk 参考图 #8D909A（浅色分支）
+    if case .chineseNineGrid = self, !context.hasDarkColorScheme {
+      return ClawPanelPalette.keyLabel
+    }
     if isSystemAction { return standard }
     if isPrimaryAction { return .white }
     return standard

@@ -34,6 +34,7 @@ import UIKit
  您可能会注意到，KeyboardKit 自己的视图使用初始化器参数而非环境对象。这是有意为之，以便更好地传达每个视图的依赖关系。
  */
 open class KeyboardInputViewController: UIInputViewController, KeyboardController {
+
   // MARK: - View Controller Lifecycle ViewController 生命周期
 
   override open func viewDidLoad() {
@@ -43,6 +44,16 @@ open class KeyboardInputViewController: UIInputViewController, KeyboardControlle
     // setupNextKeyboardBehavior()
     // KeyboardUrlOpener.shared.controller = self
     setupCombineRIMEInput()
+
+    // ClawTalk: 面板输入桥接（面板输入框聚焦时按键直输进面板，否则直接上屏）
+    ClawPanelInputBridge.shared.sendText = { [weak self] text in
+      guard let self else { return }
+      if self.keyboardContext.clawPanelInputActive {
+        ClawPanelInputBridge.shared.insertIntoPanel(text)
+      } else {
+        self.insertTextPatch(text)
+      }
+    }
   }
 
   override open func viewWillAppear(_ animated: Bool) {
@@ -50,6 +61,22 @@ open class KeyboardInputViewController: UIInputViewController, KeyboardControlle
     setupRIME()
     viewWillSetupKeyboard()
     viewWillSyncWithContext()
+    // ClawTalk: 每次键盘弹出开启新 session（隐私模式下跳过）
+    if ClawTalkPrivacyService.shared.isCollectionEnabled {
+      clawTalkBeginSession()
+      // 注意：不在键盘内自动读取剪贴板。iOS 16+ 读取剪贴板内容会弹「xx想从微信粘贴」提示，
+      // 改为在 ClawTalk 剪贴板页面手动「立即记录」，避免输入时反复弹窗打扰。
+
+      // 每日洞察：满足间隔条件时后台触发 AI 分析
+      Task.detached(priority: .background) {
+        await AutoInsightService.shared.runIfNeeded()
+      }
+
+      // 智能调频：满足间隔条件时后台触发 AI 分析
+      Task.detached(priority: .background) {
+        await SmartFreqService.shared.runIfNeeded()
+      }
+    }
 
     // fix: 屏幕边缘按键触摸延迟
     // https://stackoverflow.com/questions/39813245/touchesbeganwithevent-is-delayed-at-left-edge-of-screen
@@ -68,7 +95,10 @@ open class KeyboardInputViewController: UIInputViewController, KeyboardControlle
 
   override open func viewWillDisappear(_ animated: Bool) {
     super.viewWillDisappear(animated)
-
+    // ClawTalk: 键盘收起时保存本次 session
+    clawTalkFinalizeSession()
+    // ClawTalk: 键盘收起时清空实时建议
+    ClawSuggestionEngine.shared.clear()
   }
 
   override open func viewDidLayoutSubviews() {
@@ -473,6 +503,12 @@ open class KeyboardInputViewController: UIInputViewController, KeyboardControlle
   }
 
   open func deleteBackward() {
+    // ClawTalk: 面板输入框聚焦时，退格进面板输入框
+    if keyboardContext.clawPanelInputActive {
+      ClawPanelInputBridge.shared.deleteFromPanel()
+      return
+    }
+
     guard !rimeContext.userInputKey.isEmpty else {
       // 获取光标前后上下文，用于删除需要光标居中的符号
       let beforeInput = self.textDocumentProxy.documentContextBeforeInput ?? ""
@@ -482,10 +518,12 @@ open class KeyboardInputViewController: UIInputViewController, KeyboardControlle
       if keyboardContext.cursorBackOfSymbols(key: text) {
         self.textDocumentProxy.adjustTextPosition(byCharacterOffset: 1)
         self.textDocumentProxy.deleteBackward(times: 2)
-
+        // ClawTalk: 成对符号删除 2 个字符
+        clawTalkDeleteChars(2)
       } else {
         textDocumentProxy.deleteBackward(range: keyboardBehavior.backspaceRange)
-
+        // ClawTalk: 删除 1 个字符
+        clawTalkDeleteLastChar()
       }
       return
     }
@@ -507,8 +545,15 @@ open class KeyboardInputViewController: UIInputViewController, KeyboardControlle
   }
 
   open func deleteBackward(times: Int) {
-    textDocumentProxy.deleteBackward(times: times)
+    // ClawTalk: 面板输入框聚焦时，退格进面板输入框
+    if keyboardContext.clawPanelInputActive {
+      ClawPanelInputBridge.shared.deleteFromPanel()
+      return
+    }
 
+    textDocumentProxy.deleteBackward(times: times)
+    // ClawTalk: 批量删除
+    clawTalkDeleteChars(times)
   }
 
   open func insertSymbol(_ symbol: Symbol) {
@@ -541,9 +586,16 @@ open class KeyboardInputViewController: UIInputViewController, KeyboardControlle
   }
 
   open func insertText(_ text: String) {
+    // ClawTalk: 面板输入框聚焦时，字符直接进面板输入框
+    if keyboardContext.clawPanelInputActive {
+      ClawPanelInputBridge.shared.insertIntoPanel(text)
+      return
+    }
+
     if keyboardContext.keyboardType.isAlphabetic {
       textDocumentProxy.insertText(text)
-
+      // ClawTalk: 记录直接输入的文本（英文字符、空格等）
+      clawTalkAppendText(text)
       return
     }
 
@@ -594,12 +646,42 @@ open class KeyboardInputViewController: UIInputViewController, KeyboardControlle
   }
 
   open func openUrl(_ url: URL?) {
-    let selector = sel_registerName("openURL:")
-    var responder = self as UIResponder?
-    while let r = responder, !r.responds(to: selector) {
-      responder = r.next
+    guard let url else { return }
+    extensionContext?.open(url, completionHandler: { [weak self] success in
+      DispatchQueue.main.async {
+        guard let self = self else { return }
+        if success {
+          UISelectionFeedbackGenerator().selectionChanged()
+        } else {
+          UINotificationFeedbackGenerator().notificationOccurred(.error)
+          self.showOpenUrlFailureHint()
+        }
+      }
+    })
+  }
+
+  /// Inline hint shown when opening the main app fails (keyboard cannot show alerts; use text + haptic).
+  private func showOpenUrlFailureHint() {
+    let tag = 87231
+    view.viewWithTag(tag)?.removeFromSuperview()
+    let label = UILabel()
+    label.tag = tag
+    label.text = "未找到输入法主程序"
+    label.font = .systemFont(ofSize: 12, weight: .medium)
+    label.textColor = .white
+    label.backgroundColor = UIColor.black.withAlphaComponent(0.75)
+    label.textAlignment = .center
+    label.layer.cornerRadius = 6
+    label.layer.masksToBounds = true
+    view.addSubview(label)
+    label.translatesAutoresizingMaskIntoConstraints = false
+    NSLayoutConstraint.activate([
+      label.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+      label.topAnchor.constraint(equalTo: view.topAnchor, constant: 40),
+    ])
+    DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+      label.removeFromSuperview()
     }
-    _ = responder?.perform(selector, with: url)
   }
 
   open func resetInputEngine() {
@@ -911,6 +993,9 @@ private extension KeyboardInputViewController {
           }
         }
 
+          // ClawTalk: 提交上屏后投喂实时建议引擎
+          ClawSuggestionEngine.shared.feed(commitText)
+
         // 非嵌入模式在 CandidateWordsView.swift 中处理，直接输入 Label 中
         guard self.keyboardContext.enableEmbeddedInputMode else { return }
 
@@ -988,6 +1073,14 @@ private extension KeyboardInputViewController {
 
   /// 上屏补丁：增加了成对符号/光标回退/返回主键盘的支持
   func insertTextPatch(_ insertText: String) {
+    // ClawTalk: 面板输入框聚焦时，候选上屏/符号直接进面板输入框
+    if keyboardContext.clawPanelInputActive {
+      ClawPanelInputBridge.shared.insertIntoPanel(insertText)
+      return
+    }
+
+    // ClawTalk: 记录 RIME/符号上屏内容
+    clawTalkAppendText(insertText)
 
     // 替换为成对符号
     let text = keyboardContext.getPairSymbols(insertText)
@@ -1018,6 +1111,236 @@ private extension KeyboardInputViewController {
       keyboardContext.setKeyboardType(keyboardContext.returnKeyboardType())
     }
   }
+}
+
+// MARK: - ClawTalk 输入采集
+
+extension KeyboardInputViewController {
+  /// 本次 session 累积的完整文本
+  var clawTalkTextBuffer: String {
+    get { objc_getAssociatedObject(self, &AssociatedKeys.textBuffer) as? String ?? "" }
+    set { objc_setAssociatedObject(self, &AssociatedKeys.textBuffer, newValue, .OBJC_ASSOCIATION_RETAIN_NONATOMIC) }
+  }
+
+  /// 本次 session 开始时间
+  var clawTalkSessionStartTime: Date {
+    get { objc_getAssociatedObject(self, &AssociatedKeys.sessionStartTime) as? Date ?? Date() }
+    set { objc_setAssociatedObject(self, &AssociatedKeys.sessionStartTime, newValue, .OBJC_ASSOCIATION_RETAIN_NONATOMIC) }
+  }
+
+  /// 键盘弹出瞬间捕获的光标周围已有文本（打字前快照，与本次 session 输入无重叠）
+  var clawTalkInitialContext: String {
+    get { objc_getAssociatedObject(self, &AssociatedKeys.initialContext) as? String ?? "" }
+    set { objc_setAssociatedObject(self, &AssociatedKeys.initialContext, newValue, .OBJC_ASSOCIATION_RETAIN_NONATOMIC) }
+  }
+
+  /// 本次 session 是否因输入类型过滤而被屏蔽
+  var isCurrentSessionBlocked: Bool {
+    get { objc_getAssociatedObject(self, &AssociatedKeys.sessionBlocked) as? Bool ?? false }
+    set { objc_setAssociatedObject(self, &AssociatedKeys.sessionBlocked, newValue, .OBJC_ASSOCIATION_RETAIN_NONATOMIC) }
+  }
+
+  /// 开启新 session，同时快照当前输入框已有内容作为上下文
+  func clawTalkBeginSession() {
+    clawTalkTextBuffer = ""
+    clawTalkSessionStartTime = Date()
+    // 检测当前输入场景，决定本次 session 是否采集
+    let category = clawTalkDetectInputCategory()
+    isCurrentSessionBlocked = InputTypeFilter.shared.isBlocked(category)
+    guard !isCurrentSessionBlocked else { return }
+    // 捕获光标前后各一段文本，作为本次输入的背景语境
+    let before = String((textDocumentProxy.documentContextBeforeInput ?? "").suffix(300))
+    let after  = String((textDocumentProxy.documentContextAfterInput  ?? "").prefix(100))
+    let parts  = [before, after].filter { !$0.isEmpty }
+    clawTalkInitialContext = parts.joined(separator: "…")
+  }
+
+  /// 追加文本到 session buffer（隐私模式 / 类型被屏蔽时静默跳过）
+  func clawTalkAppendText(_ text: String) {
+    guard !text.isEmpty,
+          ClawTalkPrivacyService.shared.isCollectionEnabled,
+          !isCurrentSessionBlocked else { return }
+    clawTalkTextBuffer += text
+  }
+
+  /// 根据 textDocumentProxy 的多维信号推断当前输入场景类型
+  func clawTalkDetectInputCategory() -> InputCategory {
+    // isSecureTextEntry 最高优先级
+    if textDocumentProxy.isSecureTextEntry == true { return .password }
+
+    // textContentType 语义声明
+    if let ct = textDocumentProxy.textContentType {
+      switch ct {
+      case .password, .newPassword:            return .password
+      case .creditCardNumber:                  return .payment
+      case .oneTimeCode:                       return .otp
+      case .username:                          return .login
+      case .telephoneNumber:                   return .phone
+      case .emailAddress:                      return .email
+      case .name, .givenName, .familyName,
+           .middleName, .namePrefix, .nameSuffix,
+           .nickname:                          return .name
+      case .fullStreetAddress,
+           .streetAddressLine1, .streetAddressLine2,
+           .addressCity, .addressState,
+           .addressCityAndState, .countryName,
+           .postalCode, .location, .sublocality: return .address
+      case .organizationName, .jobTitle:       return .organization
+      case .URL:                               return .url
+      case .dateTime:                          return .dateTime
+      case .flightNumber, .shipmentTrackingNumber: return .logistics
+      default: break
+      }
+    }
+
+    // keyboardType 次级信号
+    switch textDocumentProxy.keyboardType {
+    case .phonePad, .namePhonePad:  return .phone
+    case .emailAddress:             return .email
+    case .URL, .webSearch:          return .url
+    default: break
+    }
+
+    // returnKeyType 作为搜索语境补充信号
+    switch textDocumentProxy.returnKeyType {
+    case .search, .google, .yahoo:  return .url
+    default: break
+    }
+
+    return .general
+  }
+
+  /// 删除 buffer 最后一个字符（对应用户按删除键）
+  func clawTalkDeleteLastChar() {
+    guard !clawTalkTextBuffer.isEmpty else { return }
+    clawTalkTextBuffer.removeLast()
+  }
+
+  /// 删除 buffer 最后 N 个字符
+  func clawTalkDeleteChars(_ count: Int) {
+    guard count > 0, !clawTalkTextBuffer.isEmpty else { return }
+    let removeCount = min(count, clawTalkTextBuffer.count)
+    clawTalkTextBuffer.removeLast(removeCount)
+  }
+
+  /// session 结束时保存（键盘收起）；隐私模式或类型被屏蔽时清空 buffer 但不保存
+  func clawTalkFinalizeSession() {
+    let typed       = clawTalkTextBuffer
+    let startTime   = clawTalkSessionStartTime
+    let rawContext  = clawTalkInitialContext
+    let wasBlocked  = isCurrentSessionBlocked
+    clawTalkTextBuffer          = ""
+    clawTalkInitialContext      = ""
+    isCurrentSessionBlocked = false
+
+    guard ClawTalkPrivacyService.shared.isCollectionEnabled, !wasBlocked else { return }
+
+    // 去重：裁掉 context 尾部与 typed 头部的重叠部分
+    // （同一输入框多次唤起键盘时，上次打的内容会出现在下次的 context 末尾）
+    let context = clawTalkDeduplicateContext(rawContext, typed: typed)
+    let appCtx  = clawTalkAppContext()
+    ClawTalkDataService.shared.saveSession(ClawTalkEntry(
+      startTime: startTime,
+      text: typed,
+      context: context,
+      appContext: appCtx
+    ))
+  }
+
+  /// 去重：若 context 尾部与 typed 前缀有重叠，裁掉重叠部分
+  private func clawTalkDeduplicateContext(_ context: String, typed: String) -> String? {
+    guard !context.isEmpty else { return nil }
+    guard !typed.isEmpty else { return context }
+
+    // 若 typed 完全包含在 context 中（用户在已有文字中间插入），直接返回 context 即可
+    if context.contains(typed) { return context }
+
+    // 找 context 尾部与 typed 头部最长匹配，裁掉重叠
+    let maxCheck = min(context.count, typed.count)
+    for length in stride(from: maxCheck, through: 2, by: -1) {
+      if context.suffix(length) == typed.prefix(length) {
+        let trimmed = String(context.dropLast(length))
+          .trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+      }
+    }
+    return context
+  }
+
+  /// 从 textDocumentProxy 的三类信号推断当前输入场景
+  /// 注意：iOS 键盘扩展沙箱机制决定了无法获取宿主 app 的 bundle ID，
+  /// 这是目前能拿到的最精细信息。
+  func clawTalkAppContext() -> String {
+    // 优先从 textContentType 推断，它是 app 主动声明的语义，最准确
+    if let ct = textDocumentProxy.textContentType {
+      switch ct {
+      case .username:             return "账号登录"
+      case .password, .newPassword: return "密码输入"
+      case .emailAddress:         return "Email"
+      case .telephoneNumber:      return "电话号码"
+      case .URL:                  return "链接/浏览器"
+      case .name:                 return "姓名"
+      case .givenName:            return "名字"
+      case .familyName:           return "姓氏"
+      case .organizationName:     return "组织名称"
+      case .fullStreetAddress,
+           .streetAddressLine1,
+           .streetAddressLine2:   return "街道地址"
+      case .addressCity:          return "城市"
+      case .addressState:         return "省/州"
+      case .addressCityAndState:  return "城市/省州"
+      case .countryName:          return "国家"
+      case .postalCode:           return "邮政编码"
+      case .creditCardNumber:     return "信用卡号"
+      case .oneTimeCode:          return "验证码"
+      case .jobTitle:             return "职位"
+      case .location:             return "地点"
+      case .nickname:             return "昵称"
+      case .sublocality:          return "地区"
+      case .middleName:           return "中间名"
+      case .namePrefix:           return "称谓"
+      case .nameSuffix:           return "名称后缀"
+      case .dateTime:             return "日期/时间"
+      case .flightNumber:         return "航班号"
+      case .shipmentTrackingNumber: return "快递单号"
+      default: break
+      }
+    }
+
+    // 次优：keyboardType，app 通常根据场景设置
+    switch textDocumentProxy.keyboardType {
+    case .emailAddress:           return "Email 输入"
+    case .URL:                    return "URL/浏览器"
+    case .webSearch:              return "网页搜索"
+    case .twitter:                return "社交媒体"
+    case .namePhonePad:           return "联系人"
+    case .numberPad,
+         .decimalPad,
+         .asciiCapableNumberPad:  return "数字输入"
+    case .phonePad:               return "电话号码"
+    case .numbersAndPunctuation:  return "数字/符号"
+    default: break
+    }
+
+    // 兜底：returnKeyType，根据按钮语义推断
+    switch textDocumentProxy.returnKeyType {
+    case .search, .google, .yahoo: return "搜索框"
+    case .send:                    return "消息发送"
+    case .go:                      return "跳转/确认"
+    case .join:                    return "加入/提交"
+    case .continue:                return "表单填写"
+    default:                       break
+    }
+
+    return "通用文本"
+  }
+}
+
+private enum AssociatedKeys {
+  static var textBuffer = "clawTalkTextBuffer"
+  static var sessionStartTime = "clawTalkSessionStartTime"
+  static var initialContext = "clawTalkInitialContext"
+  static var sessionBlocked = "clawTalkSessionBlocked"
 }
 
 extension UIKeyboardType {

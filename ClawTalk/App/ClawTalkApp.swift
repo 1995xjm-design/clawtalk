@@ -22,6 +22,7 @@ struct ClawTalkApp: App {
     @State private var ackSynthesizer: AVSpeechSynthesizer?
     @State private var showGatewaySessions = false
     @State private var showHomeTools = false
+    @State private var showKeyboardSettings = false
     @State private var gatewaySessionsViewModel: ToolsViewModel?
     @State private var widgetSnapshot: WidgetSnapshot?
     @State private var syncedChannelsSignature: String?
@@ -216,6 +217,11 @@ struct ClawTalkApp: App {
                             openGatewaySession(session)
                         })
                     }
+                }
+            }
+            .sheet(isPresented: $showKeyboardSettings) {
+                NavigationStack {
+                    KeyboardSettingsPlaceholderView()
                 }
             }
             .tint(.openClawRed)
@@ -631,6 +637,13 @@ struct ClawTalkApp: App {
     /// 深链接统一入口：SOS 优先，其余走既有 DeepLinkHandler。
     private func handleIncomingURL(_ url: URL) {
         if EmergencyStore.handleSOSDeepLink(url) {
+            return
+        }
+        // 键盘设置深链接：clawtalk://keyboard-settings 或 clawtalk://keyboard → 弹「键盘」设置页（键盘包搬入前为占位页）
+        if url.scheme?.lowercased() == DeepLinkHandler.scheme,
+           let host = url.host?.lowercased(),
+           host == "keyboard-settings" || host == "keyboard" {
+            showKeyboardSettings = true
             return
         }
         handleDeepLink(url)

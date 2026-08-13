@@ -1,0 +1,69 @@
+//
+//  File.swift
+//
+//
+//  Created by morse on 2023/7/7.
+//
+
+import Foundation
+
+/// 主页设置子页面
+public enum SettingsSubView: String {
+  /// 输入方案页面
+  case inputSchema
+  
+  /// 输入方案上传页面
+  case uploadInputSchema
+  
+  /// 文件管理页面
+  case finder
+  
+  /// 键盘设置页面
+  case keyboardSettings
+  
+  /// 键盘配色页面
+  case colorSchema
+  
+  /// 反馈设置页面
+  case feedback
+  
+  /// iCloud页面
+  case iCloud
+  
+  /// 备份页面
+  case backup
+  
+  /// RIME 页面
+  case rime
+  
+  /// 关于页面
+  case about
+
+  /// 主页面
+  case main
+
+
+  /// ClawTalk 输入采集页面
+  case clawTalk
+
+  /// 每日洞察页面
+  case autoInsight
+
+  /// 智能调频页面
+  case smartFreq
+
+  /// 输入法设置汇总页面
+  case inputMethodSettings
+
+  /// Google Drive 同步页面
+  case googleDrive
+
+  /// 调试日志页面
+  case debugLog
+
+  /// 聊天对象档案页面
+  case heartTargets
+
+  /// 空页面
+  case none
+}

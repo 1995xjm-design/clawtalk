@@ -50,6 +50,7 @@ class KeyboardRootView: NibLessView {
   /// 工具栏展开时约束
   private var toolbarExpandDynamicConstraints = [NSLayoutConstraint]()
 
+
   /// 工具栏高度约束
   private var toolbarHeightConstraint: NSLayoutConstraint?
 
@@ -153,6 +154,7 @@ class KeyboardRootView: NibLessView {
     return view
   }()
 
+
   /// 主键盘
   private lazy var primaryKeyboardView: UIView = {
     if let view = chooseKeyboard(keyboardType: keyboardContext.keyboardType) {
@@ -241,6 +243,7 @@ class KeyboardRootView: NibLessView {
 
   /// 激活约束
   override func activateViewConstraints() {
+
     if keyboardContext.enableToolbar {
       // 工具栏高度约束，可随配置调整高度
       toolbarHeightConstraint = toolbarView.heightAnchor.constraint(equalToConstant: keyboardContext.heightOfToolbar)
@@ -305,6 +308,19 @@ class KeyboardRootView: NibLessView {
           guard let self = self else { return }
           guard candidateViewState != $0 else { return }
           setNeedsLayout()
+        }
+        .store(in: &subscriptions)
+
+      // ClawTalk 业务面板：展开时工具栏高度增加（候选栏收起状态下生效）
+      keyboardContext.$clawPanelTab
+        .receive(on: DispatchQueue.main)
+        .sink { [weak self] tab in
+          guard let self = self else { return }
+          guard let heightConstraint = self.toolbarHeightConstraint else { return }
+          if self.keyboardContext.candidatesViewState.isCollapse() {
+            let panelHeight: CGFloat = tab >= 0 ? ClawPanelOverlayView.panelHeight : 0
+            heightConstraint.constant = self.keyboardContext.heightOfToolbar + panelHeight
+          }
         }
         .store(in: &subscriptions)
     }
@@ -401,7 +417,8 @@ class KeyboardRootView: NibLessView {
     // 候选栏收起
     if candidateViewState.isCollapse() {
       // 键盘显示
-      toolbarHeightConstraint?.constant = keyboardContext.heightOfToolbar
+      let panelHeight: CGFloat = keyboardContext.clawPanelTab >= 0 ? ClawPanelOverlayView.panelHeight : 0
+      toolbarHeightConstraint?.constant = keyboardContext.heightOfToolbar + panelHeight
       addSubview(primaryKeyboardView)
       NSLayoutConstraint.deactivate(toolbarExpandDynamicConstraints)
       NSLayoutConstraint.activate(toolbarCollapseDynamicConstraints)

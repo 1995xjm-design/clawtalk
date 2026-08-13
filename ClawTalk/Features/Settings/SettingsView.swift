@@ -339,9 +339,13 @@ struct SettingsView: View {
     // MARK: - Connection
 
         private var keyboardSection: some View {
-        Section {
-            Label("AI 聊天回复键盘", systemImage: "keyboard")
-                .font(.headline)
+        Section("键盘") {
+            NavigationLink {
+                KeyboardSettingsPlaceholderView()
+            } label: {
+                Label("ClawTalk 键盘设置", systemImage: "keyboard.badge.ellipsis")
+                    .font(.headline)
+            }
             Text("键盘已共享当前 OpenClaw 连接。启用后：选聊天对象 → 粘贴/输入对方的话 → 点 ✨ 生成 AI 回复。")
                 .font(.caption)
                 .foregroundColor(.secondary)
@@ -1138,5 +1142,18 @@ private struct LiveActivityPreviewCard: View {
         .background(Capsule().fill(Color.black))
         .overlay(Capsule().strokeBorder(.white.opacity(0.14), lineWidth: 1))
         .accessibilityLabel("灵动岛样式预览：\(style.displayName)")
+    }
+}
+
+/// 键盘设置占位页（键盘包融合中，下一版接入完整键盘设置）。
+struct KeyboardSettingsPlaceholderView: View {
+    var body: some View {
+        ContentUnavailableView {
+            Label("ClawTalk 键盘设置", systemImage: "keyboard.badge.ellipsis")
+        } description: {
+            Text("键盘功能融合中，下一版接入完整设置。")
+        }
+        .navigationTitle("键盘设置")
+        .navigationBarTitleDisplayMode(.inline)
     }
 }

@@ -66,7 +66,7 @@ final class SettingsStore {
     }
     /// 同步网关配置到 App Group（供键盘扩展读取）
     private func syncGatewayToAppGroup() {
-        guard let groupDefaults = UserDefaults(suiteName: "group.com.openclaw.clawtalk") else { return }
+        guard let groupDefaults = UserDefaults(suiteName: "group.7518554") else { return }
         groupDefaults.set(settings.gatewayURL, forKey: "gateway_url")
         groupDefaults.set(gatewayToken, forKey: "gateway_token")
         groupDefaults.set("main", forKey: "agent_id")

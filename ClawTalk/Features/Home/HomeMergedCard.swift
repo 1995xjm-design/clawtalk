@@ -398,6 +398,44 @@ struct HomeMergedCardPage: View {
                     destination: AnyView(SummarizeView(settingsStore: settings))
                 )
             ]
+        case .keyboard:
+            return [
+                HomeSection(
+                    id: "now", title: "Now ClawTalk", icon: "brain.head.profile", tint: .purple,
+                    subtitle: "输入采集 · 剪贴板 · AI 分析",
+                    destination: AnyView(KeyboardMergePlaceholderView(title: "Now ClawTalk"))
+                ),
+                HomeSection(
+                    id: "insight", title: "每日洞察", icon: "sparkles", tint: .orange,
+                    subtitle: "心灵陪伴 · 事务指导",
+                    destination: AnyView(KeyboardMergePlaceholderView(title: "每日洞察"))
+                ),
+                HomeSection(
+                    id: "freq", title: "智能调频", icon: "bolt.fill", tint: .teal,
+                    subtitle: "词频优化 · 新词发现",
+                    destination: AnyView(KeyboardMergePlaceholderView(title: "智能调频"))
+                ),
+                HomeSection(
+                    id: "chat-target", title: "聊天档案", icon: "person.crop.circle.badge.heart", tint: .pink,
+                    subtitle: "聊天对象背景档案",
+                    destination: AnyView(KeyboardMergePlaceholderView(title: "聊天档案"))
+                )
+            ]
         }
+    }
+}
+
+/// 键盘融合占位页：键盘包搬入前诚实标注（不造假功能）。
+struct KeyboardMergePlaceholderView: View {
+    let title: String
+
+    var body: some View {
+        ContentUnavailableView {
+            Label(title, systemImage: "keyboard.badge.ellipsis")
+        } description: {
+            Text("键盘功能融合中，下一版接入完整功能。")
+        }
+        .navigationTitle(title)
+        .navigationBarTitleDisplayMode(.inline)
     }
 }

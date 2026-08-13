@@ -13,6 +13,7 @@ enum HomeCardKind: String, CaseIterable, Identifiable, Hashable, Codable {
     case expense
     case travel
     case knowledge
+    case keyboard
 
     var id: String { rawValue }
 
@@ -26,6 +27,7 @@ enum HomeCardKind: String, CaseIterable, Identifiable, Hashable, Codable {
         case .expense: return "记账"
         case .travel: return "出行"
         case .knowledge: return "知识"
+        case .keyboard: return "键盘智能"
         }
     }
 
@@ -39,6 +41,7 @@ enum HomeCardKind: String, CaseIterable, Identifiable, Hashable, Codable {
         case .expense: return "yensign.circle.fill"
         case .travel: return "airplane"
         case .knowledge: return "books.vertical.fill"
+        case .keyboard: return "keyboard.badge.ellipsis"
         }
     }
 
@@ -52,6 +55,7 @@ enum HomeCardKind: String, CaseIterable, Identifiable, Hashable, Codable {
         case .expense: return .green
         case .travel: return .blue
         case .knowledge: return .purple
+        case .keyboard: return .indigo
         }
     }
 
@@ -65,19 +69,14 @@ enum HomeCardKind: String, CaseIterable, Identifiable, Hashable, Codable {
         case .expense: return "语音记账 · 本月收支 · 分类"
         case .travel: return "差旅管家 · 停车位置"
         case .knowledge: return "知识库问答 · 长文摘要"
+        case .keyboard: return "Now ClawTalk · 每日洞察 · 智能调频 · 聊天档案"
         }
     }
 
     /// S10：卡片默认尺寸（语音助手大卡固定大卡，不在本枚举内）。
+    /// 明哥要求：主页小卡全部换成中卡——所有可配置卡默认 medium。
     var defaultSize: HomeCardSize {
-        switch self {
-        case .memory: return .medium
-        case .record: return .medium
-        case .report: return .medium
-        case .travel: return .medium
-        case .knowledge: return .medium
-        default: return .small
-        }
+        .medium
     }
 }
 
