@@ -496,6 +496,11 @@ final class ToolsViewModel {
         }
     }
 
+    /// 是否网关限流（429）。
+    static func isRateLimit(_ error: Error) -> Bool {
+        error.localizedDescription.contains("429")
+    }
+
     static func extractBase64(from text: String) -> String? {
         let pattern = #"[A-Za-z0-9+/=]{1000,}"#
         guard let range = text.range(of: pattern, options: .regularExpression) else { return nil }
