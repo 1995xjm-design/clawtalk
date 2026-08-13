@@ -97,12 +97,12 @@ enum HomeCardSize: String, CaseIterable, Codable, Identifiable {
         }
     }
 
-    /// 编辑态尺寸按钮循环：小 → 中 → 大 → 小。
+    /// 编辑态尺寸按钮循环：中 → 大 → 中（small 已废弃，一行 2 个起）。
     var next: HomeCardSize {
         switch self {
         case .small: return .medium
         case .medium: return .large
-        case .large: return .small
+        case .large: return .medium
         }
     }
 
@@ -162,15 +162,16 @@ enum HomeCardRegistry {
     }
 
     /// S10：读取卡片尺寸（未设置时回落默认尺寸）。
-    static func size(for kind: HomeCardKind, storage: String) -> HomeCardSize {
-        for part in storage.split(separator: ",") {
-            let kv = part.split(separator: ":", maxSplits: 1).map { String($0).trimmingCharacters(in: .whitespaces) }
-            if kv.count == 2, let key = HomeCardKind(rawValue: kv[0]), key == kind,
-               let value = HomeCardSize(rawValue: kv[1]) {
-                return value
-            }
+        static func size(for kind: HomeCardKind, storage: String) -> HomeCardSize {
+        // 明哥要求：一行 2 个（small 一律升 medium，老存档迁移）
+        var resolved: HomeCardSize
+        if let raw = HomeCardSize(rawValue: storage), let size = try? kind.size(raw) {
+            resolved = size
+        } else {
+            resolved = kind.defaultSize
         }
-        return kind.defaultSize
+        if resolved == .small { resolved = .medium }
+        return resolved
     }
 
     /// S10：写入卡片尺寸（覆盖同卡旧值）。
