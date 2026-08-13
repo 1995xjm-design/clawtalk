@@ -21,21 +21,6 @@ let package = Package(
     .package(url: "https://github.com/jpsim/Yams.git", exact: "5.0.6"),
   ],
   targets: [
-    .binaryTarget(
-      name: "librime",
-      path: "../../Frameworks/librime.xcframework"),
-    .binaryTarget(
-      name: "libleveldb",
-      path: "../../Frameworks/libleveldb.xcframework"),
-    .binaryTarget(
-      name: "libmarisa",
-      path: "../../Frameworks/libmarisa.xcframework"),
-    .binaryTarget(
-      name: "libopencc",
-      path: "../../Frameworks/libopencc.xcframework"),
-    .binaryTarget(
-      name: "libyaml-cpp",
-      path: "../../Frameworks/libyaml-cpp.xcframework"),
     .target(
       name: "HamsterKeyboardKit",
       dependencies: [
@@ -56,11 +41,6 @@ let package = Package(
         "ZIPFoundation",
         // "ZippyJSON",
         "RimeKit",
-        "librime",
-        "libleveldb",
-        "libmarisa",
-        "libopencc",
-        "libyaml-cpp",
       ],
       path: "Tests"),
   ])
