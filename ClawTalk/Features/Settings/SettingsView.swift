@@ -1164,7 +1164,7 @@ private final class KeyboardSettingsHostViewController: UIViewController {
     private var child: UIViewController?
     override func viewDidLoad() {
         super.viewDidLoad()
-        let container = HamsterAppDependencyContainer()
+        let container = HamsterAppDependencyContainer.shared
         let settingsVC = container.makeSettingsViewController()
         addChild(settingsVC)
         settingsVC.view.frame = view.bounds
