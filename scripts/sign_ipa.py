@@ -145,11 +145,6 @@ def main():
                             "--entitlements", ent_path,
                             "--timestamp=none", ext_path], check=True)
             print("signed extension: %s | profile: %s" % (ext, os.path.basename(profile)))
-        subprocess.run(["codesign", "--force", "--sign", identity,
-                        "--entitlements", main_ent_path,
-                        "--timestamp=none", app_path], check=True)
-        print("signed app:", app_name)
-
         # --- sign embedded watch app (ClawTalk.app/Watch/*.app, watchOS 10 single-app model) ---
         watch_dir = os.path.join(app_path, "Watch")
         if os.path.isdir(watch_dir):
@@ -166,6 +161,12 @@ def main():
                                 "--entitlements", watch_ent_path,
                                 "--timestamp=none", watch_app_path], check=True)
                 print("signed watch app:", watch_app)
+
+        # 最后签名主 App：seal 必须包含已签名的扩展与内嵌 watch app
+        subprocess.run(["codesign", "--force", "--sign", identity,
+                        "--entitlements", main_ent_path,
+                        "--timestamp=none", app_path], check=True)
+        print("signed app:", app_name)
 
         # --- verify ---
         subprocess.run(["codesign", "--verify", "--deep", "--strict", app_path], check=True)
