@@ -367,6 +367,7 @@ struct SummarizeView: View {
     @State private var isHolding = false
     @State private var showHoldHint = false
 
+    private let settingsStore: SettingsStore
     private let hapticsEnabled: Bool
     private let recordButtonSize: CGFloat = 64
     /// 按住多久算开始录音（0.3 秒，与语音日记/会议纪要一致）
@@ -377,6 +378,7 @@ struct SummarizeView: View {
             settingsStore: settingsStore,
             store: store ?? SummarizerStore()
         ))
+        self.settingsStore = settingsStore
         hapticsEnabled = settingsStore.settings.hapticsEnabled
     }
 
