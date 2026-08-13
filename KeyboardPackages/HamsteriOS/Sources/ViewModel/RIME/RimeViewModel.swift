@@ -49,6 +49,21 @@ public class RimeViewModel {
     }
   }
 
+  /// 简繁切换开关
+  /// 基于简繁切换键值是否配置判断：旧文本值非空视为开启，兼容旧存档
+  public var isSimplifiedTraditionalEnabled: Bool {
+    get { !keyValueOfSwitchSimplifiedAndTraditional.isEmpty }
+    set {
+      if newValue {
+        if keyValueOfSwitchSimplifiedAndTraditional.isEmpty {
+          keyValueOfSwitchSimplifiedAndTraditional = "traditionalization"
+        }
+      } else {
+        keyValueOfSwitchSimplifiedAndTraditional = ""
+      }
+    }
+  }
+
   // 是否覆盖词库文件
   // 非造词用户保持默认值 true
   public var overrideDictFiles: Bool {
@@ -64,15 +79,14 @@ public class RimeViewModel {
   lazy var settings: [SettingSectionModel] = [
     .init(
       title: "简繁切换",
-      footer: "配置文件中`switches`简繁转换选项的配置名称，仓用于中文简体与繁体之间快速切换。",
+      footer: "开启后可在键盘上通过简繁切换键在简体与繁体之间快速切换。",
       items: [
         .init(
-          icon: UIImage(systemName: "square.and.pencil"),
-          placeholder: "简繁切换键值",
-          type: .textField,
-          textValue: { [unowned self] in keyValueOfSwitchSimplifiedAndTraditional },
-          textHandled: { [unowned self] in
-            keyValueOfSwitchSimplifiedAndTraditional = $0
+          text: "启用简繁切换",
+          type: .toggle,
+          toggleValue: { [unowned self] in isSimplifiedTraditionalEnabled },
+          toggleHandled: { [unowned self] in
+            isSimplifiedTraditionalEnabled = $0
           }
         ),
       ]

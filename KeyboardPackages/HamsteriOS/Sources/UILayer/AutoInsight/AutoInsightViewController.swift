@@ -2,7 +2,10 @@ import HamsterUIKit
 import SwiftUI
 import UIKit
 
-class AutoInsightViewController: NibLessViewController {
+public class AutoInsightViewController: NibLessViewController {
+  public init() {
+    super.init(nibName: nil, bundle: nil)
+  }
   override func loadView() {
     view = UIView()
     title = "每日洞察"

@@ -82,10 +82,6 @@ struct ReportView: View {
         .task(id: selectedPeriod) { await load() }
         .refreshable { await load() }
         .onDisappear { stopSpeaking() }
-        .overlay(alignment: .bottom) {
-            GlobalVoiceInputFloating(settingsStore: settings)
-                .padding(.bottom, 20)
-        }
     }
 
     // MARK: - 顶部：周期切换 + 总结 + 操作按钮

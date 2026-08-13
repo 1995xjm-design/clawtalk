@@ -22,6 +22,13 @@ public class BackupViewModel {
     favoriteButton: .appBackup
   )
 
+  lazy var importSettingItem = SettingItemModel(
+    text: "从文件导入备份",
+    buttonAction: { [unowned self] in
+      backupSwipeAction = .importBackup
+    }
+  )
+
   /// 备份文件列表
   @Published
   var backupFiles: [FileInfo] = []
@@ -57,10 +64,14 @@ public class BackupViewModel {
     }
   }
 
-  /// 应用恢复
+  /// Restore application from backup
   func restore(fileInfo: FileInfo) async {
+    await restore(from: fileInfo.url)
+  }
+
+  /// 应用恢复（指定备份文件 URL）
+  func restore(from selectRestoreFileURL: URL) async {
     await ProgressHUD.animate("恢复中，请等待……", interaction: false)
-    let selectRestoreFileURL = fileInfo.url
     do {
       // 解压zip
       if FileManager.default.fileExists(atPath: FileManager.tempBackupDirectory.path) {
@@ -85,6 +96,33 @@ public class BackupViewModel {
     } catch {
       Logger.statistics.error("App restore error: \(error.localizedDescription)")
       await ProgressHUD.failed("恢复失败")
+    }
+  }
+
+  /// 从外部文件导入备份（文档选择器选中后调用）
+  func importBackup(from externalURL: URL) async {
+    let didStartAccessing = externalURL.startAccessingSecurityScopedResource()
+    defer {
+      if didStartAccessing {
+        externalURL.stopAccessingSecurityScopedResource()
+      }
+    }
+    do {
+      let backupURL = FileManager.sandboxBackupDirectory
+      if !FileManager.default.fileExists(atPath: backupURL.path) {
+        try FileManager.createDirectory(dst: backupURL)
+      }
+      let fileName = externalURL.lastPathComponent.isEmpty
+        ? "import-\(DateFormatter.tempFileNameStyle.string(from: Date())).zip"
+        : externalURL.lastPathComponent
+      let localURL = backupURL.appendingPathComponent(fileName)
+      try? FileManager.default.removeItem(at: localURL)
+      try FileManager.default.copyItem(at: externalURL, to: localURL)
+      await restore(from: localURL)
+      loadBackupFiles()
+    } catch {
+      Logger.statistics.error("App import backup error: \(error.localizedDescription)")
+      await ProgressHUD.failed("导入备份失败")
     }
   }
 

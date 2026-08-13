@@ -1,3 +1,4 @@
+import HamsteriOS
 import SwiftUI
 
 /// 合并卡子功能条目：跳转到现有功能页（复用现有 Views，不复制大段代码）。
@@ -403,39 +404,101 @@ struct HomeMergedCardPage: View {
                 HomeSection(
                     id: "now", title: "Now ClawTalk", icon: "brain.head.profile", tint: .purple,
                     subtitle: "输入采集 · 剪贴板 · AI 分析",
-                    destination: AnyView(KeyboardMergePlaceholderView(title: "Now ClawTalk"))
+                    destination: AnyView(ClawTalkPanelHost())
                 ),
                 HomeSection(
                     id: "insight", title: "每日洞察", icon: "sparkles", tint: .orange,
                     subtitle: "心灵陪伴 · 事务指导",
-                    destination: AnyView(KeyboardMergePlaceholderView(title: "每日洞察"))
+                    destination: AnyView(AutoInsightPanelHost())
                 ),
                 HomeSection(
                     id: "freq", title: "智能调频", icon: "bolt.fill", tint: .teal,
                     subtitle: "词频优化 · 新词发现",
-                    destination: AnyView(KeyboardMergePlaceholderView(title: "智能调频"))
+                    destination: AnyView(SmartFreqPanelHost())
                 ),
                 HomeSection(
                     id: "chat-target", title: "聊天档案", icon: "person.crop.circle.badge.heart", tint: .pink,
                     subtitle: "聊天对象背景档案",
-                    destination: AnyView(KeyboardMergePlaceholderView(title: "聊天档案"))
+                    destination: AnyView(HeartTargetPanelHost())
                 )
             ]
         }
     }
 }
 
-/// 键盘融合占位页：键盘包搬入前诚实标注（不造假功能）。
-struct KeyboardMergePlaceholderView: View {
-    let title: String
+// MARK: - 键盘智能卡真实页面（UIViewControllerRepresentable 包 HamsteriOS 页面，防崩兜底）
 
-    var body: some View {
-        ContentUnavailableView {
-            Label(title, systemImage: "keyboard.badge.ellipsis")
-        } description: {
-            Text("键盘功能融合中，下一版接入完整功能。")
-        }
-        .navigationTitle(title)
-        .navigationBarTitleDisplayMode(.inline)
+/// 防崩兜底页：控制器创建/加载异常时诚实提示，不把异常抛给 SwiftUI。
+private final class KeyboardHostFailureViewController: UIViewController {
+    private let reason: String
+
+    init(reason: String) {
+        self.reason = reason
+        super.init(nibName: nil, bundle: nil)
     }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        view.backgroundColor = .systemGroupedBackground
+        let label = UILabel()
+        label.text = "键盘功能加载失败：\(reason)"
+        label.numberOfLines = 0
+        label.textAlignment = .center
+        label.textColor = .secondaryLabel
+        label.font = .preferredFont(forTextStyle: .footnote)
+        label.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(label)
+        NSLayoutConstraint.activate([
+            label.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 24),
+            label.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -24),
+            label.centerYAnchor.constraint(equalTo: view.centerYAnchor),
+        ])
+    }
+}
+
+/// 安全创建控制器：任何初始化异常都回退到诚实提示页，保证主程序不崩。
+private enum KeyboardPanelHost {
+    static func safe(make: @escaping () throws -> UIViewController) -> UIViewController {
+        do {
+            return try make()
+        } catch {
+            return KeyboardHostFailureViewController(reason: error.localizedDescription)
+        }
+    }
+}
+
+/// Now ClawTalk：输入采集 · 剪贴板 · AI 分析
+struct ClawTalkPanelHost: UIViewControllerRepresentable {
+    func makeUIViewController(context: Context) -> UIViewController {
+        KeyboardPanelHost.safe { ClawTalkViewController() }
+    }
+    func updateUIViewController(_ uiViewController: UIViewController, context: Context) {}
+}
+
+/// 每日洞察：心灵陪伴 · 事务指导
+struct AutoInsightPanelHost: UIViewControllerRepresentable {
+    func makeUIViewController(context: Context) -> UIViewController {
+        KeyboardPanelHost.safe { AutoInsightViewController() }
+    }
+    func updateUIViewController(_ uiViewController: UIViewController, context: Context) {}
+}
+
+/// 智能调频：词频优化 · 新词发现
+struct SmartFreqPanelHost: UIViewControllerRepresentable {
+    func makeUIViewController(context: Context) -> UIViewController {
+        KeyboardPanelHost.safe { SmartFreqViewController() }
+    }
+    func updateUIViewController(_ uiViewController: UIViewController, context: Context) {}
+}
+
+/// 聊天档案：聊天对象背景档案
+struct HeartTargetPanelHost: UIViewControllerRepresentable {
+    func makeUIViewController(context: Context) -> UIViewController {
+        KeyboardPanelHost.safe { HeartTargetSettingsViewController() }
+    }
+    func updateUIViewController(_ uiViewController: UIViewController, context: Context) {}
 }

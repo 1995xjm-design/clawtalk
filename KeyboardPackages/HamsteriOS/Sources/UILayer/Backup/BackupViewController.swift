@@ -8,6 +8,7 @@
 import Combine
 import HamsterUIKit
 import UIKit
+import UniformTypeIdentifiers
 
 class BackupViewController: NibLessViewController {
   // MARK: properties
@@ -40,7 +41,30 @@ class BackupViewController: NibLessViewController {
       deleteBackupAction()
     case .rename:
       renameAction()
+    case .share:
+      shareBackupAction()
+    case .importBackup:
+      presentBackupImportPicker()
     }
+  }
+
+  /// 从文件导入备份（文档选择器）
+  func presentBackupImportPicker() {
+    let documentPicker = UIDocumentPickerViewController(forOpeningContentTypes: [.zip, .data], asCopy: true)
+    documentPicker.delegate = self
+    documentPicker.allowsMultipleSelection = false
+    present(documentPicker, animated: true)
+  }
+
+  /// 分享备份文件
+  func shareBackupAction() {
+    guard let selectFile = backupViewModel.selectFile else { return }
+    let activityController = UIActivityViewController(activityItems: [selectFile.url], applicationActivities: nil)
+    if let popover = activityController.popoverPresentationController {
+      popover.sourceView = view
+      popover.sourceRect = view.bounds
+    }
+    present(activityController, animated: true)
   }
 
   func deleteBackupAction() {
@@ -75,5 +99,16 @@ class BackupViewController: NibLessViewController {
     }))
     alertController.addAction(UIAlertAction(title: "取消", style: .cancel, handler: nil))
     present(alertController, animated: true)
+  }
+}
+
+// MARK: - UIDocumentPickerDelegate
+
+extension BackupViewController: UIDocumentPickerDelegate {
+  func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
+    guard let url = urls.first else { return }
+    Task {
+      await backupViewModel.importBackup(from: url)
+    }
   }
 }

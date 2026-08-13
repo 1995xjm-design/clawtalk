@@ -48,7 +48,7 @@ struct MessageBubble: View {
                             }
                         }
                     } else {
-                        Text(message.timestamp, style: .time)
+                        Text(message.timestamp.formatted(date: .abbreviated, time: .shortened))
                             .font(.caption2)
                             .foregroundStyle(.secondary)
 

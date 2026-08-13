@@ -1,3 +1,4 @@
+import HamsterKit
 import SwiftUI
 import UIKit
 
@@ -12,6 +13,7 @@ struct AboutView: View {
                 LabeledContent("名称", value: "ClawTalk")
                 LabeledContent("版本", value: appVersion)
                 LabeledContent("构建号", value: appBuild)
+                LabeledContent("RIME 引擎", value: rimeEngineText)
             }
 
             Section("设备") {
@@ -45,6 +47,12 @@ struct AboutView: View {
 
     private var systemVersion: String {
         "\(UIDevice.current.systemName) \(UIDevice.current.systemVersion)"
+    }
+
+    /// RIME 引擎标识：读 Info.plist rimeVersion；键盘包提供真实版本后经该键回填。
+    private var rimeEngineText: String {
+        let v = AppInfo.rimeVersion
+        return v.isEmpty ? "librime（内置）" : v
     }
 
     private var gatewayStatusText: String {

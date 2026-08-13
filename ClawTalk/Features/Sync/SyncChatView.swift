@@ -443,7 +443,7 @@ private struct SyncSearchView: View {
                                 Image(systemName: message.role == .user ? "person.fill" : "cpu")
                                     .font(.caption)
                                     .foregroundStyle(message.role == .user ? .blue : Color.openClawRed)
-                                Text(message.timestamp, style: .time)
+                                Text(message.timestamp.formatted(date: .abbreviated, time: .shortened))
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             }
@@ -511,7 +511,7 @@ private struct SyncBubble: View {
                             }
                         }
                     } else {
-                        Text(message.timestamp, style: .time)
+                        Text(message.timestamp.formatted(date: .abbreviated, time: .shortened))
                             .font(.caption2)
                             .foregroundStyle(.secondary)
                     }

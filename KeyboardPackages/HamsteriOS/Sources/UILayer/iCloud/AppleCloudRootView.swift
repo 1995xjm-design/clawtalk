@@ -20,6 +20,7 @@ class AppleCloudRootView: NibLessView {
     tableView.register(ToggleTableViewCell.self, forCellReuseIdentifier: ToggleTableViewCell.identifier)
     tableView.register(ButtonTableViewCell.self, forCellReuseIdentifier: ButtonTableViewCell.identifier)
     tableView.register(TextFieldTableViewCell.self, forCellReuseIdentifier: TextFieldTableViewCell.identifier)
+    tableView.register(SettingTableViewCell.self, forCellReuseIdentifier: SettingTableViewCell.identifier)
     tableView.allowsSelection = false
     tableView.delegate = self
     tableView.dataSource = self
@@ -54,7 +55,7 @@ class AppleCloudRootView: NibLessView {
   }
 
   func reloadSyncStatus() {
-    tableView.reloadSections(IndexSet(integer: 1), with: .none)
+    tableView.reloadSections(IndexSet([0, 2]), with: .none)
   }
 }
 
@@ -70,12 +71,16 @@ extension AppleCloudRootView: UITableViewDelegate {
   func tableView(_ tableView: UITableView, viewForFooterInSection section: Int) -> UIView? {
     switch section {
     case 0:
-      return TableFooterView(footer: Self.enableAppleCloudRemark)
+      return TableFooterView(footer: Self.statusRemark)
     case 1:
+      return TableFooterView(footer: Self.enableAppleCloudRemark)
+    case 2:
       let lastSync = viewModel.lastSyncDescription
       let footer = lastSync.isEmpty ? Self.copyRemark : Self.copyRemark + "\n\(lastSync)"
       return TableFooterView(footer: footer)
-    case 2:
+    case 3:
+      return TableFooterView(footer: Self.restoreRemark)
+    case 4:
       let footerView = TableFooterView(footer: Self.regexRemark)
       let gesture = UITapGestureRecognizer(target: self, action: #selector(copyRegex))
       gesture.cancelsTouchesInView = false
@@ -114,6 +119,13 @@ extension AppleCloudRootView: UITableViewDataSource {
       return cell
     }
 
+    if settingItem.type == .settings {
+      let cell = tableView.dequeueReusableCell(withIdentifier: SettingTableViewCell.identifier, for: indexPath)
+      guard let cell = cell as? SettingTableViewCell else { return cell }
+      cell.updateWithSettingItem(settingItem)
+      return cell
+    }
+
     let cell = tableView.dequeueReusableCell(withIdentifier: TextFieldTableViewCell.identifier, for: indexPath)
     guard let cell = cell as? TextFieldTableViewCell else { return cell }
     cell.updateWithSettingItem(settingItem)
@@ -122,6 +134,13 @@ extension AppleCloudRootView: UITableViewDataSource {
 }
 
 extension AppleCloudRootView {
+  static let statusRemark = "显示当前 iCloud 可用状态；同步前请确保已登录 iCloud 云盘。"
+
+  static let restoreRemark = """
+  1. 从 iCloud 将 RIME 配置与用户数据恢复到本地沙盒；
+  2. 恢复后,请手动执行“重新部署”;
+  """
+
   static let enableAppleCloudRemark = """
   1. 启用后，“重新部署”会复制iCloud中ClawTalk输入法`RIME`文件夹下全部文件；
   2. 复制时，差异文件会被覆盖；

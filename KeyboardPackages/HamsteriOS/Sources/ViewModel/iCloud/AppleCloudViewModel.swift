@@ -24,6 +24,20 @@ public class AppleCloudViewModel: ObservableObject {
 
   @Published public var syncState: SyncState = .idle
 
+  // MARK: - iCloud Availability
+
+  /// iCloud 是否可用（检测 ubiquity 身份令牌）
+  public var isICloudAvailable: Bool {
+    FileManager.default.ubiquityIdentityToken != nil
+  }
+
+  public var iCloudAvailabilityDescription: String {
+    if isICloudAvailable {
+      return "iCloud 已可用"
+    }
+    return "iCloud 不可用：请在系统设置中登录 iCloud，并开启 ClawTalk 的 iCloud 云盘"
+  }
+
   // MARK: - Last Sync Status (persisted in UserDefaults)
 
   private let lastSyncTimeKey = "icloud_last_sync_time"
@@ -50,6 +64,11 @@ public class AppleCloudViewModel: ObservableObject {
 
   lazy var settings: [SettingItemModel] = [
     .init(
+      text: "iCloud 状态",
+      secondaryText: iCloudAvailabilityDescription,
+      type: .settings
+    ),
+    .init(
       text: "iCloud",
       type: .toggle,
       toggleValue: { [unowned self] in settingsViewModel.enableAppleCloud },
@@ -65,6 +84,13 @@ public class AppleCloudViewModel: ObservableObject {
       }
     ),
     .init(
+      text: "从 iCloud 恢复",
+      type: .button,
+      buttonAction: { [unowned self] in
+        Task { await restoreFileFromiCloud() }
+      }
+    ),
+    .init(
       text: "正则过滤",
       textValue: { [unowned self] in regexOnCopyFile },
       textHandled: { [unowned self] in
@@ -75,6 +101,31 @@ public class AppleCloudViewModel: ObservableObject {
 
   init(settingsViewModel: SettingsViewModel) {
     self.settingsViewModel = settingsViewModel
+  }
+
+  /// 从 iCloud 恢复到本地沙盒
+  func restoreFileFromiCloud() async {
+    guard isICloudAvailable else {
+      await MainActor.run { syncState = .finished(success: false, message: iCloudAvailabilityDescription) }
+      return
+    }
+    await MainActor.run { syncState = .syncing }
+    await ProgressHUD.animate("从 iCloud 恢复中……", interaction: false)
+    do {
+      let regexList = regexOnCopyFile.split(separator: ",").map { String($0) }
+      try FileManager.copyAppleCloudSharedSupportDirectoryToSandbox(regexList)
+      try FileManager.copyAppleCloudUserDataDirectoryToSandbox(regexList)
+      UserDefaults.standard.set(Date(), forKey: lastSyncTimeKey)
+      UserDefaults.standard.set(true, forKey: lastSyncSuccessKey)
+      await ProgressHUD.dismiss()
+      await MainActor.run { syncState = .finished(success: true, message: "已从 iCloud 恢复到本地，请重新部署。") }
+    } catch {
+      Logger.statistics.error("apple cloud restore from iCloud error: \(error)")
+      UserDefaults.standard.set(Date(), forKey: lastSyncTimeKey)
+      UserDefaults.standard.set(false, forKey: lastSyncSuccessKey)
+      await ProgressHUD.dismiss()
+      await MainActor.run { syncState = .finished(success: false, message: error.localizedDescription) }
+    }
   }
 
   func copyFileToiCloud() async {

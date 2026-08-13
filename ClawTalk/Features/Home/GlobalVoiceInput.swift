@@ -73,6 +73,7 @@ final class GlobalVoiceInputViewModel {
 
     func startShortRecording() {
         guard state == .idle else { return }
+        guard ensureMicPermission() else { return }
         beginSession()
         do {
             try audioCapture.startRecording()
@@ -131,6 +132,7 @@ final class GlobalVoiceInputViewModel {
 
     func startLongRecording() {
         guard state == .idle else { return }
+        guard ensureMicPermission() else { return }
         beginSession()
         let recorder = LongAudioRecorder()
         do {
@@ -185,6 +187,30 @@ final class GlobalVoiceInputViewModel {
         state = .idle
         recordingStart = nil
         endSession()
+    }
+
+    /// 麦克风权限预检：未授权给出明确引导，不静默失败。
+    private func ensureMicPermission() -> Bool {
+        switch AVAudioApplication.shared.recordPermission {
+        case .granted:
+            return true
+        case .denied:
+            errorMessage = "需要麦克风权限：请到 系统设置 → 隐私与安全性 → 麦克风 开启 ClawTalk 后重试。"
+            return false
+        case .undetermined:
+            // 首次使用：弹系统授权框；授权后再点一次即可开始。
+            AVAudioApplication.requestRecordPermission { granted in
+                if !granted {
+                    Task { @MainActor in
+                        LogCollector.record(module: "全局语音输入", "用户拒绝麦克风权限")
+                    }
+                }
+            }
+            errorMessage = "请允许麦克风权限后再次点击开始。"
+            return false
+        @unknown default:
+            return true
+        }
     }
 
     // MARK: - 转写（长录音分段拼接）
@@ -682,12 +708,10 @@ struct GlobalVoiceInput: View {
 struct GlobalVoiceInputFloating: View {
     @State private var viewModel: GlobalVoiceInputViewModel
     @State private var isPressed = false
-    @State private var holdTask: Task<Void, Never>?
     @State private var didSwitchToLong = false
     @State private var isBreathing = false
 
     private let buttonSize: CGFloat = 64
-    private let holdThreshold: UInt64 = 250_000_000
     private let swipeUpThreshold: CGFloat = -70
 
     init(settingsStore: SettingsStore, onTranscript: ((String, GlobalVoiceInputMode) -> Void)? = nil) {
@@ -707,8 +731,6 @@ struct GlobalVoiceInputFloating: View {
             }
         }
         .onDisappear {
-            holdTask?.cancel()
-            holdTask = nil
             viewModel.discard()
         }
     }
@@ -834,11 +856,9 @@ struct GlobalVoiceInputFloating: View {
                     guard viewModel.mode == .short, !isPressed else { return }
                     isPressed = true
                     UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                    holdTask = Task { @MainActor in
-                        try? await Task.sleep(nanoseconds: holdThreshold)
-                        guard !Task.isCancelled, isPressed, viewModel.state == .idle else { return }
-                        viewModel.startShortRecording()
-                    }
+                    // 按下立即开始录音：界面马上有「接收语音」的反应；
+                    // 松开时不足 0.5 秒的短按由 stopShortRecording 自动判误触丢弃。
+                    viewModel.startShortRecording()
                 case .recording:
                     if viewModel.mode == .short,
                        value.translation.height < swipeUpThreshold,
@@ -852,8 +872,6 @@ struct GlobalVoiceInputFloating: View {
                 }
             }
             .onEnded { _ in
-                holdTask?.cancel()
-                holdTask = nil
                 isPressed = false
                 // 已上滑切长录音：松开不停止（锁定继续录），点按才结束
                 if didSwitchToLong {

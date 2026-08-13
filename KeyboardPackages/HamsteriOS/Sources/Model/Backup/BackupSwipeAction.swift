@@ -10,4 +10,6 @@ import Foundation
 enum BackupSwipeAction {
   case delete
   case rename
+  case share
+  case importBackup
 }

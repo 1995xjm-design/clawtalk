@@ -86,10 +86,6 @@ struct DailyBriefingView: View {
         .task { await load() }
         .refreshable { await load() }
         .onDisappear { stopSpeaking() }
-        .overlay(alignment: .bottom) {
-            GlobalVoiceInputFloating(settingsStore: settings)
-                .padding(.bottom, 20)
-        }
     }
 
     // MARK: - 一键播报

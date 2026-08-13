@@ -162,16 +162,16 @@ enum HomeCardRegistry {
     }
 
     /// S10：读取卡片尺寸（未设置时回落默认尺寸）。
-        static func size(for kind: HomeCardKind, storage: String) -> HomeCardSize {
-        // 明哥要求：一行 2 个（small 一律升 medium，老存档迁移）
-        var resolved: HomeCardSize
-        if let raw = HomeCardSize(rawValue: storage), let size = try? kind.size(raw) {
-            resolved = size
-        } else {
-            resolved = kind.defaultSize
+    static func size(for kind: HomeCardKind, storage: String) -> HomeCardSize {
+        for part in storage.split(separator: ",") {
+            let kv = part.split(separator: ":", maxSplits: 1).map { String($0).trimmingCharacters(in: .whitespaces) }
+            if kv.count == 2, let key = HomeCardKind(rawValue: kv[0]), key == kind,
+               let value = HomeCardSize(rawValue: kv[1]) {
+                // 明哥要求：一行 2 个（small 一律升 medium，老存档迁移）
+                return value == .small ? .medium : value
+            }
         }
-        if resolved == .small { resolved = .medium }
-        return resolved
+        return kind.defaultSize
     }
 
     /// S10：写入卡片尺寸（覆盖同卡旧值）。

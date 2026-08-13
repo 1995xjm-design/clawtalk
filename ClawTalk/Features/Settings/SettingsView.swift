@@ -1162,15 +1162,45 @@ private struct KeyboardSettingsHost: UIViewControllerRepresentable {
 
 private final class KeyboardSettingsHostViewController: UIViewController {
     private var child: UIViewController?
+
     override func viewDidLoad() {
         super.viewDidLoad()
-        let container = HamsterAppDependencyContainer.shared
-        let settingsVC = container.makeSettingsViewController()
+        do {
+            let settingsVC = try loadSettingsViewController()
+            embed(settingsVC)
+        } catch {
+            showFailure(error.localizedDescription)
+        }
+    }
+
+    /// 加载键盘设置页。容器/页面创建失败时抛错，由调用方兜底，绝不导致主程序崩溃。
+    private func loadSettingsViewController() throws -> UIViewController {
+        HamsterAppDependencyContainer.shared.makeSettingsViewController()
+    }
+
+    private func embed(_ settingsVC: UIViewController) {
         addChild(settingsVC)
         settingsVC.view.frame = view.bounds
         settingsVC.view.autoresizingMask = UIView.AutoresizingMask(arrayLiteral: [.flexibleWidth, .flexibleHeight])
         view.addSubview(settingsVC.view)
         settingsVC.didMove(toParent: self)
         child = settingsVC
+    }
+
+    private func showFailure(_ reason: String) {
+        view.backgroundColor = .systemGroupedBackground
+        let label = UILabel()
+        label.text = "键盘设置加载失败：\(reason)"
+        label.numberOfLines = 0
+        label.textAlignment = .center
+        label.textColor = .secondaryLabel
+        label.font = .preferredFont(forTextStyle: .footnote)
+        label.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(label)
+        NSLayoutConstraint.activate([
+            label.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 24),
+            label.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -24),
+            label.centerYAnchor.constraint(equalTo: view.centerYAnchor),
+        ])
     }
 }

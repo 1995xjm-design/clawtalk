@@ -172,6 +172,15 @@ struct GoogleDriveRootView: View {
           }
           .disabled(viewModel.clientID.isEmpty)
 
+          Button {
+            if let url = URL(string: "https://console.cloud.google.com/apis/credentials") {
+              UIApplication.shared.open(url)
+            }
+          } label: {
+            Label("打开 Google Cloud Console 创建 Client ID", systemImage: "link.circle")
+          }
+          .font(.footnote)
+
           if !viewModel.statusMessage.isEmpty {
             Text(viewModel.statusMessage)
               .font(.caption).foregroundColor(.secondary)
@@ -181,7 +190,7 @@ struct GoogleDriveRootView: View {
         } footer: {
           VStack(alignment: .leading, spacing: 4) {
             Text("同步 ClawTalk 采集记录至 Google Drive / Hamster / ClawTalk / 目录。")
-            Text("首次使用：前往 Google Cloud Console → APIs & Services → Credentials，创建 **Web 应用** 类型的 OAuth 2.0 Client ID，在「已获授权的重定向 URI」中添加：\nhamster://oauth2redirect")
+            Text("首次使用步骤：\n1. 点上方按钮打开 Google Cloud Console → APIs & Services → Credentials；\n2. 创建 Web 应用 类型的 OAuth 2.0 Client ID；\n3. 在已获授权的重定向 URI 中添加：hamster://oauth2redirect；\n4. 回本页填入 Client ID 后点 登录 Google 账号。")
           }
           .font(.caption)
         }

@@ -2,7 +2,10 @@ import HamsterUIKit
 import SwiftUI
 import UIKit
 
-class ClawTalkViewController: NibLessViewController {
+public class ClawTalkViewController: NibLessViewController {
+  public init() {
+    super.init(nibName: nil, bundle: nil)
+  }
   private let viewModel = ClawTalkViewModel()
 
   override func viewDidLoad() {

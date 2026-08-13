@@ -2,7 +2,10 @@ import HamsterUIKit
 import SwiftUI
 import UIKit
 
-class SmartFreqViewController: NibLessViewController {
+public class SmartFreqViewController: NibLessViewController {
+  public init() {
+    super.init(nibName: nil, bundle: nil)
+  }
   override func loadView() {
     view = UIView()
     title = "智能调频"

@@ -38,6 +38,8 @@ struct VoiceAssistantCardView: View, VoiceAssistantCardContent {
     @AppStorage("voiceAssistant.theme") private var themeRawValue = VoiceAssistantTheme.aurora.rawValue
     // 对话记录入口
     @State private var showTranscript = false
+    // 错误横幅自动消失任务
+    @State private var errorAutoClearTask: Task<Void, Never>?
 
     private let cardHeight: CGFloat = 250
     private let firstUseDefaultsKey = "voiceAssistant.didShowFirstUseGuide"
@@ -96,6 +98,8 @@ struct VoiceAssistantCardView: View, VoiceAssistantCardContent {
         .onDisappear {
             stopTipRotation()
             stopTextBreathing()
+            errorAutoClearTask?.cancel()
+            errorAutoClearTask = nil
         }
         .onChange(of: viewModel.state) { _, newState in
             handleStateChange(newState)
@@ -105,6 +109,17 @@ struct VoiceAssistantCardView: View, VoiceAssistantCardContent {
             if viewModel.voiceAssistantShowTranscript,
                viewModel.state == .listening || viewModel.state == .thinking {
                 startTranscriptReveal()
+            }
+        }
+        .onChange(of: viewModel.errorMessage) { _, newValue in
+            guard newValue != nil else { return }
+            errorAutoClearTask?.cancel()
+            errorAutoClearTask = Task { @MainActor in
+                try? await Task.sleep(for: .seconds(6))
+                guard !Task.isCancelled else { return }
+                withAnimation(.easeOut(duration: 0.3)) {
+                    viewModel.clearErrorMessage()
+                }
             }
         }
     }
@@ -137,6 +152,19 @@ struct VoiceAssistantCardView: View, VoiceAssistantCardContent {
                     .transition(.opacity.combined(with: .offset(y: 3)))
             } else {
                 liveTextArea
+            }
+
+            if let error = viewModel.errorMessage {
+                Text(error)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(.white)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(Capsule().fill(Color.red.opacity(0.85)))
+                    .padding(.top, 4)
+                    .transition(.opacity.combined(with: .scale(scale: 0.92)))
             }
 
             Spacer(minLength: 0)

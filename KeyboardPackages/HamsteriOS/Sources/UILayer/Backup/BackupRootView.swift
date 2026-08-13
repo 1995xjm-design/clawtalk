@@ -77,7 +77,12 @@ extension BackupRootView: UITableViewDelegate {
       backupViewModel.backupSwipeAction = .rename
     }
     editAction.backgroundColor = .systemBlue
-    return UISwipeActionsConfiguration(actions: [editAction, restoreAction, deleteAction])
+
+    let shareAction = UIContextualAction(style: .normal, title: "分享") { [unowned self] _, _, _ in
+      backupViewModel.backupSwipeAction = .share
+    }
+    shareAction.backgroundColor = .systemGreen
+    return UISwipeActionsConfiguration(actions: [shareAction, editAction, restoreAction, deleteAction])
   }
 }
 
@@ -88,7 +93,7 @@ extension BackupRootView: UITableViewDataSource {
 
   public func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
     if section == 0 {
-      return 1
+      return 2
     }
     return backupViewModel.backupFiles.count
   }
@@ -96,7 +101,7 @@ extension BackupRootView: UITableViewDataSource {
   public func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
     if indexPath.section == 0 {
       let cell = ButtonTableViewCell(style: .default, reuseIdentifier: ButtonTableViewCell.identifier)
-      cell.updateWithSettingItem(backupViewModel.settingItem)
+      cell.updateWithSettingItem(indexPath.row == 0 ? backupViewModel.settingItem : backupViewModel.importSettingItem)
       return cell
     }
 

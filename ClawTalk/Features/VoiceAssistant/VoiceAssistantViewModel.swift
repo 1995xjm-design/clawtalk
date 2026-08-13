@@ -1,6 +1,7 @@
 import Foundation
 import SwiftUI
 import UIKit
+import AVFoundation
 
 /// 语音助手四种会话状态（对应卡片四种动画）。
 enum VoiceAssistantState: Equatable {
@@ -273,6 +274,10 @@ final class VoiceAssistantViewModel {
     /// 开始连续对讲。
     func startConversation() {
         guard state == .idle else { return }
+        // 每次进入重新按当前设置自建 STT/TTS：用户在设置里开启语音输入后立即生效，
+        // 避免只在 init 自建导致「语音转文字开着但大卡仍无反应」。
+        bootstrapServicesIfNeeded()
+        guard ensureMicPermission() else { return }
         guard transcriptionService != nil else {
             errorMessage = "语音转文字服务未配置，请在设置中开启语音输入。"
             return
@@ -336,6 +341,35 @@ final class VoiceAssistantViewModel {
     /// 页面退出/App 生命周期兜底（幂等）。
     func stop() {
         stopConversation()
+    }
+
+    /// 清空卡片上显示的错误（错误横幅超时自动消失时调用）。
+    func clearErrorMessage() {
+        errorMessage = nil
+    }
+
+    /// 麦克风权限预检：未授权给出明确引导，不静默失败。
+    private func ensureMicPermission() -> Bool {
+        switch AVAudioApplication.shared.recordPermission {
+        case .granted:
+            return true
+        case .denied:
+            errorMessage = "需要麦克风权限：请到 系统设置 → 隐私与安全性 → 麦克风 开启 ClawTalk 后重试。"
+            return false
+        case .undetermined:
+            // 首次使用：弹系统授权框；用户授权后再点一次即可开始。
+            AVAudioApplication.requestRecordPermission { granted in
+                if !granted {
+                    Task { @MainActor in
+                        LogCollector.record(module: "语音助手", "用户拒绝麦克风权限")
+                    }
+                }
+            }
+            errorMessage = "请允许麦克风权限后再次点击开始。"
+            return false
+        @unknown default:
+            return true
+        }
     }
 
     // MARK: - 场景模式

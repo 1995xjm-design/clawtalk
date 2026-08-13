@@ -1,9 +1,30 @@
 import Foundation
 
 /// 本地错误日志收集器（环形，最多保留 100 条），供「日志与诊断」查看与同步到 OpenClaw。
+/// 日志存放在 App Group（group.7518554），主 App 与键盘扩展共享同一份日志；
+/// 升级前存在 standard 的旧日志会在首次访问时自动迁移。
 enum LogCollector {
+    private static let appGroupSuiteName = "group.7518554"
     private static let key = "app_error_logs"
     private static let limit = 100
+
+    /// App Group 共享存储；套件初始化失败时回退 standard（不丢日志能力）。
+    private static var defaults: UserDefaults {
+        UserDefaults(suiteName: appGroupSuiteName) ?? .standard
+    }
+
+    /// 迁移升级前 standard 中的旧日志与待上报计数（一次性）。
+    private static func migrateLegacyDataIfNeeded() {
+        let shared = UserDefaults(suiteName: appGroupSuiteName)
+        if let legacy = UserDefaults.standard.data(forKey: key), shared?.data(forKey: key) == nil {
+            shared?.set(legacy, forKey: key)
+            UserDefaults.standard.removeObject(forKey: key)
+        }
+        if UserDefaults.standard.object(forKey: pendingKey) != nil, shared?.object(forKey: pendingKey) == nil {
+            shared?.set(UserDefaults.standard.integer(forKey: pendingKey), forKey: pendingKey)
+            UserDefaults.standard.removeObject(forKey: pendingKey)
+        }
+    }
 
     struct Entry: Codable, Identifiable {
         let id: UUID
@@ -28,25 +49,28 @@ enum LogCollector {
         if entries.count > limit {
             entries.removeFirst(entries.count - limit)
         }
+        migrateLegacyDataIfNeeded()
         if let data = try? JSONEncoder().encode(entries) {
-            UserDefaults.standard.set(data, forKey: key)
+            defaults.set(data, forKey: key)
         }
         // C1：累计达到阈值自动触发上传（App 层监听执行，成功后重置计数）
-        let count = UserDefaults.standard.integer(forKey: pendingKey) + 1
-        UserDefaults.standard.set(count, forKey: pendingKey)
+        let count = defaults.integer(forKey: pendingKey) + 1
+        defaults.set(count, forKey: pendingKey)
         if count >= autoUploadThreshold {
             NotificationCenter.default.post(name: autoUploadNotification, object: nil)
         }
     }
 
     static func load() -> [Entry] {
-        guard let data = UserDefaults.standard.data(forKey: key),
+        migrateLegacyDataIfNeeded()
+        guard let data = defaults.data(forKey: key),
               let entries = try? JSONDecoder().decode([Entry].self, from: data) else { return [] }
         return entries
     }
 
     static func clear() {
-        UserDefaults.standard.removeObject(forKey: key)
+        migrateLegacyDataIfNeeded()
+        defaults.removeObject(forKey: key)
     }
 
     // MARK: - 自动上报（C1：累计 20 条自动发电脑 inbound）
@@ -57,11 +81,13 @@ enum LogCollector {
 
     /// 待上报计数（自上次成功上传/清零后累计的记录条数）。
     static var pendingUploadCount: Int {
-        UserDefaults.standard.integer(forKey: pendingKey)
+        migrateLegacyDataIfNeeded()
+        return defaults.integer(forKey: pendingKey)
     }
 
     static func resetPendingUploadCount() {
-        UserDefaults.standard.set(0, forKey: pendingKey)
+        migrateLegacyDataIfNeeded()
+        defaults.set(0, forKey: pendingKey)
     }
 
     /// 导出全部日志为带时间戳的文本（供自动上传/手动发送复用）。
