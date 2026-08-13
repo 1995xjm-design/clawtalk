@@ -207,17 +207,17 @@ targets:
   # watch app 容器用 app.lgm.7517.watchapp；profile 暂用 7517ext 占位，
   # 正式出包前需在开发者后台给 watchOS 补描述文件（见 docs/watchos-wiring.md）。
   ClawTalkWatchApp:
-    type: com.apple.product-type.application.watchapp2
+    type: application
     platform: watchOS
     deploymentTarget: "10.0"
     sources:
-      - path: ClawTalkWatchApp/Resources
-    dependencies:
-      - target: ClawTalkWatchExtension
+      - path: ClawTalkWatchApp/App
+      - path: ClawTalkWatchApp/Extension
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: app.lgm.7517.watchapp
         PROVISIONING_PROFILE_SPECIFIER: 7517ext
+        CODE_SIGN_ENTITLEMENTS: ClawTalkWatchApp/ClawTalkWatch.entitlements
         TARGETED_DEVICE_FAMILY: "4"
         MARKETING_VERSION: "1.2.2"
         CURRENT_PROJECT_VERSION: 7
@@ -229,29 +229,3 @@ targets:
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         WKApplication: true
         WKCompanionAppBundleIdentifier: app.lgm.7517
-
-  ClawTalkWatchExtension:
-    type: com.apple.product-type.watchkit2-extension
-    platform: watchOS
-    deploymentTarget: "10.0"
-    sources:
-      - path: ClawTalkWatchApp/App
-      - path: ClawTalkWatchApp/Extension
-    settings:
-      base:
-        PRODUCT_BUNDLE_IDENTIFIER: app.lgm.7517.watchapp.watch
-        PROVISIONING_PROFILE_SPECIFIER: 7517ext
-        CODE_SIGN_ENTITLEMENTS: ClawTalkWatchApp/ClawTalkWatch.entitlements
-        TARGETED_DEVICE_FAMILY: "4"
-        MARKETING_VERSION: "1.2.2"
-        CURRENT_PROJECT_VERSION: 7
-    info:
-      path: ClawTalkWatchApp/Resources/Extension-Info.plist
-      properties:
-        CFBundleDisplayName: ClawTalk
-        CFBundleShortVersionString: "$(MARKETING_VERSION)"
-        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
-        NSExtension:
-          NSExtensionAttributes:
-            WKAppBundleIdentifier: app.lgm.7517.watchapp
-          NSExtensionPointIdentifier: com.apple.watchkit
