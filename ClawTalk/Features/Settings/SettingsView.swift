@@ -1173,7 +1173,3 @@ private final class KeyboardSettingsHostViewController: UIViewController {
         child = settingsVC
     }
 }
-        .navigationTitle("键盘设置")
-        .navigationBarTitleDisplayMode(.inline)
-    }
-}
