@@ -414,7 +414,7 @@ final class ToolsViewModel {
                 browserScreenshot = UIImage(data: decoded)
             }
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = Self.isRateLimit(error) ? "网关限流（429），请稍后重试" : error.localizedDescription
         }
 
         isLoading = false
@@ -471,7 +471,7 @@ final class ToolsViewModel {
             )
             await checkBrowserTool()
         } catch {
-            errorMessage = "安装指令执行失败：\(error.localizedDescription)"
+            errorMessage = Self.isRateLimit(error) ? "安装指令执行失败：网关限流（429），请稍后重试" : "安装指令执行失败：\(error.localizedDescription)"
         }
     }
 
@@ -492,7 +492,7 @@ final class ToolsViewModel {
                 errorMessage = "未从回复中解析到截图数据"
             }
         } catch {
-            errorMessage = "截图指令执行失败：\(error.localizedDescription)"
+            errorMessage = Self.isRateLimit(error) ? "截图指令执行失败：网关限流（429），请稍后重试" : "截图指令执行失败：\(error.localizedDescription)"
         }
     }
 

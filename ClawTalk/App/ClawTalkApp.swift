@@ -484,6 +484,8 @@ struct ClawTalkApp: App {
 
     /// 已开启语音唤醒且未处于免提对话时启动唤醒词监听（前台/后台均可，退后台持续监听）。
     private func startVoiceWakeIfNeeded() {
+        // 幂等：已在监听则不重复启动，避免「语音唤醒已在运行」噪音（日志 23:44/23:38）
+        guard !VoiceWakeCapability.shared.isListening else { return }
         guard settingsStore.settings.voiceWakeEnabled else { return }
         guard settingsStore.settings.voiceInputEnabled else { return }
         if let vm = chatViewModel, vm.isConversationMode { return }
