@@ -307,10 +307,10 @@ extension SettingsViewModel {
               // 阶段 1：解压输入方案目录（真实进度，按解压后字节数百分比）
               let unzipSrc = FileManager.appSharedSupportDirectory.appendingPathComponent(HamsterConstants.userDataZipFile)
               if FileManager.default.fileExists(atPath: unzipSrc.path) {
-                DispatchQueue.main.async { ProgressHUD.progress(0, text: "正在解压输入方案 0%", interaction: false) }
+                DispatchQueue.main.async { ProgressHUD.progress("正在解压输入方案 0%", 0, interaction: false) }
                 try FileManager.default.unzipSync(unzipSrc, dst: FileManager.sandboxUserDataDirectory) { p in
                   DispatchQueue.main.async {
-                    ProgressHUD.progress(CGFloat(p), text: "正在解压输入方案 \(Int(p * 100))%", interaction: false)
+                    ProgressHUD.progress("正在解压输入方案 \(Int(p * 100))%", CGFloat(p), interaction: false)
                   }
                 }
               } else {
