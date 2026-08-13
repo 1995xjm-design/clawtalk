@@ -111,13 +111,16 @@ final class VoiceAssistantViewModel {
     /// 独立发送链路持有的 OpenClawClient（与 SyncChatViewModel 同模式）。
     private let openClaw = OpenClawClient()
     /// 本地记忆档案（直连 DeepSeek 通道注入用；懒加载，读不到时诚实降级为无档案）。
-    private lazy var memoryStore: MemoryProfileStore = {
+    private var cachedMemoryStore: MemoryProfileStore?
+    private var memoryStore: MemoryProfileStore {
+        if let store = cachedMemoryStore { return store }
         let store = MemoryProfileStore(settings: settings)
         if store.profiles.isEmpty {
             store.refreshFromConversations()
         }
+        cachedMemoryStore = store
         return store
-    }()
+    }
     /// 连续对讲内的上下文历史（独立路径；每轮结束后保留，最多 20 条）。
     private var conversationHistory: [Message] = []
 
