@@ -39,8 +39,7 @@ targets:
       - ClawTalkShared
     resources:
       - ClawTalk/Resources
-      # Rime 内置资源：主 App bundle 也带上 SharedSupport，供键盘设置页在 ClawTalk 进程内初始化 Rime（否则「导入数据异常」）
-      - path: ClawTalkKeyboard/Resources/SharedSupport
+      # Rime 内置资源随 ClawTalk/Resources 打包进主 App（修复键盘设置页「导入数据异常」）
     dependencies:
       - package: KeychainAccess
       - package: MarkdownUI
