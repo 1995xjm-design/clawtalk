@@ -600,9 +600,9 @@ struct ExpenseListView: View {
         let dayEntries = (grouped[day] ?? []).sorted { $0.createdAt > $1.createdAt }
         return Section(header: Text(Self.dayHeader(for: day))) {
             ForEach(dayEntries) { entry in
-                ExpenseEntryRow(entry: entry) { fileName in
+                ExpenseEntryRow(entry: entry, onPreviewPhoto: { fileName in
                     previewPhoto = ExpensePhotoPreview(fileName: fileName)
-                }
+                })
             }
             .onDelete { offsets in
                 for offset in offsets {
