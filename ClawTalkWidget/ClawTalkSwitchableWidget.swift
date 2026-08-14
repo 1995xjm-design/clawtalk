@@ -49,7 +49,7 @@ struct ClawTalkSwitchableEntry: TimelineEntry {
 }
 
 /// 与 ClawTalkTimelineProvider 同频刷新（15 分钟）；数据变化由主 App 主动 reload。
-struct ClawTalkSwitchableTimelineProvider: TimelineProvider {
+struct ClawTalkSwitchableTimelineProvider: AppIntentTimelineProvider {
     func placeholder(in context: Context) -> ClawTalkSwitchableEntry {
         ClawTalkSwitchableEntry(
             date: Date(),
@@ -58,23 +58,23 @@ struct ClawTalkSwitchableTimelineProvider: TimelineProvider {
         )
     }
 
-    func getSnapshot(in context: Context, completion: @escaping (ClawTalkSwitchableEntry) -> Void) {
-        completion(ClawTalkSwitchableEntry(
+    func snapshot(for configuration: ClawTalkCardSelectionIntent, in context: Context) async -> ClawTalkSwitchableEntry {
+        ClawTalkSwitchableEntry(
             date: Date(),
-            configuration: ClawTalkCardSelectionIntent(),
+            configuration: configuration,
             data: WidgetAppGroup.loadEntry()
-        ))
+        )
     }
 
-    func getTimeline(in context: Context, completion: @escaping (Timeline<ClawTalkSwitchableEntry>) -> Void) {
+    func timeline(for configuration: ClawTalkCardSelectionIntent, in context: Context) async -> Timeline<ClawTalkSwitchableEntry> {
         let entry = ClawTalkSwitchableEntry(
             date: Date(),
-            configuration: ClawTalkCardSelectionIntent(),
+            configuration: configuration,
             data: WidgetAppGroup.loadEntry()
         )
         let nextUpdate = Calendar.current.date(byAdding: .minute, value: 15, to: Date())
             ?? Date().addingTimeInterval(15 * 60)
-        completion(Timeline(entries: [entry], policy: .after(nextUpdate)))
+        return Timeline(entries: [entry], policy: .after(nextUpdate))
     }
 }
 
@@ -85,8 +85,8 @@ struct ClawTalkSwitchableWidget: Widget {
     var body: some WidgetConfiguration {
         AppIntentConfiguration(
             kind: kind,
-            provider: ClawTalkSwitchableTimelineProvider(),
-            intent: ClawTalkCardSelectionIntent.self
+            intent: ClawTalkCardSelectionIntent.self,
+            provider: ClawTalkSwitchableTimelineProvider()
         ) { entry in
             ClawTalkSwitchableCardView(entry: entry)
         }
