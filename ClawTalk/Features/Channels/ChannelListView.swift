@@ -188,6 +188,8 @@ struct ChannelListView: View {
                 .listStyle(.insetGrouped)
                 .scrollContentBackground(.hidden)
             }
+            // ?????????????????????/???????????? LOGO ???
+            .ignoresSafeArea(.keyboard, edges: .bottom)
             .background {
                 if settingsStore.settings.globalGlassEnabled {
                     Rectangle().fill(.ultraThinMaterial).ignoresSafeArea()

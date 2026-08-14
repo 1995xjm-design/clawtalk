@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 import PhotosUI
 import UniformTypeIdentifiers
 
@@ -396,6 +397,10 @@ struct ChatView: View {
         .background(Color(.secondarySystemBackground))
         .animation(.easeInOut(duration: 0.2), value: viewModel.state)
         .animation(.easeInOut(duration: 0.2), value: viewModel.errorMessage != nil)
+        .onDisappear {
+            // ????????????????????????? LOGO ???????
+            UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+        }
     }
 
     // MARK: - State Indicator

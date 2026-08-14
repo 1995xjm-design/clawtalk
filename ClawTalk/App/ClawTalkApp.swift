@@ -468,6 +468,8 @@ struct ClawTalkApp: App {
 
     /// 聊天页退出清理：系统侧滑返回或自绘返回按钮共用（不销毁后台任务，完成后发通知）。
     private func handleChatRouteCleared() {
+        // ????????????????????????????? LOGO ???????
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
         stopVoiceWake()
         if syncChatViewModel != nil || selectedSyncChannel != nil {
             syncChatViewModel?.stopPolling()
