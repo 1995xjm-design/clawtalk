@@ -23,7 +23,7 @@ enum LocationCapability {
             switch self {
             case .denied: return "定位权限被拒绝"
             case .unavailable: return "定位服务不可用"
-            case .timeout: return "定位请求超时"
+            case .timeout: return "定位超时，请到开阔处重试"
             }
         }
     }
@@ -71,39 +71,93 @@ enum LocationCapability {
 private class LocationDelegate: NSObject, CLLocationManagerDelegate {
     private var locationContinuation: CheckedContinuation<CLLocation, Error>?
     private var authContinuation: CheckedContinuation<Void, Error>?
+    private let lock = NSLock()
+
+    /// 授权 / 定位各 15 秒超时兜底：到点抛 .timeout，不再无限转圈。
+    private let timeoutDuration: Duration = .seconds(15)
 
     func waitForLocation() async throws -> CLLocation {
         try await withCheckedThrowingContinuation { continuation in
             self.locationContinuation = continuation
+            Task {
+                try? await Task.sleep(for: self.timeoutDuration)
+                self.finishLocation(throwing: LocationCapability.LocationError.timeout)
+            }
         }
     }
 
     func waitForAuthorization() async throws {
         try await withCheckedThrowingContinuation { continuation in
             self.authContinuation = continuation
+            Task {
+                try? await Task.sleep(for: self.timeoutDuration)
+                self.finishAuthorization(throwing: LocationCapability.LocationError.timeout)
+            }
         }
     }
 
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         if let location = locations.last {
-            locationContinuation?.resume(returning: location)
-            locationContinuation = nil
+            finishLocation(returning: location)
         }
     }
 
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
-        locationContinuation?.resume(throwing: error)
-        locationContinuation = nil
+        finishLocation(throwing: error)
     }
 
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
         let status = manager.authorizationStatus
         if status == .authorizedWhenInUse || status == .authorizedAlways {
-            authContinuation?.resume()
-            authContinuation = nil
+            finishAuthorization()
         } else if status == .denied || status == .restricted {
-            authContinuation?.resume(throwing: LocationCapability.LocationError.denied)
-            authContinuation = nil
+            finishAuthorization(throwing: LocationCapability.LocationError.denied)
         }
+    }
+
+    // MARK: - 一次性恢复：先取走并置 nil 再 resume，避免超时与回调竞态导致重复恢复崩溃
+
+    private func finishLocation(returning location: CLLocation) {
+        lock.lock()
+        guard let continuation = locationContinuation else {
+            lock.unlock()
+            return
+        }
+        locationContinuation = nil
+        lock.unlock()
+        continuation.resume(returning: location)
+    }
+
+    private func finishLocation(throwing error: Error) {
+        lock.lock()
+        guard let continuation = locationContinuation else {
+            lock.unlock()
+            return
+        }
+        locationContinuation = nil
+        lock.unlock()
+        continuation.resume(throwing: error)
+    }
+
+    private func finishAuthorization() {
+        lock.lock()
+        guard let continuation = authContinuation else {
+            lock.unlock()
+            return
+        }
+        authContinuation = nil
+        lock.unlock()
+        continuation.resume()
+    }
+
+    private func finishAuthorization(throwing error: Error) {
+        lock.lock()
+        guard let continuation = authContinuation else {
+            lock.unlock()
+            return
+        }
+        authContinuation = nil
+        lock.unlock()
+        continuation.resume(throwing: error)
     }
 }

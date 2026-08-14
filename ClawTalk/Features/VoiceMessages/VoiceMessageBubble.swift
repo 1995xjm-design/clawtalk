@@ -39,7 +39,7 @@ struct VoiceMessageBubble: View {
                             }
                         }
                     } else {
-                        Text(message.timestamp, style: .time)
+                        Text(ChatBubbleTimeText.string(from: message.timestamp))
                             .font(.caption2)
                             .foregroundStyle(.secondary)
 

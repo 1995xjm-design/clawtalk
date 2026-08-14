@@ -48,7 +48,7 @@ struct MessageBubble: View {
                             }
                         }
                     } else {
-                        Text(message.timestamp.formatted(date: .abbreviated, time: .shortened))
+                        Text(ChatBubbleTimeText.string(from: message.timestamp))
                             .font(.caption2)
                             .foregroundStyle(.secondary)
 
@@ -251,5 +251,15 @@ struct TypingIndicator: View {
             }
         }
         .onAppear { animating = true }
+    }
+}
+
+/// 聊天气泡时间文案：今天只显示时分，非今天显示「MM-dd HH:mm」（主聊天页与 SyncChatView 统一）。
+enum ChatBubbleTimeText {
+    static func string(from date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = Calendar.current.isDateInToday(date) ? "HH:mm" : "MM-dd HH:mm"
+        return formatter.string(from: date)
     }
 }

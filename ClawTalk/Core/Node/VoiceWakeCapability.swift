@@ -71,10 +71,12 @@ final class VoiceWakeCapability {
     // MARK: - Commands
 
     func setConfig(keywords: [String], enabled: Bool, locale: String?) async throws -> ConfigResult {
-        currentKeywords = keywords
+        // 规范化（去空白/去空词/去重）：编辑/存储过的词直接可用于识别匹配，
+        // 避免带空白或重复的词永远无法命中（S7：添加词不生效）。
+        currentKeywords = Self.normalizedKeywords(keywords)
         let resolvedLocale = Self.resolveLocale(locale)
 
-        if enabled && !keywords.isEmpty {
+        if enabled && !currentKeywords.isEmpty {
             do {
                 try await startListening(locale: resolvedLocale)
             } catch {

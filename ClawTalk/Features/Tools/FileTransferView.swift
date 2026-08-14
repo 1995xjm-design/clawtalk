@@ -25,6 +25,8 @@ struct FileTransferChannelView: View {
     @State private var showPhotoPicker = false
     @State private var showFileImporter = false
     @State private var photoItems: [PhotosPickerItem] = []
+    @State private var uploadResults: [UploadResultItem] = []
+    @State private var uploadBatchTotal = 0
 
     init(settings: SettingsStore, embeddedInNavigation: Bool = false, onBack: (() -> Void)? = nil) {
         self.settings = settings
@@ -305,13 +307,48 @@ struct FileTransferChannelView: View {
             .tint(.openClawRed)
             .disabled(viewModel.isUploading)
 
+            if viewModel.isUploading {
+                HStack(spacing: 6) {
+                    ProgressView()
+                        .scaleEffect(0.7)
+                    Text(uploadBatchTotal > 0 ? "正在批量上传（\(uploadResults.count)/\(uploadBatchTotal)）…" : "正在上传…")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
             if let progress = viewModel.uploadProgress {
                 VStack(spacing: 4) {
                     ProgressView(value: progress)
-                    Text("已上传 \(Int(progress * 100))%")
+                    Text("当前文件已上传 \(Int(progress * 100))%")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                 }
+            }
+
+            if !uploadResults.isEmpty {
+                VStack(spacing: 6) {
+                    ForEach(uploadResults) { item in
+                        HStack(spacing: 8) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(item.name)
+                                    .font(.caption)
+                                    .lineLimit(1)
+                                if let message = item.message {
+                                    Text(message)
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                        .lineLimit(2)
+                                }
+                            }
+                            Spacer(minLength: 4)
+                            Image(systemName: item.success ? "checkmark.circle.fill" : "xmark.circle.fill")
+                                .font(.caption)
+                                .foregroundStyle(item.success ? .green : .red)
+                        }
+                    }
+                }
+                .padding(.top, 4)
             }
         }
         .padding(.top, 6)
@@ -618,21 +655,27 @@ struct FileTransferChannelView: View {
         }
     }
 
-    /// 多文件队列上传：逐个上传，汇总成功/失败数量。
+    /// 多文件队列上传：逐个上传，逐文件记录结果并汇总成功/失败数量。
     private func uploadPickedFiles(urls: [URL]) async {
         var successCount = 0
         var failedCount = 0
+        uploadResults = []
+        uploadBatchTotal = urls.count
         for url in urls {
+            let name = url.lastPathComponent
             let accessing = url.startAccessingSecurityScopedResource()
             defer {
                 if accessing {
                     url.stopAccessingSecurityScopedResource()
                 }
             }
-            if await viewModel.uploadFile(fileURL: url, suggestedName: url.lastPathComponent) {
+            let ok = await viewModel.uploadFile(fileURL: url, suggestedName: name)
+            if ok {
                 successCount += 1
+                uploadResults.append(UploadResultItem(name: name, success: true, message: nil))
             } else {
                 failedCount += 1
+                uploadResults.append(UploadResultItem(name: name, success: false, message: viewModel.lastUploadFailure?.friendlyText))
             }
         }
         if successCount > 0 {
@@ -703,6 +746,14 @@ private struct ActiveAlert: Identifiable {
     let id = UUID()
     let title: String
     let message: String
+}
+
+/// 单个文件上传结果（供上传区逐条展示成功/失败）。
+private struct UploadResultItem: Identifiable {
+    let id = UUID()
+    let name: String
+    let success: Bool
+    let message: String?
 }
 
 /// 用系统 QuickLook 预览已下载文件（图片/文档等）。

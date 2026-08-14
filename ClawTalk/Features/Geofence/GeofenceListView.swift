@@ -358,6 +358,9 @@ private struct GeofenceEditView: View {
             let result = try await LocationCapability.getLocation()
             latitudeText = String(format: "%.6f", result.latitude)
             longitudeText = String(format: "%.6f", result.longitude)
+        } catch let error as LocationCapability.LocationError {
+            // 已知定位错误（拒绝/不可用/超时）直接展示友好文案
+            locationError = error.localizedDescription
         } catch {
             locationError = "获取当前位置失败：\(error.localizedDescription)"
         }

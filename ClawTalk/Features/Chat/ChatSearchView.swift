@@ -40,7 +40,7 @@ struct ChatSearchView: View {
                                         .fontWeight(.semibold)
                                         .foregroundStyle(message.role == .user ? .blue : Color.openClawRed)
                                     Spacer()
-                                    Text(message.timestamp, style: .time)
+                                    Text(ChatBubbleTimeText.string(from: message.timestamp))
                                         .font(.caption2)
                                         .foregroundStyle(.tertiary)
                                 }

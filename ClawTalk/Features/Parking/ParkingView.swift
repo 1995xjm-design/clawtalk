@@ -17,6 +17,7 @@ struct ParkingView: View {
     @State private var statusMessage: String?
     @State private var showSettingsGuide = false
     @State private var settingsGuideReason = ""
+    @State private var authWatcher: ParkingAuthorizationWatcher?
 
     // 拍照附注（PhotosPicker 选一张存本地）
     @State private var photoTargetRecordID: String?
@@ -141,7 +142,24 @@ struct ParkingView: View {
         switch manager.authorizationStatus {
         case .notDetermined:
             manager.requestWhenInUseAuthorization()
-            statusMessage = "请在系统弹窗中允许定位，然后再次点击「记录」"
+            statusMessage = "已请求定位授权，授权成功后会自动开始记录…"
+            // 监听授权回调：授权成功自动开始定位，不用用户再点一次「记录」
+            let watcher = ParkingAuthorizationWatcher()
+            watcher.onAuthorizationChange = { [self] status in
+                switch status {
+                case .authorizedWhenInUse, .authorizedAlways:
+                    self.authWatcher = nil
+                    self.startLocationCapture()
+                case .denied, .restricted:
+                    self.authWatcher = nil
+                    self.settingsGuideReason = "定位权限未开启，无法获取当前位置。请到系统设置允许 ClawTalk 使用定位。"
+                    self.showSettingsGuide = true
+                default:
+                    break
+                }
+            }
+            authWatcher = watcher
+            watcher.start()
         case .denied, .restricted:
             settingsGuideReason = "定位权限未开启，无法获取当前位置。请到系统设置允许 ClawTalk 使用定位。"
             showSettingsGuide = true
@@ -431,7 +449,7 @@ enum ParkingLocationError: LocalizedError {
     }
 }
 
-/// 一次性定位：CLLocationManager.requestLocation + 15 秒超时兜底（不无限转圈）。
+/// 一次性定位：CLLocationManager.requestLocation + 20 秒超时兜底（不无限转圈）。
 final class ParkingLocationFetcher: NSObject, CLLocationManagerDelegate {
     private var manager: CLLocationManager?
     private var continuation: CheckedContinuation<CLLocation, Error>?
@@ -446,7 +464,7 @@ final class ParkingLocationFetcher: NSObject, CLLocationManagerDelegate {
         return try await withCheckedThrowingContinuation { continuation in
             self.continuation = continuation
             Task {
-                try? await Task.sleep(for: .seconds(15))
+                try? await Task.sleep(for: .seconds(20))
                 finish(throwing: ParkingLocationError.timeout)
             }
         }
@@ -509,5 +527,23 @@ struct ParkingPhotoThumbnail: View {
         .task {
             image = UIImage(contentsOfFile: url.path)
         }
+    }
+}
+
+// MARK: - 授权监听
+
+/// 授权监听器：权限未决定时点击「记录」弹窗授权，授权成功自动开始定位（不用再点一次）。
+private final class ParkingAuthorizationWatcher: NSObject, CLLocationManagerDelegate {
+    private let manager = CLLocationManager()
+    var onAuthorizationChange: ((CLAuthorizationStatus) -> Void)?
+
+    func start() {
+        manager.delegate = self
+        // 同步兜底：部分系统版本设置 delegate 时不会立即回调当前状态
+        onAuthorizationChange?(manager.authorizationStatus)
+    }
+
+    func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
+        onAuthorizationChange?(manager.authorizationStatus)
     }
 }

@@ -332,6 +332,34 @@ struct SyncChatView: View {
                 .padding(.top, 10)
             }
 
+            if !attachedSyncImages.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(Array(attachedSyncImages.enumerated()), id: \.offset) { index, data in
+                            if let uiImage = UIImage(data: data) {
+                                Image(uiImage: uiImage)
+                                    .resizable()
+                                    .scaledToFill()
+                                    .frame(width: 60, height: 60)
+                                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                                    .overlay(alignment: .topTrailing) {
+                                        Button(action: { attachedSyncImages.remove(at: index) }) {
+                                            Image(systemName: "xmark.circle.fill")
+                                                .font(.system(size: 18))
+                                                .symbolRenderingMode(.palette)
+                                                .foregroundStyle(.white, .black.opacity(0.6))
+                                        }
+                                        .offset(x: 6, y: -6)
+                                    }
+                            }
+                        }
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.top, 8)
+                }
+                .padding(.top, 4)
+            }
+
             if let attachedSyncFile {
                 HStack(spacing: 8) {
                     Image(systemName: "doc.fill")
@@ -443,7 +471,7 @@ private struct SyncSearchView: View {
                                 Image(systemName: message.role == .user ? "person.fill" : "cpu")
                                     .font(.caption)
                                     .foregroundStyle(message.role == .user ? .blue : Color.openClawRed)
-                                Text(message.timestamp.formatted(date: .abbreviated, time: .shortened))
+                                Text(ChatBubbleTimeText.string(from: message.timestamp))
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             }
@@ -511,7 +539,7 @@ private struct SyncBubble: View {
                             }
                         }
                     } else {
-                        Text(message.timestamp.formatted(date: .abbreviated, time: .shortened))
+                        Text(ChatBubbleTimeText.string(from: message.timestamp))
                             .font(.caption2)
                             .foregroundStyle(.secondary)
                     }

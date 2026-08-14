@@ -986,14 +986,23 @@ final class VoiceAssistantViewModel {
                 audioPlayback.enqueue(pcmData: chunk)
             }
             audioPlayback.markStreamingDone()
-            await audioPlayback.waitUntilFinished()
+            // 打断/退出路径：音频已被 handleInterrupt/stopConversation 停掉，
+            // 跳过播放等待避免空转，立即响应新输入。
+            if !Task.isCancelled {
+                await audioPlayback.waitUntilFinished()
+            }
+            try Task.checkCancellation()
         } catch is CancellationError {
             // 被打断/退出：静默结束。
         } catch {
             LogCollector.record(module: "语音助手", "朗读失败：\(AppErrorText.localized(error.localizedDescription))")
         }
 
-        audioPlayback.stop()
+        // 打断/退出时音频引擎已由 handleInterrupt/stopConversation 停止；
+        // 这里不再 stop，避免误杀打断后新一轮对讲刚启动的播放引擎。
+        if !Task.isCancelled {
+            audioPlayback.stop()
+        }
         return !interruptedDuringSpeaking
     }
 

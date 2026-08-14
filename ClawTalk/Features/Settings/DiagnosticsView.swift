@@ -279,12 +279,22 @@ struct DiagnosticsView: View {
         let gw = settings.settings.gatewayURL
             .trimmingCharacters(in: .whitespacesAndNewlines)
             .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        // 用当前网关令牌（优先配对下发的 device token，回退手填令牌）做鉴权，
+        // 避免仅二维码配对场景 settings.gatewayToken 为空导致同步误报 401（S7：鉴权未适配网关令牌）。
+        let resolvedToken = OpenClawClient.resolveHTTPToken(
+            settingsToken: settings.gatewayToken,
+            gatewayURL: settings.settings.gatewayURL
+        )
+        guard !resolvedToken.isEmpty else {
+            syncError = "未获取到网关令牌（请先 openclaw qr 配对或填写令牌）。"
+            return
+        }
         Task {
             do {
                 let reply = try await OpenClawClient().chat(
                     messages: [Message(role: .user, content: instruction)],
                     gatewayURL: gw,
-                    token: settings.gatewayToken,
+                    token: resolvedToken,
                     sessionKey: InstructionChannels.diagnostics
                 )
                 isSyncing = false
@@ -780,17 +790,55 @@ struct ConnectionDiagnostics {
         guard !resolvedToken.isEmpty else {
             return step(.auth, success: false, since: start, detail: "未获取到网关令牌（请先 openclaw qr 配对或填写令牌）")
         }
-        guard let url = URL(string: "\(base)/health") else {
+
+        // 鉴权探测走带令牌的接口（与 App 实际请求一致）：/v1/models 需要有效令牌才返回 2xx，
+        // 避免 /health 未鉴权返回 200 造成「假通过」；网关无该接口（404）时回退 /health。
+        // 与 runTLS/runWebSocket 一致使用 TLS 放行会话，自签证书（已加指纹信任）不误报失败。
+        let delegate = DiagnosticsTLSDelegate()
+        let config = URLSessionConfiguration.ephemeral
+        config.timeoutIntervalForRequest = 5
+        config.timeoutIntervalForResource = 5
+        let session = URLSession(configuration: config, delegate: delegate, delegateQueue: nil)
+        defer { session.invalidateAndCancel() }
+
+        guard let url = URL(string: "\(base)/v1/models") else {
             return step(.auth, success: false, since: start, detail: "网关地址无法解析")
         }
-
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
         request.timeoutInterval = 5
         request.setValue("Bearer \(resolvedToken)", forHTTPHeaderField: "Authorization")
 
         do {
-            let (_, response) = try await URLSession.shared.data(for: request)
+            let (_, response) = try await session.data(for: request)
+            let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+            switch status {
+            case 200..<300:
+                return step(.auth, success: true, since: start, detail: "鉴权通过（HTTP \(status)，网关令牌有效）")
+            case 401, 403:
+                return step(.auth, success: false, since: start, detail: "令牌被拒绝（HTTP \(status)）——请检查网关令牌或重新配对")
+            case 404:
+                // 网关没有 OpenAI 兼容接口：退回 /health 做可达性 + 令牌探测
+                return await runHealthProbe(base: base, token: resolvedToken, session: session, start: start)
+            default:
+                return step(.auth, success: false, since: start, detail: "网关返回 HTTP \(status)")
+            }
+        } catch {
+            return step(.auth, success: false, since: start, detail: "请求失败：\(AppErrorText.localized(error.localizedDescription))")
+        }
+    }
+
+    /// 无 /v1/models 的网关：用 /health + Bearer 令牌做可达性/鉴权探测，不报假错。
+    private static func runHealthProbe(base: String, token: String, session: URLSession, start: Date) async -> StepResult {
+        guard let url = URL(string: "\(base)/health") else {
+            return step(.auth, success: false, since: start, detail: "网关地址无法解析")
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.timeoutInterval = 5
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        do {
+            let (_, response) = try await session.data(for: request)
             let status = (response as? HTTPURLResponse)?.statusCode ?? 0
             switch status {
             case 200..<300:
@@ -798,7 +846,7 @@ struct ConnectionDiagnostics {
             case 401, 403:
                 return step(.auth, success: false, since: start, detail: "令牌被拒绝（HTTP \(status)）——请检查网关令牌或重新配对")
             case 404:
-                return step(.auth, success: true, since: start, detail: "网关可达（HTTP 404：无 /health 接口，鉴权未验证）")
+                return step(.auth, success: true, since: start, detail: "网关可达（HTTP 404：无 /v1/models 与 /health 接口，鉴权未验证）")
             default:
                 return step(.auth, success: false, since: start, detail: "网关返回 HTTP \(status)")
             }

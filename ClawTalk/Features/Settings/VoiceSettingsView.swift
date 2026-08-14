@@ -35,20 +35,40 @@ struct VoiceSettingsView: View {
             } message: {
                 Text(previewErrorMessage ?? "")
             }
-            .alert("添加唤醒词", isPresented: $showAddWakeWord) {
-                TextField("唤醒词", text: $newWakeWord)
-                Button("添加") {
-                    let word = newWakeWord.trimmingCharacters(in: .whitespacesAndNewlines)
-                    if !word.isEmpty {
-                        addWakeWord(word)
+            .sheet(isPresented: $showAddWakeWord) {
+                NavigationStack {
+                    Form {
+                        Section {
+                            TextField("唤醒词", text: $newWakeWord)
+                                .autocorrectionDisabled()
+                                .textInputAutocapitalization(.never)
+                        } footer: {
+                            Text("说出该词即可唤醒（建议 2-4 个字）。")
+                        }
                     }
-                    newWakeWord = ""
+                    .navigationTitle("添加唤醒词")
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("取消") {
+                                newWakeWord = ""
+                                showAddWakeWord = false
+                            }
+                        }
+                        ToolbarItem(placement: .confirmationAction) {
+                            Button("添加") {
+                                let word = newWakeWord.trimmingCharacters(in: .whitespacesAndNewlines)
+                                if !word.isEmpty {
+                                    addWakeWord(word)
+                                }
+                                newWakeWord = ""
+                                showAddWakeWord = false
+                            }
+                            .disabled(newWakeWord.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                        }
+                    }
                 }
-                Button("取消", role: .cancel) {
-                    newWakeWord = ""
-                }
-            } message: {
-                Text("说出该词即可唤醒（建议 2-4 个字）。")
+                .presentationDetents([.height(220)])
             }
         }
     }
@@ -60,20 +80,29 @@ struct VoiceSettingsView: View {
     }
 
     private func commitWakeWords() {
-        store.settings.voiceWakeWords = wakeWordEdits.map(\.word)
+        store.settings.voiceWakeWords = wakeWordEdits.map {
+            $0.word.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
         store.save()
     }
 
     /// 唤醒词列表变更且引擎正在监听时热更新（主 App 只监听开关变化，词表变化需此处补齐）。
     private func hotReloadVoiceWakeKeywords() {
-        guard store.settings.voiceWakeEnabled, VoiceWakeCapability.shared.isListening else { return }
+        guard store.settings.voiceWakeEnabled else { return }
         let words = store.settings.voiceWakeWords
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
         guard !words.isEmpty else { return }
+        // 引擎当前未监听（对讲占用/看门狗尚未拉起）：词表已持久化，
+        // 下次 startVoiceWakeIfNeeded 会用新词表，不在此强拉麦克风。
+        guard VoiceWakeCapability.shared.isListening else { return }
         Task { @MainActor in
             VoiceWakeCapability.shared.stopListening()
-            _ = try? await VoiceWakeCapability.shared.setConfig(keywords: words, enabled: true, locale: "zh-CN")
+            do {
+                _ = try await VoiceWakeCapability.shared.setConfig(keywords: words, enabled: true, locale: "zh-CN")
+            } catch {
+                LogCollector.record(module: "语音唤醒", "唤醒词热更新失败：\(AppErrorText.localized(error.localizedDescription))")
+            }
         }
     }
 
@@ -84,7 +113,13 @@ struct VoiceSettingsView: View {
     }
 
     private func addWakeWord(_ word: String) {
-        wakeWordEdits.append(WakeWordEdit(word: word))
+        let trimmed = word.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        let alreadyExists = wakeWordEdits.contains {
+            $0.word.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == trimmed.lowercased()
+        }
+        guard !alreadyExists else { return }
+        wakeWordEdits.append(WakeWordEdit(word: trimmed))
         commitWakeWords()
         hotReloadVoiceWakeKeywords()
     }
