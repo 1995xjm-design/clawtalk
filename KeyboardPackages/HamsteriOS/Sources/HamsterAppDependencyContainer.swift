@@ -338,7 +338,7 @@ extension HamsterAppDependencyContainer: SubViewControllerFactory {
     case .debugLog: return makeLogViewController()
     case .inputMethodSettings: return makeInputMethodSettingsViewController()
     case .heartTargets: return makeHeartTargetSettingsViewController()
-    case .main, .about: return nil
+    case .main, .about, .none: return nil
     }
   }
 
