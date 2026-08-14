@@ -49,6 +49,10 @@ public extension KeyboardType {
     case .chineseNineGrid: return true
     case .classifySymbolic: return true
     case .numericNineGrid: return true
+    case .numericMoreSymbols: return true
+    case .classifySymbolicMore: return true
+    case .englishNumeric: return true
+    case .englishSymbolsMore: return true
     case .chineseNumeric: return true
     case .chineseSymbolic: return true
     default:

@@ -280,8 +280,14 @@ public class KeyboardButton: UIControl {
     // 更新按钮内容的样式
     buttonContentView.setStyle(style)
 
-    // 按钮样式
-    buttonContentView.backgroundColor = style.backgroundColor
+    // 按钮样式：ClawTalk IOS原生 无缩放，仅背景色渐变 0.12s（按下/抬起/移出取消/触摸打断都复位背景色）
+    if keyboardContext.isClawIOSNativeStyled {
+      UIView.animate(withDuration: 0.12, delay: 0, options: [.beginFromCurrentState, .allowUserInteraction]) {
+        self.buttonContentView.backgroundColor = style.backgroundColor
+      }
+    } else {
+      buttonContentView.backgroundColor = style.backgroundColor
+    }
     if let color = style.border?.color {
       buttonContentView.layer.borderColor = color.cgColor
       buttonContentView.layer.borderWidth = style.border?.size ?? 1

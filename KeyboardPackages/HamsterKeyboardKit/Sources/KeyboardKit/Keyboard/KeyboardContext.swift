@@ -255,6 +255,10 @@ public class KeyboardContext: ObservableObject {
   @Published
   public var clawPanelInputActive: Bool = false
 
+  /// ClawTalk emoji 来源面板：进入 emoji 时记录，退出（TAB_BACK/关闭）回来源
+  @Published
+  public var clawEmojiPrevPanel: KeyboardType?
+
   /**
    Hamster 应用配置
    */
@@ -667,6 +671,10 @@ public extension KeyboardContext {
    设置键盘类型
    */
   func setKeyboardType(_ type: KeyboardType) {
+    // ClawTalk: 进入 emoji 面板时记录来源面板（退出时回来源，不写死回 9 键主页）
+    if type == .emojis, keyboardType != .emojis {
+      clawEmojiPrevPanel = keyboardType
+    }
     if type.isPrimaryKeyboard(keyboards) {
       // 切换回 selectKeyboard 时，清空键盘 stack
       if type == selectKeyboard {
@@ -685,6 +693,18 @@ public extension KeyboardContext {
   func returnKeyboardType() -> KeyboardType {
     guard let type = primaryKeyboardStack.popLast() else { return selectKeyboard }
     return type
+  }
+
+  /// ClawTalk 键盘失焦（收起）时重置面板状态：清 emoji 来源 + 业务面板收起 + 面板回 9 键主页
+  func clawResetPanelState() {
+    clawEmojiPrevPanel = nil
+    clawPanelTab = -1
+    if keyboardType.isClawIOSNativeKeyboard || keyboardType == .emojis {
+      // 面板回 9 键主页（文档 Panel.pinyin9）
+      let home = selectKeyboard.isClawIOSNativeKeyboard ? selectKeyboard : ClawKeyboardPanel.pinyin9.keyboardType
+      keyboardType = home
+      keyboardTypeSubject.send(home)
+    }
   }
 
   /**

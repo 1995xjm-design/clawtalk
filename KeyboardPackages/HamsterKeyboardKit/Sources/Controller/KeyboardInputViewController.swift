@@ -89,6 +89,8 @@ open class KeyboardInputViewController: UIInputViewController, KeyboardControlle
     clawTalkFinalizeSession()
     // ClawTalk: 键盘收起时清空实时建议
     ClawSuggestionEngine.shared.clear()
+    // ClawTalk: 输入框失焦（键盘收起）→ 重置按压状态 + 清空 emoji 来源 + 面板回 9 键主页
+    keyboardContext.clawResetPanelState()
   }
 
   override open func viewDidLayoutSubviews() {

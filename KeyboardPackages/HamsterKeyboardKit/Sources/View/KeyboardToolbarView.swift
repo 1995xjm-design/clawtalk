@@ -234,8 +234,8 @@ class KeyboardToolbarView: NibLessView {
     // 面板配色跟随当前键盘主题
     ClawPanelPalette.sync(with: keyboardContext)
     self.style = appearance.candidateBarStyle
-    // 候选栏背景：全局写死 #F1F1F3
-    backgroundColor = ClawIOSNativePalette.candidateBarBackground
+    // 候选栏背景：按深浅套写死（浅 #E8E8E8 / 深 #2C2C2E）
+    backgroundColor = ClawIOSNativePalette.candidateBarBackground(for: keyboardContext.colorScheme)
 
     updateEntryButtonStates()
     updateEyeButtonState()
@@ -371,19 +371,19 @@ class KeyboardToolbarView: NibLessView {
 
   private func pressButton(_ button: UIButton) {
     UIView.animate(withDuration: 0.12, delay: 0, options: [.beginFromCurrentState, .allowUserInteraction]) {
-      button.transform = CGAffineTransform(scaleX: 0.9, y: 0.9)
+      button.alpha = 0.55
     }
   }
 
   private func unpressButton(_ button: UIButton) {
     UIView.animate(withDuration: 0.12, delay: 0, options: [.beginFromCurrentState, .allowUserInteraction]) {
-      button.transform = .identity
+      button.alpha = 1.0
     }
   }
 
   @objc func touchCancel() {
     [aiButton, superTalkButton, eyeButton].forEach { button in
-      button.transform = .identity
+      button.alpha = 1.0
     }
   }
 }

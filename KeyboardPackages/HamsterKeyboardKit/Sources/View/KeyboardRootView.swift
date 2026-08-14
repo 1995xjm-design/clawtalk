@@ -112,9 +112,61 @@ class KeyboardRootView: NibLessView {
     return view
   }
 
-  /// 英文 T9 键盘（英文 T9 页）
-  private var englishT9KeyboardView: EnglishT9Keyboard {
-    let view = EnglishT9Keyboard(
+  /// 英文 QWERTY 键盘（英文大写/小写页）
+  private var clawEnglishKeyboardView: ClawEnglishKeyboard {
+    let view = ClawEnglishKeyboard(
+      actionHandler: actionHandler,
+      appearance: appearance,
+      keyboardContext: keyboardContext,
+      calloutContext: calloutContext,
+      rimeContext: rimeContext
+    )
+    view.translatesAutoresizingMaskIntoConstraints = false
+    return view
+  }
+
+  /// 数字-更多符号子面板
+  private var numericMoreSymbolsKeyboardView: NumericMoreSymbolsKeyboard {
+    let view = NumericMoreSymbolsKeyboard(
+      actionHandler: actionHandler,
+      appearance: appearance,
+      keyboardContext: keyboardContext,
+      calloutContext: calloutContext,
+      rimeContext: rimeContext
+    )
+    view.translatesAutoresizingMaskIntoConstraints = false
+    return view
+  }
+
+  /// 中文拓展符号子面板
+  private var classifySymbolicMoreKeyboardView: ClassifySymbolicMoreKeyboard {
+    let view = ClassifySymbolicMoreKeyboard(
+      actionHandler: actionHandler,
+      appearance: appearance,
+      keyboardContext: keyboardContext,
+      calloutContext: calloutContext,
+      rimeContext: rimeContext
+    )
+    view.translatesAutoresizingMaskIntoConstraints = false
+    return view
+  }
+
+  /// 英文数字页
+  private var englishNumericKeyboardView: EnglishNumericKeyboard {
+    let view = EnglishNumericKeyboard(
+      actionHandler: actionHandler,
+      appearance: appearance,
+      keyboardContext: keyboardContext,
+      calloutContext: calloutContext,
+      rimeContext: rimeContext
+    )
+    view.translatesAutoresizingMaskIntoConstraints = false
+    return view
+  }
+
+  /// 英文符号更多页
+  private var englishSymbolsMoreKeyboardView: EnglishSymbolsMoreKeyboard {
+    let view = EnglishSymbolsMoreKeyboard(
       actionHandler: actionHandler,
       appearance: appearance,
       keyboardContext: keyboardContext,
@@ -425,12 +477,23 @@ class KeyboardRootView: NibLessView {
       tempKeyboardView = classifySymbolicKeyboardView
     case .emojis:
       tempKeyboardView = emojisKeyboardView
-    case .alphabetic, .numeric, .symbolic, .chinese, .chineseNumeric, .chineseSymbolic, .custom:
+    case .alphabetic:
+      // ClawTalk IOS原生模式：英文页 = QWERTY 全键盘；其余 = 标准 26 键
+      tempKeyboardView = keyboardContext.isClawIOSNativeMode ? clawEnglishKeyboardView : standerSystemKeyboard
+    case .numeric, .symbolic, .chinese, .chineseNumeric, .chineseSymbolic, .custom:
       tempKeyboardView = standerSystemKeyboard
     case .chineseNineGrid, .chineseNineGridIOS:
       tempKeyboardView = chineseNineGridKeyboardView
     case .englishT9:
-      tempKeyboardView = englishT9KeyboardView
+      tempKeyboardView = clawEnglishKeyboardView
+    case .numericMoreSymbols:
+      tempKeyboardView = numericMoreSymbolsKeyboardView
+    case .classifySymbolicMore:
+      tempKeyboardView = classifySymbolicMoreKeyboardView
+    case .englishNumeric:
+      tempKeyboardView = englishNumericKeyboardView
+    case .englishSymbolsMore:
+      tempKeyboardView = englishSymbolsMoreKeyboardView
     default:
       Logger.statistics.error("keyboardType: \(keyboardType.yamlString) not match tempKeyboardType")
       return nil

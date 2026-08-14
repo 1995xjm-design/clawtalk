@@ -142,6 +142,18 @@ public enum KeyboardType: Codable, Identifiable, Hashable {
   /// ClawTalk English T9 page
   case englishT9
 
+  /// ClawTalk 数字-更多符号子面板（数字页「更多」进入）
+  case numericMoreSymbols
+
+  /// ClawTalk 中文拓展符号子面板（中文符号页「#+=」进入）
+  case classifySymbolicMore
+
+  /// ClawTalk 英文数字页
+  case englishNumeric
+
+  /// ClawTalk 英文符号更多页
+  case englishSymbolsMore
+
   public func hash(into hasher: inout Hasher) {
     switch self {
     case .alphabetic(let casing): hasher.combine("alphabetic(\(casing.rawValue))")
@@ -157,6 +169,10 @@ public enum KeyboardType: Codable, Identifiable, Hashable {
     case .chineseNineGrid: hasher.combine("chineseNineGrid")
     case .chineseNineGridIOS: hasher.combine("chineseNineGridIOS")
     case .englishT9: hasher.combine("englishT9")
+    case .numericMoreSymbols: hasher.combine("numericMoreSymbols")
+    case .classifySymbolicMore: hasher.combine("classifySymbolicMore")
+    case .englishNumeric: hasher.combine("englishNumeric")
+    case .englishSymbolsMore: hasher.combine("englishSymbolsMore")
     case .numericNineGrid: hasher.combine("numericNineGrid")
     case .classifySymbolic: hasher.combine("classifySymbolic")
     case .classifySymbolicOfLight: hasher.combine("classifySymbolicOfLight")
@@ -183,6 +199,10 @@ public extension KeyboardType {
     case .chineseNineGrid: return "chineseNineGrid"
     case .chineseNineGridIOS: return "chineseNineGridIOS"
     case .englishT9: return "englishT9"
+    case .numericMoreSymbols: return "numericMoreSymbols"
+    case .classifySymbolicMore: return "classifySymbolicMore"
+    case .englishNumeric: return "englishNumeric"
+    case .englishSymbolsMore: return "englishSymbolsMore"
     case .numericNineGrid: return "numericNineGrid"
     case .classifySymbolic: return "classifySymbolic"
     case .classifySymbolicOfLight: return "classifySymbolicOfLight"
@@ -242,6 +262,8 @@ public extension KeyboardType {
     case .numeric: return true
     case .numericNineGrid: return true
     case .chineseNumeric: return true
+    case .numericMoreSymbols: return true
+    case .englishNumeric: return true
     default:
       return false
     }
@@ -252,6 +274,8 @@ public extension KeyboardType {
     switch self {
     case .symbolic: return true
     case .chineseSymbolic: return true
+    case .classifySymbolicMore: return true
+    case .englishSymbolsMore: return true
     default: return false
     }
   }

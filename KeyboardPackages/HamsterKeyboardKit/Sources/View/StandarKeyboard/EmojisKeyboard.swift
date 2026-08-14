@@ -79,6 +79,14 @@ class EmojisKeyboard: NibLessView {
     return btn
   }()
 
+  /// TAB_BACK：返回来源面板（emoji_prev_panel）
+  private lazy var backButton: UIButton = {
+    let btn = UIButton(type: .system)
+    btn.translatesAutoresizingMaskIntoConstraints = false
+    btn.addTarget(self, action: #selector(backTapped), for: .touchUpInside)
+    return btn
+  }()
+
   // MARK: - Init
 
   init(keyboardContext: KeyboardContext, actionHandler: KeyboardActionHandler, appearance: KeyboardAppearance) {
@@ -100,6 +108,7 @@ class EmojisKeyboard: NibLessView {
     addSubview(collectionView)
     addSubview(bottomBar)
     categoryScrollView.addSubview(categoryBar)
+    bottomBar.addSubview(backButton)
     bottomBar.addSubview(deleteButton)
 
     // 构建分类按钮
@@ -112,6 +121,11 @@ class EmojisKeyboard: NibLessView {
       categoryBar.addArrangedSubview(btn)
     }
     updateCategoryHighlight()
+
+    backButton.setTitle(backButtonTitle, for: .normal)
+    backButton.titleLabel?.font = .systemFont(ofSize: 15, weight: .medium)
+    backButton.setTitleColor(style.toolbarButtonFrontColor, for: .normal)
+    styleCapsule(backButton)
 
     deleteButton.tintColor = style.toolbarButtonFrontColor
     styleCapsule(deleteButton)
@@ -136,6 +150,11 @@ class EmojisKeyboard: NibLessView {
       bottomBar.trailingAnchor.constraint(equalTo: trailingAnchor),
       bottomBar.bottomAnchor.constraint(equalTo: bottomAnchor),
       bottomBar.heightAnchor.constraint(equalToConstant: 40),
+
+      backButton.leadingAnchor.constraint(equalTo: bottomBar.leadingAnchor, constant: 12),
+      backButton.centerYAnchor.constraint(equalTo: bottomBar.centerYAnchor),
+      backButton.widthAnchor.constraint(equalToConstant: 46),
+      backButton.heightAnchor.constraint(equalToConstant: 32),
 
       deleteButton.trailingAnchor.constraint(equalTo: bottomBar.trailingAnchor, constant: -12),
       deleteButton.centerYAnchor.constraint(equalTo: bottomBar.centerYAnchor),
@@ -200,6 +219,23 @@ class EmojisKeyboard: NibLessView {
 
   @objc private func deleteTapped() {
     keyboardContext.textDocumentProxy.deleteBackward()
+  }
+
+  /// 返回键标题：按来源面板显示（英文=ABC / 数字=123 / 中文=中）
+  private var backButtonTitle: String {
+    switch keyboardContext.clawEmojiPrevPanel {
+    case .alphabetic: return "ABC"
+    case .numericNineGrid, .englishNumeric: return "123"
+    case .numericMoreSymbols: return "更多"
+    default: return "中"
+    }
+  }
+
+  /// TAB_BACK：退出 emoji 回来源面板（不写死回 9 键主页）
+  @objc private func backTapped() {
+    let prev = keyboardContext.clawEmojiPrevPanel ?? .chineseNineGridIOS
+    keyboardContext.clawEmojiPrevPanel = nil
+    keyboardContext.setKeyboardType(prev)
   }
 }
 

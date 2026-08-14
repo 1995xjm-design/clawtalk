@@ -41,9 +41,17 @@ public extension KeyboardType {
   func standardButtonText(for context: KeyboardContext) -> String? {
     switch self {
     case .chinese, .chineseNineGrid, .chineseNineGridIOS: return "中"
+    case .numericMoreSymbols: return "更多"
+    case .classifySymbolicMore: return "#+="
+    case .englishNumeric: return "123"
+    case .englishSymbolsMore: return "#+="
     case .classifySymbolic, .classifySymbolicOfLight:
-      // ClawTalk IOS原生页面：中文九宫格主页 #+ 键显示 #@¥
-      return context.keyboardType.isClawIOSNativeKeyboard ? "#@¥" : "#+="
+      // ClawTalk IOS原生页面：中文九宫格主页 #+ 键显示 #@¥；
+      // 中文符号更多子面板内返回键（上一级）显示 123
+      if context.keyboardType.isClawIOSNativeKeyboard {
+        return context.keyboardType == .classifySymbolicMore ? "123" : "#@¥"
+      }
+      return "#+="
     case .englishT9: return "ABC"
     case .alphabetic: return "ABC"
     case .numeric: return "123"

@@ -8,12 +8,12 @@
 import HamsterUIKit
 import UIKit
 
-/// 扩展符号页（ClawTalk IOS原生）
+/// 中文符号页（ClawTalk IOS原生，按文档）
 /// 行1：[|]|{|}|删除
 /// 行2：#|%|^|*|+
 /// 行3：=|\||~|<
-/// 行4：>|€|£|¥|123
-/// 行5：ABC|,|.|空格|确认
+/// 行4：>|€|£|¥|#+=
+/// 行5：ABC|,|.|空格|发送/换行
 class ClassifySymbolicKeyboard: KeyboardTouchView {
   private let keyboardContext: KeyboardContext
   private let actionHandler: KeyboardActionHandler
@@ -39,9 +39,17 @@ class ClassifySymbolicKeyboard: KeyboardTouchView {
       [.symbol(Symbol(char: "[")), .symbol(Symbol(char: "]")), .symbol(Symbol(char: "{")), .symbol(Symbol(char: "}")), .backspace],
       [.symbol(Symbol(char: "#")), .symbol(Symbol(char: "%")), .symbol(Symbol(char: "^")), .symbol(Symbol(char: "*")), .symbol(Symbol(char: "+"))],
       [.symbol(Symbol(char: "=")), .symbol(Symbol(char: "|")), .symbol(Symbol(char: "~")), .symbol(Symbol(char: "<"))],
-      [.symbol(Symbol(char: ">")), .symbol(Symbol(char: "€")), .symbol(Symbol(char: "£")), .symbol(Symbol(char: "¥")), .keyboardType(.numericNineGrid)],
-      [.keyboardType(.chineseNineGrid), .symbol(Symbol(char: ",")), .symbol(Symbol(char: ".")), .space, .primary(.custom(title: "确认"))],
+      [.symbol(Symbol(char: ">")), .symbol(Symbol(char: "€")), .symbol(Symbol(char: "£")), .symbol(Symbol(char: "¥")), .keyboardType(.classifySymbolicMore)],
+      [.keyboardType(.alphabetic(.lowercased)), .symbol(Symbol(char: ",")), .symbol(Symbol(char: ".")), .space, primaryAction],
     ]
+  }
+
+  /// 发送/换行键（跟随外部输入框 returnKeyType，键盘不自行判断）
+  private var primaryAction: KeyboardAction {
+    let proxy = keyboardContext.textDocumentProxy
+    let returnType = proxy.returnKeyType?.keyboardReturnKeyType
+    if let returnType { return .primary(returnType) }
+    return .primary(.return)
   }
 
   private var layout: KeyboardLayout {
@@ -88,7 +96,7 @@ class ClassifySymbolicKeyboard: KeyboardTouchView {
   // MARK: - Layout
 
   func setupKeyboardView() {
-    backgroundColor = ClawIOSNativePalette.keyboardBackground
+    backgroundColor = ClawIOSNativePalette.colors(for: keyboardContext.colorScheme).keyboardBackground
 
     constructViewHierarchy()
     activateViewConstraints()
@@ -140,6 +148,7 @@ class ClassifySymbolicKeyboard: KeyboardTouchView {
 
     if userInterfaceStyle != keyboardContext.colorScheme {
       userInterfaceStyle = keyboardContext.colorScheme
+      backgroundColor = ClawIOSNativePalette.colors(for: userInterfaceStyle).keyboardBackground
       keyboardRows.forEach { $0.forEach { $0.setNeedsLayout() } }
     }
 

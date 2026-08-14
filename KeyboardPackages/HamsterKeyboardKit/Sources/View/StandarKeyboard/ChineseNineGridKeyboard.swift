@@ -11,11 +11,11 @@ import HamsterUIKit
 import OSLog
 import UIKit
 
-/// 中文九宫格键盘（ClawTalk IOS原生）
+/// 中文九宫格键盘（ClawTalk IOS原生，按文档）
 /// 行1：123 | ,。？！ | ABC | DEF | 删除
-/// 行2：#@¥ | GHI | JKL | MNO | 分隔
-/// 行3：ABC | PQRS | TUV | WXYZ | 确认(右侧纵向通高)
-/// 行4：😀表情 | 选拼音 | 选定 | 确认(右侧纵向通高)
+/// 行2：#@¥ | GHI | JKL | MNO
+/// 行3：ABC | PQRS | TUV | WXYZ
+/// 行4：😀表情 58 | 选拼音 58 | 空格 163 | 发送/换行
 public class ChineseNineGridKeyboard: KeyboardTouchView {
   // MARK: - Properties
 
@@ -100,7 +100,7 @@ public class ChineseNineGridKeyboard: KeyboardTouchView {
   // MARK: - Layout
 
   func setupKeyboardView() {
-    backgroundColor = ClawIOSNativePalette.keyboardBackground
+    backgroundColor = ClawIOSNativePalette.colors(for: keyboardContext.colorScheme).keyboardBackground
 
     constructViewHierarchy()
     activateViewConstraints()
@@ -136,11 +136,10 @@ public class ChineseNineGridKeyboard: KeyboardTouchView {
       rowHeight: rowHeight,
       specs: [
         .fixed([4: 0.165], equal: [0: 1, 1: 1, 2: 1, 3: 1]),
-        .fixed([4: 0.165], equal: [0: 1, 1: 1, 2: 1, 3: 1]),
-        .fixed([4: 0.165], equal: [0: 1, 1: 1, 2: 1, 3: 1]),
-        .equal([0: 1, 1: 1, 2: 1]),
-      ],
-      verticalSpan: (row: 2, column: 4)
+        .equal([0: 1, 1: 1, 2: 1, 3: 1]),
+        .equal([0: 1, 1: 1, 2: 1, 3: 1]),
+        .fixedPt([0: 58, 1: 58, 2: 163], equal: [3: 1]),
+      ]
     )
     engine.build(on: self, rows: keyboardRows)
 
@@ -154,6 +153,7 @@ public class ChineseNineGridKeyboard: KeyboardTouchView {
     // 样式调整
     if userInterfaceStyle != keyboardContext.colorScheme {
       userInterfaceStyle = keyboardContext.colorScheme
+      backgroundColor = ClawIOSNativePalette.colors(for: userInterfaceStyle).keyboardBackground
       keyboardRows.forEach { $0.forEach { $0.setNeedsLayout() } }
     }
 

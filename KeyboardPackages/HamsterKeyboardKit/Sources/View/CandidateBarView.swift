@@ -39,7 +39,7 @@ public class CandidateBarView: NibLessView {
 
   /// 拼音行（仅中文主页双层模式第 1 层）：数据源 = Rime 拼音候选
   lazy var pinyinRowView: PinyinCandidateRowView = {
-    let view = PinyinCandidateRowView(rimeContext: rimeContext)
+    let view = PinyinCandidateRowView(rimeContext: rimeContext, keyboardContext: keyboardContext)
     view.translatesAutoresizingMaskIntoConstraints = false
     return view
   }()
@@ -104,7 +104,7 @@ public class CandidateBarView: NibLessView {
   /// 竖线
   lazy var verticalLine: UIView = {
     let view = UIView(frame: .zero)
-    view.backgroundColor = ClawIOSNativePalette.collapseArrow.withAlphaComponent(0.3)
+    view.backgroundColor = ClawIOSNativePalette.collapseArrow(for: keyboardContext.colorScheme).withAlphaComponent(0.3)
     view.translatesAutoresizingMaskIntoConstraints = false
     return view
   }()
@@ -139,7 +139,7 @@ public class CandidateBarView: NibLessView {
     let button = UIButton(type: .system)
     button.setImage(UIImage(systemName: "chevron.down.circle"), for: .normal)
     button.setPreferredSymbolConfiguration(.init(font: .systemFont(ofSize: 17), scale: .default), forImageIn: .normal)
-    button.tintColor = ClawIOSNativePalette.collapseArrow
+    button.tintColor = ClawIOSNativePalette.collapseArrow(for: keyboardContext.colorScheme)
     button.translatesAutoresizingMaskIntoConstraints = false
     button.addTarget(self, action: #selector(dismissTapped), for: .touchUpInside)
     return button
@@ -158,6 +158,9 @@ public class CandidateBarView: NibLessView {
   }()
 
   // MARK: - 布局状态
+
+  /// 当前界面样式（深浅切换刷新外观）
+  private var userInterfaceStyle: UIUserInterfaceStyle = .light
 
   /// 是否双层模式（中文九宫格主页面）
   private var isDoubleMode: Bool {
@@ -299,14 +302,14 @@ public class CandidateBarView: NibLessView {
   }
 
   override public func setupAppearance() {
-    // 候选栏背景：全局写死 #F1F1F3
-    backgroundColor = ClawIOSNativePalette.candidateBarBackground
+    // 候选栏背景：按深浅套写死（浅 #E8E8E8 / 深 #2C2C2E）
+    backgroundColor = ClawIOSNativePalette.candidateBarBackground(for: keyboardContext.colorScheme)
 
-    // 收起箭头：全局写死 #86868B
-    stateImageView.tintColor = ClawIOSNativePalette.collapseArrow
+    // 收起箭头：按深浅套
+    stateImageView.tintColor = ClawIOSNativePalette.collapseArrow(for: keyboardContext.colorScheme)
 
-    // 候选文字样式：全局写死（候选 #111111 / 选中 #007AFF）
-    style = ClawIOSNativePalette.candidateBarStyle
+    // 候选文字样式：按深浅套写死（选中 #007AFF）
+    style = ClawIOSNativePalette.candidateBarStyle(for: keyboardContext.colorScheme)
     candidatesArea.setupStyle(style)
     candidatesPagingArea.setupStyle(style)
   }
@@ -314,6 +317,14 @@ public class CandidateBarView: NibLessView {
   func setStyle(_ style: CandidateBarStyle) {
     self.style = style
     setupAppearance()
+  }
+
+  override public func layoutSubviews() {
+    super.layoutSubviews()
+    if userInterfaceStyle != keyboardContext.colorScheme {
+      userInterfaceStyle = keyboardContext.colorScheme
+      setupAppearance()
+    }
   }
 
   @objc func changeState() {

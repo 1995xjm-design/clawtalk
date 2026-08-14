@@ -7,12 +7,12 @@
 
 import UIKit
 
-/// 数字页布局（ClawTalk IOS原生）
+/// 数字页布局（ClawTalk IOS原生，按文档）
 /// 行1：1|2|3|4|删除
 /// 行2：5|6|7|8|9
 /// 行3：0|-|/|:|;
-/// 行4：(|)|¥|@|#+=
-/// 行5：ABC|,|.|空格|确认
+/// 行4：(|)|¥|@|更多
+/// 行5：ABC|,|.|空格|发送/换行
 open class NumericNineGridKeyboardLayoutProvider: KeyboardLayoutProvider {
   static let insets = UIEdgeInsets(top: 3, left: 3, bottom: 3, right: 3)
 
@@ -41,8 +41,8 @@ open class NumericNineGridKeyboardLayoutProvider: KeyboardLayoutProvider {
       [.symbol(Symbol(char: "1")), .symbol(Symbol(char: "2")), .symbol(Symbol(char: "3")), .symbol(Symbol(char: "4")), .backspace],
       [.symbol(Symbol(char: "5")), .symbol(Symbol(char: "6")), .symbol(Symbol(char: "7")), .symbol(Symbol(char: "8")), .symbol(Symbol(char: "9"))],
       [.symbol(Symbol(char: "0")), .symbol(Symbol(char: "-")), .symbol(Symbol(char: "/")), .symbol(Symbol(char: ":")), .symbol(Symbol(char: ";"))],
-      [.symbol(Symbol(char: "(")), .symbol(Symbol(char: ")")), .symbol(Symbol(char: "¥")), .symbol(Symbol(char: "@")), .keyboardType(.classifySymbolic)],
-      [.keyboardType(.chineseNineGrid), .symbol(Symbol(char: ",")), .symbol(Symbol(char: ".")), .space, .primary(.custom(title: "确认"))],
+      [.symbol(Symbol(char: "(")), .symbol(Symbol(char: ")")), .symbol(Symbol(char: "¥")), .symbol(Symbol(char: "@")), .keyboardType(.numericMoreSymbols)],
+      [.keyboardType(.alphabetic(.lowercased)), .symbol(Symbol(char: ",")), .symbol(Symbol(char: ".")), .space, keyboardReturnAction(for: context)],
     ]
   }
 

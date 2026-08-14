@@ -1,51 +1,69 @@
 //
-//  NumericNineGridKeyboard.swift
+//  NumericMoreSymbolsKeyboard.swift
 //
-//
-//  Created by morse on 2023/9/5.
+//  ClawTalk「IOS原生」数字-更多符号子面板（数字页「更多」进入，按文档）。
 //
 
 import HamsterKit
 import HamsterUIKit
 import UIKit
 
-/// 数字页（ClawTalk IOS原生）
-/// 行1：1|2|3|4|删除
-/// 行2：5|6|7|8|9
-/// 行3：0|-|/|:|;
-/// 行4：(|)|¥|@|#+=
-/// 行5：ABC|,|.|空格|确认
-public class NumericNineGridKeyboard: KeyboardTouchView {
-  // MARK: - Properties
-
-  private let keyboardLayoutProvider: NumericNineGridKeyboardLayoutProvider
+/// 数字-更多符号子面板（ClawTalk IOS原生，按文档）
+/// 行1：· | ÷ | × | − | 删除
+/// 行2：≠ | ≈ | ≤ | ≥ | ±
+/// 行3：∞ | √ | π | ° | %
+/// 行4：_ | € | £ | ¥ | 123
+/// 行5：ABC | , | 空格 | . | 发送/换行
+class NumericMoreSymbolsKeyboard: KeyboardTouchView {
+  private let keyboardContext: KeyboardContext
   private let actionHandler: KeyboardActionHandler
   private let appearance: KeyboardAppearance
-  private var keyboardContext: KeyboardContext
-  private var calloutContext: KeyboardCalloutContext
-  private var rimeContext: RimeContext
+  private let rimeContext: RimeContext
 
   private var interfaceOrientation: InterfaceOrientation
-
   private var userInterfaceStyle: UIUserInterfaceStyle
-
   private var isKeyboardFloating: Bool
 
-  /// 缓存所有按键视图
   private var keyboardRows: [[KeyboardButton]] = []
-
   private var staticConstraints: [NSLayoutConstraint] = []
-
   private var dynamicConstraints: [NSLayoutConstraint] = []
 
   // MARK: - 计算属性
 
-  private var layout: KeyboardLayout {
-    keyboardLayoutProvider.keyboardLayout(for: keyboardContext)
-  }
-
   private var layoutConfig: KeyboardLayoutConfiguration {
     .standard(for: keyboardContext)
+  }
+
+  /// 发送/换行键（跟随外部输入框 returnKeyType，键盘不自行判断）
+  private var primaryAction: KeyboardAction {
+    let proxy = keyboardContext.textDocumentProxy
+    let returnType = proxy.returnKeyType?.keyboardReturnKeyType
+    if let returnType { return .primary(returnType) }
+    return .primary(.return)
+  }
+
+  private var actionRows: KeyboardActionRows {
+    [
+      [.symbol(Symbol(char: "·")), .symbol(Symbol(char: "÷")), .symbol(Symbol(char: "×")), .symbol(Symbol(char: "−")), .backspace],
+      [.symbol(Symbol(char: "≠")), .symbol(Symbol(char: "≈")), .symbol(Symbol(char: "≤")), .symbol(Symbol(char: "≥")), .symbol(Symbol(char: "±"))],
+      [.symbol(Symbol(char: "∞")), .symbol(Symbol(char: "√")), .symbol(Symbol(char: "π")), .symbol(Symbol(char: "°")), .symbol(Symbol(char: "%"))],
+      [.symbol(Symbol(char: "_")), .symbol(Symbol(char: "€")), .symbol(Symbol(char: "£")), .symbol(Symbol(char: "¥")), .keyboardType(.numericNineGrid)],
+      [.keyboardType(.alphabetic(.lowercased)), .symbol(Symbol(char: ",")), .space, .symbol(Symbol(char: ".")), primaryAction],
+    ]
+  }
+
+  private var layout: KeyboardLayout {
+    let items = actionRows.enumerated().map { row -> KeyboardLayoutItemRow in
+      row.element.enumerated().map { action -> KeyboardLayoutItem in
+        KeyboardLayoutItem(
+          action: action.element,
+          size: KeyboardLayoutItemSize(width: .available, height: layoutConfig.rowHeight),
+          insets: UIEdgeInsets(top: 3, left: 3, bottom: 3, right: 3),
+          swipes: []
+        )
+      }
+    }
+    return KeyboardLayout(itemRows: items)
   }
 
   // MARK: - Initialization
@@ -57,11 +75,9 @@ public class NumericNineGridKeyboard: KeyboardTouchView {
     calloutContext: KeyboardCalloutContext,
     rimeContext: RimeContext
   ) {
-    self.keyboardLayoutProvider = NumericNineGridKeyboardLayoutProvider(keyboardContext: keyboardContext)
     self.actionHandler = actionHandler
     self.appearance = appearance
     self.keyboardContext = keyboardContext
-    self.calloutContext = calloutContext
     self.rimeContext = rimeContext
     self.interfaceOrientation = keyboardContext.interfaceOrientation
     self.isKeyboardFloating = keyboardContext.isKeyboardFloating
@@ -87,7 +103,6 @@ public class NumericNineGridKeyboard: KeyboardTouchView {
   }
 
   override public func constructViewHierarchy() {
-    // 添加按键
     for (rowIndex, row) in layout.itemRows.enumerated() {
       var tempRow = [KeyboardButton]()
       for (itemIndex, item) in row.enumerated() {
@@ -98,7 +113,7 @@ public class NumericNineGridKeyboard: KeyboardTouchView {
           actionHandler: actionHandler,
           keyboardContext: keyboardContext,
           rimeContext: rimeContext,
-          calloutContext: calloutContext,
+          calloutContext: .disabled,
           appearance: appearance
         )
         buttonItem.translatesAutoresizingMaskIntoConstraints = false

@@ -560,6 +560,14 @@ public extension String {
       return .chineseNineGridIOS
     case "englishT9":
       return .englishT9
+    case "numericMoreSymbols":
+      return .numericMoreSymbols
+    case "classifySymbolicMore":
+      return .classifySymbolicMore
+    case "englishNumeric":
+      return .englishNumeric
+    case "englishSymbolsMore":
+      return .englishSymbolsMore
     case "numericNineGrid":
       return .numericNineGrid
     case "custom":
@@ -689,6 +697,14 @@ public extension KeyboardType {
       return "chineseNineGridIOS"
     case .englishT9:
       return "englishT9"
+    case .numericMoreSymbols:
+      return "numericMoreSymbols"
+    case .classifySymbolicMore:
+      return "classifySymbolicMore"
+    case .englishNumeric:
+      return "englishNumeric"
+    case .englishSymbolsMore:
+      return "englishSymbolsMore"
     case .numericNineGrid:
       return "numericNineGrid"
     case .classifySymbolic:
@@ -714,6 +730,14 @@ public extension KeyboardType {
       return "符"
     case .englishT9:
       return "ABC"
+    case .numericMoreSymbols:
+      return "更多"
+    case .classifySymbolicMore:
+      return "#+="
+    case .englishNumeric:
+      return "123"
+    case .englishSymbolsMore:
+      return "#+="
     case .chinese, .chineseNineGrid, .chineseNineGridIOS, .custom:
       return "中"
     case .emojis:

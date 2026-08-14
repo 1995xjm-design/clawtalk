@@ -7,19 +7,12 @@
 
 import UIKit
 
-/// 中文九宫格布局（ClawTalk IOS原生）
+/// 中文九宫格布局（ClawTalk IOS原生，按文档）
 /// 行1：123 | ,。？！ | ABC | DEF | 删除
-/// 行2：#@¥ | GHI | JKL | MNO | 分隔
-/// 行3：ABC | PQRS | TUV | WXYZ | 确认(纵向通高)
-/// 行4：😀表情 | 选拼音 | 选定 | 确认(纵向通高)
+/// 行2：#@¥ | GHI | JKL | MNO
+/// 行3：ABC | PQRS | TUV | WXYZ
+/// 行4：😀表情 58 | 选拼音 58 | 空格 163 | 发送/换行
 public class ChineseNineGridLayoutProvider: KeyboardLayoutProvider {
-  static let actionRows: KeyboardActionRows = [
-    [.keyboardType(.numericNineGrid), .chineseNineGrid(Symbol(char: ",。？！")), .keyboardType(.englishT9), .chineseNineGrid(Symbol(char: "DEF")), .backspace],
-    [.keyboardType(.classifySymbolic), .chineseNineGrid(Symbol(char: "GHI")), .chineseNineGrid(Symbol(char: "JKL")), .chineseNineGrid(Symbol(char: "MNO")), .delimiter],
-    [.keyboardType(.englishT9), .chineseNineGrid(Symbol(char: "PQRS")), .chineseNineGrid(Symbol(char: "TUV")), .chineseNineGrid(Symbol(char: "WXYZ")), .primary(.custom(title: "确认"))],
-    [.keyboardType(.emojis), .t9SelectPinyin, .t9ConfirmCandidate],
-  ]
-
   static let insets = UIEdgeInsets(top: 3, left: 3, bottom: 3, right: 3)
 
   public var insets: UIEdgeInsets {
@@ -37,7 +30,12 @@ public class ChineseNineGridLayoutProvider: KeyboardLayoutProvider {
   }
 
   open func actions(context: KeyboardContext) -> KeyboardActionRows {
-    Self.actionRows
+    [
+      [.keyboardType(.numericNineGrid), .chineseNineGrid(Symbol(char: ",。？！")), .keyboardType(.alphabetic(.lowercased)), .chineseNineGrid(Symbol(char: "DEF")), .backspace],
+      [.keyboardType(.classifySymbolic), .chineseNineGrid(Symbol(char: "GHI")), .chineseNineGrid(Symbol(char: "JKL")), .chineseNineGrid(Symbol(char: "MNO"))],
+      [.keyboardType(.alphabetic(.lowercased)), .chineseNineGrid(Symbol(char: "PQRS")), .chineseNineGrid(Symbol(char: "TUV")), .chineseNineGrid(Symbol(char: "WXYZ"))],
+      [.keyboardType(.emojis), .t9SelectPinyin, .space, keyboardReturnAction(for: context)],
+    ]
   }
 
   open func items(for actions: KeyboardActionRows, context: KeyboardContext) -> KeyboardLayoutItemRows {

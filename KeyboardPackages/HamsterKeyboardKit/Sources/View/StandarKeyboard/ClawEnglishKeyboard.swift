@@ -1,19 +1,20 @@
 //
-//  EnglishT9Keyboard.swift
+//  ClawEnglishKeyboard.swift
 //
-//  ClawTalk「IOS原生」英文 T9 页（点 ABC 进入）。
+//  ClawTalk「IOS原生」英文 QWERTY 全键盘（大写/小写两页，按文档）。
 //
 
 import HamsterKit
 import HamsterUIKit
 import UIKit
 
-/// 英文 T9 页（ClawTalk IOS原生）
-/// 行1：123 | QW | ER | TY | 删除
-/// 行2：UI | OP | AS | DF | 分隔
-/// 行3：GH | JK | LZ | XC | 确认(右侧纵向通高)
-/// 行4：😀表情 | 选拼音 | 选定 | 确认(右侧纵向通高)
-public class EnglishT9Keyboard: KeyboardTouchView {
+/// 英文 QWERTY 全键盘（ClawTalk IOS原生，按文档）
+/// 行1：10 键 30.5×46（QWERTYUIOP）
+/// 行2：9 键 34.5×46 水平居中（ASDFGHJKL）
+/// 行3：SHIFT 52×46 | ZXCVBNM 等分 | 删除 52×46
+/// 行4：123 52×46 | 😀 52×46 | 空格弹性 | send 52×46
+/// SHIFT 切换大小写
+public class ClawEnglishKeyboard: KeyboardTouchView {
   private let actionHandler: KeyboardActionHandler
   private let appearance: KeyboardAppearance
   private var keyboardContext: KeyboardContext
@@ -34,12 +35,37 @@ public class EnglishT9Keyboard: KeyboardTouchView {
     .standard(for: keyboardContext)
   }
 
+  /// 当前是否大写页
+  private var isUppercased: Bool {
+    if case .alphabetic(let casing) = keyboardContext.keyboardType {
+      return casing.isUppercased
+    }
+    return false
+  }
+
+  /// 字母序列（按当前大小写）
+  private var letters: [String] {
+    Array("qwertyuiopasdfghjklzxcvbnm").map { isUppercased ? String($0).uppercased() : String($0) }
+  }
+
+  /// 发送/换行键（跟随外部输入框 returnKeyType，键盘不自行判断）
+  private var primaryAction: KeyboardAction {
+    let proxy = keyboardContext.textDocumentProxy
+    let returnType = proxy.returnKeyType?.keyboardReturnKeyType
+    if let returnType { return .primary(returnType) }
+    return .primary(.return)
+  }
+
   private var actionRows: KeyboardActionRows {
-    [
-      [.keyboardType(.numericNineGrid), .englishT9(Symbol(char: "QW")), .englishT9(Symbol(char: "ER")), .englishT9(Symbol(char: "TY")), .backspace],
-      [.englishT9(Symbol(char: "UI")), .englishT9(Symbol(char: "OP")), .englishT9(Symbol(char: "AS")), .englishT9(Symbol(char: "DF")), .delimiter],
-      [.englishT9(Symbol(char: "GH")), .englishT9(Symbol(char: "JK")), .englishT9(Symbol(char: "LZ")), .englishT9(Symbol(char: "XC")), .primary(.custom(title: "确认"))],
-      [.keyboardType(.emojis), .t9SelectPinyin, .t9ConfirmCandidate],
+    let l = letters
+    let shiftCasing: KeyboardCase = isUppercased ? .uppercased : .lowercased
+    return [
+      (0..<10).map { .character(l[$0]) },
+      (10..<19).map { .character(l[$0]) },
+      [.shift(currentCasing: shiftCasing)]
+        + (19..<26).map { .character(l[$0]) }
+        + [.backspace],
+      [.keyboardType(.englishNumeric), .keyboardType(.emojis), .space, primaryAction],
     ]
   }
 
@@ -88,7 +114,7 @@ public class EnglishT9Keyboard: KeyboardTouchView {
   // MARK: - Layout
 
   func setupKeyboardView() {
-    backgroundColor = ClawIOSNativePalette.keyboardBackground
+    backgroundColor = ClawIOSNativePalette.colors(for: keyboardContext.colorScheme).keyboardBackground
 
     constructViewHierarchy()
     activateViewConstraints()
@@ -122,12 +148,11 @@ public class EnglishT9Keyboard: KeyboardTouchView {
     let engine = ClawNineGridLayoutEngine(
       rowHeight: rowHeight,
       specs: [
-        .fixed([4: 0.165], equal: [0: 1, 1: 1, 2: 1, 3: 1]),
-        .fixed([4: 0.165], equal: [0: 1, 1: 1, 2: 1, 3: 1]),
-        .fixed([4: 0.165], equal: [0: 1, 1: 1, 2: 1, 3: 1]),
-        .equal([0: 1, 1: 1, 2: 1]),
-      ],
-      verticalSpan: (row: 2, column: 4)
+        .equal([0: 1, 1: 1, 2: 1, 3: 1, 4: 1, 5: 1, 6: 1, 7: 1, 8: 1, 9: 1]),
+        .equal([0: 1, 1: 1, 2: 1, 3: 1, 4: 1, 5: 1, 6: 1, 7: 1, 8: 1]),
+        .fixedPt([0: 52, 8: 52], equal: [1: 1, 2: 1, 3: 1, 4: 1, 5: 1, 6: 1, 7: 1]),
+        .fixedPt([0: 52, 1: 52, 3: 52], equal: [2: 1]),
+      ]
     )
     engine.build(on: self, rows: keyboardRows)
 
@@ -140,6 +165,7 @@ public class EnglishT9Keyboard: KeyboardTouchView {
 
     if userInterfaceStyle != keyboardContext.colorScheme {
       userInterfaceStyle = keyboardContext.colorScheme
+      backgroundColor = ClawIOSNativePalette.colors(for: userInterfaceStyle).keyboardBackground
       keyboardRows.forEach { $0.forEach { $0.setNeedsLayout() } }
     }
 

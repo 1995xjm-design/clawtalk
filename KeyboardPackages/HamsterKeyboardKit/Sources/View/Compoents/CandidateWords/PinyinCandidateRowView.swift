@@ -10,6 +10,8 @@ import UIKit
 /// 拼音候选行（44pt）：数据源 = Rime 拼音候选，点击将输入编码替换为所选拼音
 final class PinyinCandidateRowView: UIView {
   private let rimeContext: RimeContext
+  private let keyboardContext: KeyboardContext
+  private var userInterfaceStyle: UIUserInterfaceStyle = .light
   private var subscriptions = Set<AnyCancellable>()
 
   private lazy var scrollView: UIScrollView = {
@@ -29,8 +31,10 @@ final class PinyinCandidateRowView: UIView {
     return view
   }()
 
-  init(rimeContext: RimeContext) {
+  init(rimeContext: RimeContext, keyboardContext: KeyboardContext) {
     self.rimeContext = rimeContext
+    self.keyboardContext = keyboardContext
+    self.userInterfaceStyle = keyboardContext.colorScheme
     super.init(frame: .zero)
     setupViews()
     bind()
@@ -77,11 +81,19 @@ final class PinyinCandidateRowView: UIView {
     for pinyin in pinyins {
       let button = UIButton(type: .system)
       button.setTitle(pinyin, for: .normal)
-      button.setTitleColor(ClawIOSNativePalette.candidateText, for: .normal)
+      button.setTitleColor(ClawIOSNativePalette.colors(for: keyboardContext.colorScheme).keyText, for: .normal)
       button.titleLabel?.font = .systemFont(ofSize: 15)
       button.contentEdgeInsets = UIEdgeInsets(top: 6, left: 4, bottom: 6, right: 4)
       button.addTarget(self, action: #selector(pinyinTapped(_:)), for: .touchUpInside)
       stackView.addArrangedSubview(button)
+    }
+  }
+
+  override func layoutSubviews() {
+    super.layoutSubviews()
+    if userInterfaceStyle != keyboardContext.colorScheme {
+      userInterfaceStyle = keyboardContext.colorScheme
+      reload()
     }
   }
 
