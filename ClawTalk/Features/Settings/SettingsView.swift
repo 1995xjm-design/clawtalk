@@ -717,6 +717,7 @@ private var connectionSection: some View {
         case .gateway, .full:
             store.settings.gatewayURL = ""
             store.gatewayToken = ""
+            store.settings.bootstrapToken = nil
             store.settings.useWebSocket = false
         case .onboarding:
             break

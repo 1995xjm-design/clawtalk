@@ -22,7 +22,7 @@ struct HomeCardManagerView: View {
                         } label: {
                             HStack(spacing: 12) {
                                 Image(systemName: kind.icon)
-                                    .font(.system(size: 15, weight: .semibold))
+                                    .font(.subheadline.weight(.semibold))
                                     .foregroundStyle(.white)
                                     .frame(width: 32, height: 32)
                                     .background(
@@ -39,13 +39,14 @@ struct HomeCardManagerView: View {
                                 }
                                 Spacer()
                                 Image(systemName: enabled.contains(kind) ? "checkmark.circle.fill" : "plus.circle")
-                                    .font(.system(size: 18, weight: .semibold))
+                                    .font(.headline)
                                     .foregroundStyle(enabled.contains(kind) ? .green : .orange)
                             }
                         }
                         .buttonStyle(.plain)
                     }
                 } header: {
+                        .accessibilityValue(enabled.contains(kind) ? "已显示" : "已隐藏")
                     Text("主页卡片")
                 } footer: {
                     Text("已显示 \(enabled.count) / \(HomeCardKind.allCases.count) 张。点按在主页显示 / 移除，移除后仍可从本页加回，功能不丢失。")

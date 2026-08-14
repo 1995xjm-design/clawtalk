@@ -50,11 +50,12 @@ struct CloneTalkView: View {
                 if let onBack {
                     Button(action: onBack) {
                         Image(systemName: "xmark")
-                            .font(.system(size: 16, weight: .semibold))
+                            .font(.callout.weight(.semibold))
                             .foregroundStyle(.primary)
                             .padding(10)
                             .background(Color(.systemGray5), in: Circle())
                     }
+                    .accessibilityLabel("关闭")
                 }
                 Spacer()
             }

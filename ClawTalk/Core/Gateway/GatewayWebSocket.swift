@@ -666,9 +666,14 @@ actor GatewayWebSocket {
         return nil
     }
 
-    /// 从 AppSettings（UserDefaults）读取持久化的配对令牌。
-    /// Onboarding 扫码/粘贴配对码后由 SettingsStore.save() 写入。
+    /// 读取持久化的配对令牌：优先钥匙串（SecureStorage.bootstrapTokenKey），旧存档兜底 UserDefaults。
+    /// Onboarding 扫码/粘贴配对码后由 SettingsStore.save() 写入钥匙串。
     private func loadBootstrapTokenFromSettings() -> String? {
+        if let token = SecureStorage.shared.getString(SecureStorage.bootstrapTokenKey)?
+            .trimmingCharacters(in: .whitespacesAndNewlines), !token.isEmpty {
+            return token
+        }
+        // 兜底：升级前的旧存档仍从 UserDefaults 读取（SettingsStore.init 会迁移到钥匙串）
         guard let data = UserDefaults.standard.data(forKey: "app_settings"),
               let settings = try? JSONDecoder().decode(AppSettings.self, from: data),
               let token = settings.bootstrapToken?.trimmingCharacters(in: .whitespacesAndNewlines),

@@ -32,6 +32,8 @@ struct GeofenceListView: View {
                 } label: {
                     Image(systemName: "plus")
                 }
+                .accessibilityLabel("添加地理围栏")
+
             }
         }
         .sheet(isPresented: $showEditor) {
@@ -153,7 +155,7 @@ struct GeofenceListView: View {
             } label: {
                 HStack(alignment: .top, spacing: 12) {
                     Image(systemName: region.type.icon)
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(.callout.weight(.semibold))
                         .foregroundStyle(.white)
                         .frame(width: 34, height: 34)
                         .background(typeColor(region.type))

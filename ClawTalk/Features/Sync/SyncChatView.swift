@@ -261,7 +261,7 @@ struct SyncChatView: View {
         VStack(spacing: 14) {
             if let error = viewModel.errorMessage {
                 Image(systemName: "wifi.exclamationmark")
-                    .font(.system(size: 48))
+                    .font(.largeTitle)
                     .foregroundStyle(.secondary)
                 Text("同步服务不可用")
                     .font(.headline)
@@ -345,10 +345,11 @@ struct SyncChatView: View {
                                     .overlay(alignment: .topTrailing) {
                                         Button(action: { attachedSyncImages.remove(at: index) }) {
                                             Image(systemName: "xmark.circle.fill")
-                                                .font(.system(size: 18))
+                                                .font(.body)
                                                 .symbolRenderingMode(.palette)
                                                 .foregroundStyle(.white, .black.opacity(0.6))
                                         }
+                                        .accessibilityLabel("删除图片")
                                         .offset(x: 6, y: -6)
                                     }
                             }
@@ -375,6 +376,7 @@ struct SyncChatView: View {
                             .foregroundStyle(.secondary)
                     }
                 }
+                    .accessibilityLabel("移除附件")
                 .padding(.horizontal, 16)
                 .padding(.top, 8)
             }

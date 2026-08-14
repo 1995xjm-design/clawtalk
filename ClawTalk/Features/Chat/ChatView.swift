@@ -140,6 +140,7 @@ struct ChatView: View {
                             .contentShape(Rectangle())
                             .frame(width: 44, height: 44)
                     }
+                    .accessibilityLabel("更多操作")
                 }
             }
         }
@@ -306,10 +307,11 @@ struct ChatView: View {
                                     .overlay(alignment: .topTrailing) {
                                         Button(action: { attachedImages.remove(at: index) }) {
                                             Image(systemName: "xmark.circle.fill")
-                                                .font(.system(size: 18))
+                                                .font(.body)
                                                 .symbolRenderingMode(.palette)
                                                 .foregroundStyle(.white, .black.opacity(0.6))
                                         }
+                                        .accessibilityLabel("删除图片")
                                         .offset(x: 6, y: -6)
                                     }
                             }
@@ -336,6 +338,7 @@ struct ChatView: View {
                             .foregroundStyle(.secondary)
                     }
                 }
+                    .accessibilityLabel("移除附件")
                 .padding(.horizontal, 16)
                 .padding(.top, 8)
             }
@@ -350,7 +353,7 @@ struct ChatView: View {
                 onToggleVoiceMode: {},
                 onSendText: {
                     if settingsStore.settings.hapticsEnabled {
-                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                        Haptics.impact(.light)
                     }
                     viewModel.sendText(textInput, images: attachedImages, file: attachedFile)
                     textInput = ""
@@ -428,6 +431,7 @@ struct ChatView: View {
                     Image(systemName: "xmark.circle.fill")
                         .foregroundStyle(.secondary)
                 }
+                .accessibilityLabel("停止朗读")
             case .idle:
                 EmptyView()
             }
@@ -469,7 +473,7 @@ struct ChatView: View {
 
     private func toggleConversationMode() {
         if settingsStore.settings.hapticsEnabled {
-            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+            Haptics.impact(.medium)
         }
         if viewModel.isConversationMode {
             viewModel.exitConversationMode()

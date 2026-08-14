@@ -57,6 +57,8 @@ struct AutomationListView: View {
                     Image(systemName: "plus")
                         .foregroundStyle(Color.openClawRed)
                 }
+                .accessibilityLabel("新建任务")
+
             }
         }
         .sheet(isPresented: $showCreate) {

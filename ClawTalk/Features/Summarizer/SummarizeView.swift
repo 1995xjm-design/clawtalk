@@ -440,7 +440,7 @@ struct SummarizeView: View {
             if viewModel.text.isEmpty {
                 VStack(spacing: 12) {
                     Image(systemName: "doc.text")
-                        .font(.system(size: 34))
+                        .font(.largeTitle)
                         .foregroundStyle(.secondary)
                     Text("还没有摘要内容")
                         .font(.headline)
@@ -822,7 +822,7 @@ struct SummarizeView: View {
                 .scaleEffect(isPressed ? 0.9 : 1.0)
 
             buttonIcon
-                .font(.system(size: 26, weight: .medium))
+                .font(.title1.weight(.medium))
                 .foregroundStyle(.white)
         }
         .frame(width: recordButtonSize + 60, height: recordButtonSize + 60)
@@ -883,14 +883,14 @@ struct SummarizeView: View {
                     return
                 }
                 if hapticsEnabled {
-                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                    Haptics.impact(.medium)
                 }
                 holdTimer = Task { @MainActor in
                     try? await Task.sleep(nanoseconds: holdThreshold)
                     guard !Task.isCancelled else { return }
                     isHolding = true
                     if hapticsEnabled {
-                        UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
+                        Haptics.impact(.heavy)
                     }
                     viewModel.startRecording()
                 }
@@ -901,7 +901,7 @@ struct SummarizeView: View {
                 guard isPressed else { return }
                 isPressed = false
                 if hapticsEnabled {
-                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    Haptics.impact(.light)
                 }
                 if viewModel.state == .recording || isHolding {
                     viewModel.stopRecordingAndTranscribe()

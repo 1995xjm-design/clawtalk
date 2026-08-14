@@ -263,6 +263,8 @@ struct VoiceSettingsView: View {
                                     .foregroundStyle(.red)
                             }
                             .buttonStyle(.borderless)
+                            .accessibilityLabel("删除唤醒词")
+
                         }
                     }
                     HStack {

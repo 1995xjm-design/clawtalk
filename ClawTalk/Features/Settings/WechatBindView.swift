@@ -138,7 +138,7 @@ struct WechatBindView: View {
 
             case .success:
                 Image(systemName: "checkmark.circle.fill")
-                    .font(.system(size: 64))
+                    .font(.largeTitle)
                     .foregroundStyle(.green)
                 Text("微信 Claw Bot 已连接")
                     .font(.title2)
@@ -161,7 +161,7 @@ struct WechatBindView: View {
 
             case .expired:
                 Image(systemName: "exclamationmark.triangle.fill")
-                    .font(.system(size: 56))
+                    .font(.largeTitle)
                     .foregroundStyle(.orange)
                 Text("二维码已过期")
                     .font(.title3)
@@ -176,7 +176,7 @@ struct WechatBindView: View {
 
             case .failed(let message):
                 Image(systemName: "wifi.exclamationmark")
-                    .font(.system(size: 56))
+                    .font(.largeTitle)
                     .foregroundStyle(.secondary)
                 Text(message)
                     .font(.subheadline)
@@ -231,7 +231,7 @@ struct WechatBindView: View {
                         .frame(width: 240, height: 240)
                 case .failure:
                     Image(systemName: "qrcode")
-                        .font(.system(size: 120))
+                        .font(.largeTitle)
                         .foregroundStyle(.secondary)
                 case .empty:
                     ProgressView()
@@ -244,7 +244,7 @@ struct WechatBindView: View {
             .clipShape(RoundedRectangle(cornerRadius: 12))
         } else {
             Image(systemName: "qrcode")
-                .font(.system(size: 120))
+                .font(.largeTitle)
                 .foregroundStyle(.secondary)
         }
     }

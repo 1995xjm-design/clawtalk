@@ -44,7 +44,7 @@ struct ReminderListView: View {
                     } label: {
                         HStack(spacing: 12) {
                             Image(systemName: templateIcon(template.category))
-                                .font(.system(size: 17, weight: .semibold))
+                                .font(.headline)
                                 .foregroundStyle(Color.openClawRed)
                                 .frame(width: 28)
                             VStack(alignment: .leading, spacing: 3) {
@@ -105,6 +105,8 @@ struct ReminderListView: View {
                     Image(systemName: "plus")
                         .foregroundStyle(Color.openClawRed)
                 }
+                .accessibilityLabel("新建提醒")
+
             }
         }
         .alert("新建提醒", isPresented: $showAdd) {
@@ -236,7 +238,7 @@ struct ReminderListView: View {
         Button {} label: {
             HStack(spacing: 12) {
                 Image(systemName: isVoiceRecording ? "waveform" : "mic.fill")
-                    .font(.system(size: 17, weight: .semibold))
+                    .font(.headline)
                     .foregroundStyle(isVoiceRecording ? Color.white : Color.openClawRed)
                     .frame(width: 36, height: 36)
                     .background(isVoiceRecording ? Color.openClawRed : Color.openClawRed.opacity(0.14), in: Circle())

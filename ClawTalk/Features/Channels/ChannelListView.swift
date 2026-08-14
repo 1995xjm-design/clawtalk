@@ -217,12 +217,16 @@ struct ChannelListView: View {
                         Image(systemName: "gearshape.fill")
                             .foregroundStyle(.openClawRed)
                     }
+                    .accessibilityLabel("打开设置")
+
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button(action: { showTools = true }) {
                         Image(systemName: "square.grid.2x2")
                             .foregroundStyle(.openClawRed)
                     }
+                    .accessibilityLabel("打开工具")
+
                 }
             }
             .sheet(isPresented: $showSettings) {

@@ -17,7 +17,7 @@ struct AutomationCreateView: View {
     @State private var isRecording = false
     @State private var isTranscribing = false
 
-    @State private var recorder = AudioCaptureManager()
+    @State private var voiceInput = VoiceInputStateMachine()
     private let transcriptionService: (any TranscriptionService)?
 
     init(viewModel: AutomationViewModel, transcription: (any TranscriptionService)? = nil) {
@@ -255,12 +255,16 @@ struct AutomationCreateView: View {
     private func toggleRecording() async {
         if isRecording {
             isRecording = false
-            let samples = recorder.stopRecording()
-            guard !samples.isEmpty else { return }
+            // 统一走语音输入状态机：误触/空样本由状态机判弃并恢复会话
+            guard let capture = voiceInput.finishShortCapture(), !capture.samples.isEmpty else { return }
             isTranscribing = true
+            defer {
+                isTranscribing = false
+                voiceInput.endSession()
+            }
             do {
                 let service = transcriptionService ?? AppleSTTService(language: "zh-CN")
-                let text = try await service.transcribe(audioSamples: samples)
+                let text = try await service.transcribe(audioSamples: capture.samples)
                 if prompt.isEmpty {
                     prompt = text
                 } else {
@@ -270,14 +274,13 @@ struct AutomationCreateView: View {
             } catch {
                 parseError = "语音识别失败：\(AppErrorText.localized(error.localizedDescription))"
             }
-            isTranscribing = false
         } else {
-            do {
-                try recorder.startRecording()
+            parseError = nil
+            voiceInput.startShort()
+            if voiceInput.isCapturing {
                 isRecording = true
-                parseError = nil
-            } catch {
-                parseError = "无法开始录音：\(AppErrorText.localized(error.localizedDescription))"
+            } else if let error = voiceInput.errorMessage {
+                parseError = error
             }
         }
     }

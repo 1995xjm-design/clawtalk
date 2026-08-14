@@ -48,7 +48,7 @@ struct KBCardView: View {
         HStack(alignment: .top) {
             ZStack(alignment: .topTrailing) {
                 Image(systemName: "books.vertical.fill")
-                    .font(.system(size: 20, weight: .semibold))
+                    .font(.title3.weight(.semibold))
                     .foregroundStyle(.white)
                     .frame(width: 42, height: 42)
                     .background(Color.teal)
@@ -56,7 +56,7 @@ struct KBCardView: View {
 
                 if store.todayCount > 0 {
                     Text("今日 +\(store.todayCount)")
-                        .font(.system(size: 9, weight: .bold))
+                        .font(.caption2.weight(.bold))
                         .foregroundStyle(.white)
                         .padding(.horizontal, 5)
                         .padding(.vertical, 2)

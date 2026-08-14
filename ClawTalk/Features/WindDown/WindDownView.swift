@@ -584,7 +584,7 @@ private struct BreathingGuideView: View {
                                 Int(ceil(phase.duration - context.date.timeIntervalSince(phaseStartedAt)))
                             )
                             Text("\(remaining)")
-                                .font(.system(size: 34, weight: .bold, design: .rounded))
+                                .font(.system(.largeTitle, design: .rounded, weight: .bold))
                                 .monospacedDigit()
                                 .foregroundStyle(.white.opacity(0.9))
                         }

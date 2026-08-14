@@ -81,16 +81,16 @@ targets:
         CFBundleDisplayName: ClawTalk
         CFBundleShortVersionString: "$(MARKETING_VERSION)"
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
-        NSMicrophoneUsageDescription: "ClawTalk needs microphone access for voice input to your AI agent."
-        NSSpeechRecognitionUsageDescription: "ClawTalk uses speech recognition to transcribe your voice messages."
-        NSUserNotificationsUsageDescription: "ClawTalk sends notifications when your AI agent needs your attention."
-        NSLocationWhenInUseUsageDescription: "ClawTalk shares your location with your AI agent when requested."
-        NSContactsUsageDescription: "ClawTalk accesses contacts when your AI agent needs to look up or add a contact."
-        NSCalendarsFullAccessUsageDescription: "ClawTalk accesses your calendar when your AI agent needs to view or create events."
-        NSRemindersFullAccessUsageDescription: "ClawTalk accesses reminders when your AI agent needs to view or create reminders."
-        NSMotionUsageDescription: "ClawTalk accesses motion data when your AI agent requests activity or step information."
-        NSPhotoLibraryUsageDescription: "ClawTalk accesses your photos when your AI agent requests recent images."
-        NSCameraUsageDescription: "ClawTalk uses the camera when your AI agent requests a photo."
+        NSMicrophoneUsageDescription: "需要麦克风权限，用于向 AI 助手发送语音消息和语音指令。"
+        NSSpeechRecognitionUsageDescription: "使用语音识别把你的语音消息转写成文字，供 AI 助手理解。"
+        NSUserNotificationsUsageDescription: "用于接收 AI 助手的提醒、配对结果与推送通知。"
+        NSLocationWhenInUseUsageDescription: "在你授权时共享位置，用于到家/离家提醒、出行记录与附近地点查询。"
+        NSContactsUsageDescription: "当 AI 助手需要查找或添加联系人时，需要访问你的通讯录。"
+        NSCalendarsFullAccessUsageDescription: "当 AI 助手需要查看或创建日程时，需要访问你的日历。"
+        NSRemindersFullAccessUsageDescription: "当 AI 助手需要查看或创建提醒事项时，需要访问你的提醒事项。"
+        NSMotionUsageDescription: "当 AI 助手需要了解活动或步数信息时，需要访问运动数据。"
+        NSPhotoLibraryUsageDescription: "当 AI 助手需要获取图片时，需要访问你的照片。"
+        NSCameraUsageDescription: "当 AI 助手需要拍照或录制视频时，需要访问你的相机。"
         NSAppTransportSecurity:
           # ????????? HTTP ????????18789?????18890?
           NSAllowsArbitraryLoads: true
@@ -110,9 +110,9 @@ targets:
           - fetch
         BGTaskSchedulerPermittedIdentifiers:
           - com.openclaw.clawtalk.bgrefresh
-        NSHealthShareUsageDescription: ClawTalk reads health data (steps) when your AI agent needs it.
-        NSLocationAlwaysAndWhenInUseUsageDescription: ClawTalk uses your location for home/leave reminders and travel.
-        NSLocalNetworkUsageDescription: ClawTalk connects to your computer on the local network for file transfer and memory sync.
+        NSHealthShareUsageDescription: "读取健康数据（步数），以便 AI 助手为你提供健康相关提醒与信息。"
+        NSLocationAlwaysAndWhenInUseUsageDescription: "用于到家/离家提醒与出行记录，需要在后台也能获取你的位置。"
+        NSLocalNetworkUsageDescription: "用于连接同一局域网内的电脑，进行文件传输与记忆同步。"
         NSBonjourServices:
           - _http._tcp
         CFBundleURLTypes:

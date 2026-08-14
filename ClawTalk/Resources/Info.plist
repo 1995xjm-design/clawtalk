@@ -38,25 +38,33 @@
 		</dict>
 	</dict>
 	<key>NSCalendarsFullAccessUsageDescription</key>
-	<string>ClawTalk accesses your calendar when your AI agent needs to view or create events.</string>
+	<string>当 AI 助手需要查看或创建日程时，需要访问你的日历。</string>
 	<key>NSCameraUsageDescription</key>
-	<string>ClawTalk uses the camera when your AI agent requests a photo.</string>
+	<string>当 AI 助手需要拍照或录制视频时，需要访问你的相机。</string>
 	<key>NSContactsUsageDescription</key>
-	<string>ClawTalk accesses contacts when your AI agent needs to look up or add a contact.</string>
+	<string>当 AI 助手需要查找或添加联系人时，需要访问你的通讯录。</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>ClawTalk shares your location with your AI agent when requested.</string>
+	<string>在你授权时共享位置，用于到家/离家提醒、出行记录与附近地点查询。</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>ClawTalk needs microphone access for voice input to your AI agent.</string>
+	<string>需要麦克风权限，用于向 AI 助手发送语音消息和语音指令。</string>
 	<key>NSMotionUsageDescription</key>
-	<string>ClawTalk accesses motion data when your AI agent requests activity or step information.</string>
+	<string>当 AI 助手需要了解活动或步数信息时，需要访问运动数据。</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>ClawTalk accesses your photos when your AI agent requests recent images.</string>
+	<string>当 AI 助手需要获取图片时，需要访问你的照片。</string>
 	<key>NSRemindersFullAccessUsageDescription</key>
-	<string>ClawTalk accesses reminders when your AI agent needs to view or create reminders.</string>
+	<string>当 AI 助手需要查看或创建提醒事项时，需要访问你的提醒事项。</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>ClawTalk uses speech recognition to transcribe your voice messages.</string>
+	<string>使用语音识别把你的语音消息转写成文字，供 AI 助手理解。</string>
 	<key>NSUserNotificationsUsageDescription</key>
-	<string>ClawTalk sends notifications when your AI agent needs your attention.</string>
+	<string>用于接收 AI 助手的提醒、配对结果与推送通知。</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>用于到家/离家提醒与出行记录，需要在后台也能获取你的位置。</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>用于连接同一局域网内的电脑，进行文件传输与记忆同步。</string>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_http._tcp</string>
+	</array>
 	<key>UILaunchScreen</key>
 	<dict/>
 	<key>LSSupportsOpeningDocumentsInPlace</key>
@@ -79,7 +87,7 @@
 		<string>com.openclaw.clawtalk.bgrefresh</string>
 	</array>
 	<key>NSHealthShareUsageDescription</key>
-	<string>ClawTalk 读取健康数据（步数），以便你的智能体在需要时提供健康相关信息。</string>
+	<string>读取健康数据（步数），以便 AI 助手为你提供健康相关提醒与信息。</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>

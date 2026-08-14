@@ -24,6 +24,8 @@ struct CanvasView: View {
                             }) {
                                 Image(systemName: "doc.on.doc")
                             }
+                            .accessibilityLabel("复制链接")
+
                         }
                     }
                 }

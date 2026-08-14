@@ -324,8 +324,8 @@ final class EmergencyStore {
     private func playAlertFeedback() {
         AudioServicesPlaySystemSound(1104)
         AudioServicesPlaySystemSound(kSystemSoundID_Vibrate)
-        UINotificationFeedbackGenerator().notificationOccurred(.error)
-        UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
+        Haptics.failure()
+        Haptics.impact(.heavy)
     }
 
     private func playRepeatedAlertFeedback() async {

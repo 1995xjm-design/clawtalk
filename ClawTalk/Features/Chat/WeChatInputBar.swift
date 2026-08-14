@@ -36,26 +36,16 @@ struct WeChatInputBar: View {
 
     /// 长按录音触发时长（秒）
     private let holdToRecordDuration: TimeInterval = 0.3
-    /// 上滑进入弧形选择层的距离（pt）
-    private let actionLayerSlideUpThreshold: CGFloat = 50
-    /// 弧形命中最小/最大距离（pt）
-    private let arcMinDistance: CGFloat = 35
-    private let arcMaxDistance: CGFloat = 160
-    /// 弧形命中角度（0° = 正上方；左右弧各占 20° 以上）
-    private let arcSideAngle: CGFloat = 20
 
-    private enum HoldAction: Equatable {
-        case cancel
-        case send
-        case transcribe
-    }
+    /// 弧形选择手势动作（统一手势判定：ClawTalk/Core/VoiceInput/VoiceInputGesture）
+    private typealias HoldAction = VoiceInputGestureAction
 
     var body: some View {
         HStack(spacing: 10) {
             // 左侧：麦克风/键盘切换
             Button(action: toggleVoiceMode) {
                 Image(systemName: isVoiceMode ? "keyboard" : "mic.fill")
-                    .font(.system(size: 19, weight: .semibold))
+                    .font(.title3.weight(.semibold))
                     .foregroundStyle(.openClawRed)
                     .frame(width: 36, height: 36)
                     .background(Circle().fill(Color(.systemGray5)))
@@ -115,7 +105,7 @@ struct WeChatInputBar: View {
 
     private var holdToTalkButton: some View {
         Text(isRecording ? "松开 结束" : "按住 说话")
-            .font(.system(size: 16, weight: .medium))
+            .font(.callout.weight(.medium))
             .foregroundStyle(isRecording ? .white : .primary)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 12)
@@ -126,6 +116,8 @@ struct WeChatInputBar: View {
             .contentShape(Rectangle())
             .gesture(holdGesture)
             .animation(.easeInOut(duration: 0.15), value: isRecording)
+            .accessibilityLabel(isRecording ? "停止录音" : "按住说话")
+            .accessibilityHint("按住开始录音，松开发送；上滑选择取消或转文字")
     }
 
     /// 按住录音 + 上滑弧形选择（取消/转文字），松手按落点触发。
@@ -139,11 +131,11 @@ struct WeChatInputBar: View {
 
                 guard isRecording else { return }
 
-                if value.translation.height < -actionLayerSlideUpThreshold {
+                if VoiceInputGestureEvaluator.didSlideUpToArc(value.translation) {
                     if !showActionLayer {
                         // 进入选择区：中震动反馈 + 从中心弹簧展开弧形层
                         if hapticsEnabled {
-                            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                            Haptics.impact(.medium)
                         }
                         withAnimation(.spring(response: 0.32, dampingFraction: 0.78)) {
                             showActionLayer = true
@@ -166,9 +158,9 @@ struct WeChatInputBar: View {
                 if isRecording {
                     isRecording = false
                     if hapticsEnabled {
-                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                        Haptics.impact(.light)
                     }
-                    if showActionLayer, value.translation.height < -actionLayerSlideUpThreshold {
+                    if showActionLayer, VoiceInputGestureEvaluator.didSlideUpToArc(value.translation) {
                         switch selectedAction {
                         case .cancel:
                             onHoldCancel()
@@ -205,29 +197,15 @@ struct WeChatInputBar: View {
         isRecording = true
         recordingStart = Date()
         if hapticsEnabled {
-            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+            Haptics.impact(.medium)
         }
         onHoldStart()
     }
 
-    /// 按「角度 + 距离」命中左右弧形按钮：0° = 正上方（中间「松开 发送」），
-    /// 负角度 = 左弧（取消），正角度 = 右弧（转文字）；距离太近/太远或回到中间则回落。
+    /// 按「角度 + 距离」命中左右弧形按钮（统一几何：VoiceInputGestureEvaluator.arcAction）：
+    /// 0° = 正上方（中间「松开 发送」），负角度 = 左弧（取消），正角度 = 右弧（转文字）。
     private func updateArcSelection(for translation: CGSize) {
-        let dx = Double(translation.width)
-        let dy = Double(translation.height)
-        let distance = sqrt(dx * dx + dy * dy)
-        guard distance >= Double(arcMinDistance), distance <= Double(arcMaxDistance) else {
-            setArcSelection(nil)
-            return
-        }
-        let angle = atan2(dx, -dy) * 180 / .pi
-        if angle <= -Double(arcSideAngle) {
-            setArcSelection(.cancel)
-        } else if angle >= Double(arcSideAngle) {
-            setArcSelection(.transcribe)
-        } else {
-            setArcSelection(nil)
-        }
+        setArcSelection(VoiceInputGestureEvaluator.arcAction(for: translation))
     }
 
     /// 更新弧形高亮：变化时轻震动；滑入侧弧时吸附震动。
@@ -236,9 +214,9 @@ struct WeChatInputBar: View {
         let wasSelected = selectedAction != nil
         selectedAction = newAction
         guard hapticsEnabled else { return }
-        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        Haptics.impact(.light)
         if newAction != nil, !wasSelected {
-            UISelectionFeedbackGenerator().selectionChanged()
+            Haptics.selection()
         }
     }
 
@@ -280,7 +258,7 @@ struct WeChatInputBar: View {
                 .shadow(color: .black.opacity(0.15), radius: 10, y: 2)
 
                 Text(recordingDurationText)
-                    .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                    .font(.system(.caption, design: .monospaced, weight: .semibold))
                     .foregroundStyle(.secondary)
                     .padding(.top, 6)
                     .padding(.trailing, 24)
@@ -310,7 +288,7 @@ struct WeChatInputBar: View {
             Image(systemName: "waveform")
                 .foregroundStyle(.openClawRed)
             Text("松开 发送")
-                .font(.system(size: 15, weight: .semibold))
+                .font(.subheadline.weight(.semibold))
         }
         .foregroundStyle(.primary)
         .padding(.horizontal, 18)
@@ -387,9 +365,9 @@ struct WeChatInputBar: View {
         let isSelected = selectedAction == action
         return HStack(spacing: 5) {
             Image(systemName: icon)
-                .font(.system(size: 15, weight: .bold))
+                .font(.subheadline.weight(.bold))
             Text(title)
-                .font(.system(size: 14, weight: .semibold))
+                .font(.footnote.weight(.semibold))
         }
         .foregroundStyle(.white)
         .padding(.horizontal, 14)

@@ -19,7 +19,7 @@ struct MeetingCardView: View {
             VStack(alignment: .leading, spacing: 12) {
                 HStack(alignment: .top) {
                     Image(systemName: "person.3.fill")
-                        .font(.system(size: 20, weight: .semibold))
+                        .font(.title3.weight(.semibold))
                         .foregroundStyle(.white)
                         .frame(width: 42, height: 42)
                         .background(Color.indigo)

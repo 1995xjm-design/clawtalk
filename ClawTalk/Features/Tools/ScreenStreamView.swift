@@ -99,6 +99,8 @@ struct ScreenStreamView: View {
                         Image(systemName: "arrow.clockwise")
                     }
                 }
+                .accessibilityLabel("刷新画面")
+
                 .buttonStyle(.bordered)
                 .disabled(isFetching)
             }

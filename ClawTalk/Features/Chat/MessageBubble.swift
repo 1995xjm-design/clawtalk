@@ -57,6 +57,8 @@ struct MessageBubble: View {
                                 Image(systemName: "speaker.wave.2")
                                     .font(.caption2)
                                     .foregroundStyle(.secondary)
+                                .accessibilityLabel("重新播放语音")
+
                             }
                         }
 

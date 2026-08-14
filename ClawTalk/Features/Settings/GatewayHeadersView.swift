@@ -36,6 +36,8 @@ struct GatewayHeadersView: View {
                                     .foregroundStyle(.red)
                             }
                             .buttonStyle(.borderless)
+                            .accessibilityLabel("删除请求头")
+
                         }
                     }
                 }

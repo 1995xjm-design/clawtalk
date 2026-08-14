@@ -80,7 +80,7 @@ struct FloatingMicOverlay: View {
                 .shadow(color: Color.openClawRed.opacity(0.4), radius: 6, y: 2)
 
             Image(systemName: viewModel.state == .transcribing ? "waveform" : "mic.fill")
-                .font(.system(size: 20, weight: .semibold))
+                .font(.title3.weight(.semibold))
                 .foregroundStyle(.white)
 
             if viewModel.state == .recording {
@@ -93,6 +93,9 @@ struct FloatingMicOverlay: View {
         }
         .scaleEffect(isDragging ? 1.12 : 1.0)
         .contentShape(Circle())
+        .accessibilityLabel("语音助手")
+        .accessibilityHint("点按打开语音助手面板")
+
     }
 
     private func ballDrag(in size: CGSize) -> some Gesture {
@@ -181,7 +184,7 @@ struct FloatingMicOverlay: View {
                 .frame(width: 72, height: 72)
                 .shadow(color: Color.openClawRed.opacity(0.35), radius: 6, y: 2)
             Image(systemName: viewModel.state == .transcribing ? "waveform" : "mic.fill")
-                .font(.system(size: 26, weight: .medium))
+                .font(.title1.weight(.medium))
                 .foregroundStyle(.white)
         }
         .contentShape(Circle())

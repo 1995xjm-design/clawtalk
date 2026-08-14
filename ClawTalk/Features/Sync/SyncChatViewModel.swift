@@ -88,6 +88,7 @@ final class SyncChatViewModel {
 
     init(settings: SettingsStore, agentId: String, channelName: String) {
         self.settings = settings
+        self.voiceInput = VoiceInputStateMachine(settingsStore: settings)
         self.agentId = agentId
         self.channelName = channelName
     }
@@ -246,31 +247,31 @@ final class SyncChatViewModel {
 
     // MARK: - 语音输入（按住说话 → STT 填入输入框，与其他聊天页一致）
 
-    private let audioCapture = AudioCaptureManager()
+    private let voiceInput: VoiceInputStateMachine
     private(set) var isRecordingVoiceInput = false
-    /// 当前录音电平（按住说话波形用）。
+    /// 当前录音电平（按住说话波形用，统一由语音输入状态机提供）。
     var audioLevel: Float {
-        audioCapture.currentLevel
+        voiceInput.audioLevel
     }
     private(set) var isTranscribingVoice = false
     var voiceInputError: String?
 
     func startVoiceInput() {
         guard !isRecordingVoiceInput, !isTranscribingVoice else { return }
-        VoiceWakeCapability.shared.stopListening()
-        do {
-            try audioCapture.startRecording()
+        // 统一走语音输入状态机（录音前状态机会先停唤醒监听）
+        voiceInput.startShort()
+        if voiceInput.isCapturing {
             isRecordingVoiceInput = true
-        } catch {
-            voiceInputError = "麦克风访问失败：\(AppErrorText.localized(error.localizedDescription))"
+        } else if let error = voiceInput.errorMessage {
+            voiceInputError = error
         }
     }
 
     func stopVoiceInputAndTranscribe(appendTo completion: @escaping (String) -> Void) {
         guard isRecordingVoiceInput else { return }
         isRecordingVoiceInput = false
-        let samples = audioCapture.stopRecording()
-        guard samples.count > 8000 else {
+        // 统一走语音输入状态机：过短（<0.5s 或样本过少）视为误触，状态机内部已结束会话
+        guard let capture = voiceInput.finishShortCapture() else {
             isTranscribingVoice = false
             return
         }
@@ -279,14 +280,15 @@ final class SyncChatViewModel {
             guard let self else { return }
             defer {
                 self.isTranscribingVoice = false
-                NotificationCenter.default.post(name: .clawTalkWakeRestartRequested, object: nil)
+                self.voiceInput.endSession()
             }
             do {
+                // 保持原 STT 规则（未按 voiceInputEnabled 开关过滤），显式传入本页服务
                 guard let stt = self.makeTranscriptionService() else {
                     self.voiceInputError = "语音转文字服务未配置，请在设置中开启语音输入。"
                     return
                 }
-                let transcript = try await stt.transcribe(audioSamples: samples)
+                let transcript = try await stt.transcribe(audioSamples: capture.samples)
                 let trimmed = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
                 if !trimmed.isEmpty {
                     completion(trimmed)
@@ -301,8 +303,7 @@ final class SyncChatViewModel {
     func cancelVoiceInput() {
         guard isRecordingVoiceInput else { return }
         isRecordingVoiceInput = false
-        _ = audioCapture.stopRecording()
-        NotificationCenter.default.post(name: .clawTalkWakeRestartRequested, object: nil)
+        voiceInput.cancel()
     }
     private func makeTranscriptionService() -> (any TranscriptionService)? {
         let s = settings.settings

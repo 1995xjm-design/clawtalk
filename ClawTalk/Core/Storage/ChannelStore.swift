@@ -54,5 +54,7 @@ final class ChannelStore {
         if let data = try? JSONEncoder().encode(channels) {
             defaults.set(data, forKey: key)
         }
+        // 频道数据变化：通知主 App 刷新小组件（WidgetDataSync 单入口模式）
+        NotificationCenter.default.post(name: WidgetDataSync.dataDidChangeNotification, object: nil)
     }
 }

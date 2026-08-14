@@ -87,7 +87,7 @@ struct FileVaultView: View {
         Section {
             VStack(alignment: .leading, spacing: 10) {
                 Image(systemName: "lock.shield")
-                    .font(.system(size: 40))
+                    .font(.largeTitle)
                     .foregroundStyle(.tertiary)
                 Text("还没有重要文件")
                     .font(.subheadline.weight(.semibold))
@@ -127,7 +127,7 @@ struct FileVaultView: View {
             NavigationLink(value: FileVaultRoute(fileID: file.id)) {
                 HStack(spacing: 12) {
                     Image(systemName: file.source.icon)
-                        .font(.system(size: 17, weight: .semibold))
+                        .font(.headline)
                         .foregroundStyle(.white)
                         .frame(width: 36, height: 36)
                         .background(rowIconColor(for: file))
@@ -361,7 +361,7 @@ private struct FileVaultDetailView: View {
             Section("文件") {
                 HStack(spacing: 12) {
                     Image(systemName: file.source.icon)
-                        .font(.system(size: 18, weight: .semibold))
+                        .font(.headline)
                         .foregroundStyle(.white)
                         .frame(width: 38, height: 38)
                         .background(Color.indigo)

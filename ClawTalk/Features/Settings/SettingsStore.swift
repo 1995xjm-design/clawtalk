@@ -50,6 +50,18 @@ final class SettingsStore {
            let decoded = try? JSONDecoder().decode(AppSettings.self, from: data) {
             self.settings = decoded
         }
+        // bootstrapToken 迁移：旧版随 AppSettings JSON 落 UserDefaults，现改为仅存钥匙串（save() 同步）
+        let legacyBootstrapToken = self.settings.bootstrapToken
+        let storedBootstrapToken = secure.getString(SecureStorage.bootstrapTokenKey)
+        if let storedBootstrapToken, !storedBootstrapToken.isEmpty {
+            self.settings.bootstrapToken = storedBootstrapToken
+        } else if let legacyBootstrapToken, !legacyBootstrapToken.isEmpty {
+            secure.setString(legacyBootstrapToken, forKey: SecureStorage.bootstrapTokenKey)
+            // 直接重写 UserDefaults JSON 清掉旧 token 字段（encode 已不写 bootstrapToken）；不调 save()，避免用空 gatewayToken 覆盖 App Group
+            if let data = try? JSONEncoder().encode(self.settings) {
+                defaults.set(data, forKey: settingsKey)
+            }
+        }
         self.gatewayToken = secure.gatewayToken ?? ""
         self.elevenLabsAPIKey = secure.elevenLabsAPIKey ?? ""
         self.openAIAPIKey = secure.openAIAPIKey ?? ""
@@ -74,8 +86,15 @@ final class SettingsStore {
     func save() {
         if let data = try? JSONEncoder().encode(settings) {
             defaults.set(data, forKey: settingsKey)
-        syncGatewayToAppGroup()
         }
+        // bootstrapToken 只进钥匙串，不落 UserDefaults（encode 已排除该字段）
+        let bootstrap = settings.bootstrapToken?.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let bootstrap, !bootstrap.isEmpty {
+            secure.setString(bootstrap, forKey: SecureStorage.bootstrapTokenKey)
+        } else {
+            secure.setString(nil, forKey: SecureStorage.bootstrapTokenKey)
+        }
+        syncGatewayToAppGroup()
     }
     /// 同步网关配置到 App Group（供键盘扩展读取）
     private func syncGatewayToAppGroup() {

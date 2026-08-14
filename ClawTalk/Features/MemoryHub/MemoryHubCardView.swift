@@ -52,7 +52,7 @@ struct MemoryHubCardView: View {
         HStack(alignment: .top) {
             ZStack(alignment: .topTrailing) {
                 Image(systemName: "brain.head.profile")
-                    .font(.system(size: 20, weight: .semibold))
+                    .font(.title3.weight(.semibold))
                     .foregroundStyle(.white)
                     .frame(width: 42, height: 42)
                     .background(Color.purple)
@@ -60,7 +60,7 @@ struct MemoryHubCardView: View {
 
                 if profileStore.todayAddedCount > 0 {
                     Text("今日 +\(profileStore.todayAddedCount)")
-                        .font(.system(size: 9, weight: .bold))
+                        .font(.caption2.weight(.bold))
                         .foregroundStyle(.white)
                         .padding(.horizontal, 5)
                         .padding(.vertical, 2)
@@ -114,7 +114,7 @@ struct MemoryHubCardView: View {
                         ForEach(profileStore.recentEntries.prefix(6)) { entry in
                             HStack(spacing: 6) {
                                 Image(systemName: entry.category.systemImage)
-                                    .font(.system(size: 9))
+                                    .font(.caption2)
                                     .foregroundStyle(Color.purple)
                                     .frame(width: 12)
 

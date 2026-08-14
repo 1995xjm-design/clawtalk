@@ -60,7 +60,7 @@ struct SkinSettingsView: View {
                         )
                         .overlay(
                             Image(systemName: "rectangle.on.rectangle.slash")
-                                .font(.system(size: 16))
+                                .font(.callout)
                                 .foregroundStyle(.secondary)
                         )
                 }
@@ -93,6 +93,8 @@ struct SkinSettingsView: View {
                     .buttonStyle(.plain)
                 }
                 Spacer()
+                    .accessibilityLabel("选择壁纸\(id + 1)")
+
             }
             Button {
                 showThemePhotoPicker = true

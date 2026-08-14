@@ -75,7 +75,7 @@ struct MeetingListView: View {
     private var emptyState: some View {
         VStack(spacing: 14) {
             Image(systemName: "person.3.sequence")
-                .font(.system(size: 44))
+                .font(.largeTitle)
                 .foregroundStyle(.secondary)
             Text("还没有会议纪要")
                 .font(.headline)

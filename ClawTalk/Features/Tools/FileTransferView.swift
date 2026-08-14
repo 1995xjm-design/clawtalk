@@ -211,7 +211,7 @@ struct FileTransferChannelView: View {
         ScrollView {
             VStack(spacing: 20) {
                 Image(systemName: "wifi.exclamationmark")
-                    .font(.system(size: 56))
+                    .font(.largeTitle)
                     .foregroundStyle(.secondary)
 
                 Text("电脑端文件服务未启动")
@@ -389,7 +389,7 @@ struct FileTransferChannelView: View {
                     } else {
                         VStack(spacing: 10) {
                             Image(systemName: "tray")
-                                .font(.system(size: 44))
+                                .font(.largeTitle)
                                 .foregroundStyle(.tertiary)
                             Text("电脑端暂无文件")
                                 .font(.subheadline)
@@ -549,6 +549,8 @@ struct FileTransferChannelView: View {
                 }
                 .buttonStyle(.plain)
                 .disabled(viewModel.downloadingFileName != nil)
+                .accessibilityLabel("下载文件")
+
             }
         }
         .padding(12)

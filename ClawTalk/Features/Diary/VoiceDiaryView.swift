@@ -69,11 +69,12 @@ struct VoiceDiaryView: View {
                 if let onBack {
                     Button(action: onBack) {
                         Image(systemName: "xmark")
-                            .font(.system(size: 16, weight: .semibold))
+                            .font(.callout.weight(.semibold))
                             .foregroundStyle(.primary)
                             .padding(10)
                             .background(Color(.systemGray5), in: Circle())
                     }
+                    .accessibilityLabel("关闭")
                 }
                 Spacer()
             }
@@ -140,7 +141,7 @@ struct VoiceDiaryView: View {
     private var emptyState: some View {
         VStack(spacing: 14) {
             Image(systemName: "book.closed")
-                .font(.system(size: 44))
+                .font(.largeTitle)
                 .foregroundStyle(.secondary)
             Text("还没有日记")
                 .font(.headline)
@@ -240,7 +241,7 @@ struct VoiceDiaryView: View {
 
             // 图标
             buttonIcon
-                .font(.system(size: 28, weight: .medium))
+                .font(.title1.weight(.medium))
                 .foregroundStyle(.white)
         }
         .frame(width: recordButtonSize + 60, height: recordButtonSize + 60)
@@ -307,14 +308,14 @@ struct VoiceDiaryView: View {
                     return
                 }
                 if hapticsEnabled {
-                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                    Haptics.impact(.medium)
                 }
                 holdTimer = Task { @MainActor in
                     try? await Task.sleep(nanoseconds: holdThreshold)
                     guard !Task.isCancelled else { return }
                     isHolding = true
                     if hapticsEnabled {
-                        UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
+                        Haptics.impact(.heavy)
                     }
                     viewModel.startRecording()
                 }
@@ -325,7 +326,7 @@ struct VoiceDiaryView: View {
                 guard isPressed else { return }
                 isPressed = false
                 if hapticsEnabled {
-                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    Haptics.impact(.light)
                 }
                 if viewModel.state == .recording || isHolding {
                     viewModel.stopRecordingAndProcess()

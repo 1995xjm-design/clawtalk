@@ -60,6 +60,7 @@ final class ChatViewModel {
     var onRunFinished: (@MainActor (ChatViewModel, Bool, String?) -> Void)?
     private let openClaw = OpenClawClient()
     private let audioCapture = AudioCaptureManager()
+    private let voiceInput: VoiceInputStateMachine
     private let audioPlayback = AudioPlaybackManager()
     private let conversationStore = ConversationStore.shared
     private(set) var settings: SettingsStore
@@ -68,7 +69,6 @@ final class ChatViewModel {
     private var transcriptionService: (any TranscriptionService)?
     private var speechService: (any SpeechService)?
     private var sendTask: Task<Void, Never>?
-    private var recordingStart: Date?
     private var currentRunId: String?
     private var currentEventSubId: UUID?
     private var ttsStopped = false
@@ -94,6 +94,7 @@ final class ChatViewModel {
 
     init(settings: SettingsStore, channel: Channel, channelStore: ChannelStore? = nil, gatewayConnection: GatewayConnection? = nil) {
         self.settings = settings
+        self.voiceInput = VoiceInputStateMachine(settingsStore: settings)
         self.channel = channel
         self.channelStore = channelStore
         self.gatewayConnection = gatewayConnection
@@ -106,15 +107,13 @@ final class ChatViewModel {
 
     func startRecording() {
         guard state == .idle else { return }
-        // 按住说话与语音唤醒共用麦克风：录音前先停唤醒监听，避免两个音频引擎抢麦
-        VoiceWakeCapability.shared.stopListening()
+        // 按住说话统一走语音输入状态机（录音前状态机会先停唤醒监听，避免两个音频引擎抢麦）
         errorMessage = nil
-        do {
-            try audioCapture.startRecording()
-            recordingStart = Date()
+        voiceInput.startShort()
+        if voiceInput.isCapturing {
             state = .recording
-        } catch {
-            errorMessage = "麦克风访问失败：\(AppErrorText.localized(error.localizedDescription))"
+        } else if let error = voiceInput.errorMessage {
+            errorMessage = error
         }
     }
 
@@ -122,20 +121,19 @@ final class ChatViewModel {
         guard state == .recording, !isRecordingVoiceMessage else { return }
         if isConversationMode { return }
 
-        let samples = audioCapture.stopRecording()
-
-        // Ignore recordings shorter than 0.5s (accidental taps)
-        let duration = Date().timeIntervalSince(recordingStart ?? Date())
-        guard duration >= 0.5, samples.count > 8000 else {
+        // 统一走语音输入状态机：过短（<0.5s 或样本过少）视为误触，状态机内部已结束会话
+        guard let capture = voiceInput.finishShortCapture() else {
             state = .idle
-            // 误触取消：麦克风已释放，恢复唤醒监听
-            NotificationCenter.default.post(name: .clawTalkWakeRestartRequested, object: nil)
             return
         }
 
         state = .transcribing
 
         sendTask = Task {
+            defer {
+                // 录音发送流程结束（成功或失败）：恢复唤醒监听（状态机结束会话）
+                voiceInput.endSession()
+            }
             do {
                 guard let stt = transcriptionService else {
                     throw ChatError.notConfigured("语音转文字服务未初始化")
@@ -145,12 +143,10 @@ final class ChatViewModel {
                 if let doubao = stt as? DoubaoSTTService {
                     transcript = try await doubao.finishStreaming()
                 } else {
-                    transcript = try await stt.transcribe(audioSamples: samples)
+                    transcript = try await stt.transcribe(audioSamples: capture.samples)
                 }
                 guard !transcript.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
                     state = .idle
-                    // Mic released without a transcript: restore wake listening
-                    NotificationCenter.default.post(name: .clawTalkWakeRestartRequested, object: nil)
                     return
                 }
 
@@ -159,8 +155,6 @@ final class ChatViewModel {
                 errorMessage = "转写失败：\(AppErrorText.localized(error.localizedDescription))"
                 state = .idle
             }
-            // 录音发送流程结束（成功或失败）：麦克风已释放，恢复唤醒监听
-            NotificationCenter.default.post(name: .clawTalkWakeRestartRequested, object: nil)
         }
     }
 
@@ -169,15 +163,14 @@ final class ChatViewModel {
     /// 开始录制语音消息（与按住说话共用麦克风，录音前先停唤醒监听）。
     func startVoiceMessageRecording() {
         guard state == .idle, !isConversationMode else { return }
-        VoiceWakeCapability.shared.stopListening()
+        // 统一走语音输入状态机（录音前状态机会先停唤醒监听）
         errorMessage = nil
-        do {
-            try audioCapture.startRecording()
-            recordingStart = Date()
+        voiceInput.startShort()
+        if voiceInput.isCapturing {
             isRecordingVoiceMessage = true
             state = .recording
-        } catch {
-            errorMessage = "麦克风访问失败：\(AppErrorText.localized(error.localizedDescription))"
+        } else if let error = voiceInput.errorMessage {
+            errorMessage = error
         }
     }
 
@@ -186,20 +179,17 @@ final class ChatViewModel {
         guard isRecordingVoiceMessage, state == .recording else { return }
         isRecordingVoiceMessage = false
 
-        let samples = audioCapture.stopRecording()
-        // 误触（<0.5s）取消：此时文件尚未保存，直接恢复
-        let duration = Date().timeIntervalSince(recordingStart ?? Date())
-        guard duration >= 0.5, samples.count > 8000 else {
+        // 统一走语音输入状态机：误触（<0.5s）由状态机判弃并恢复会话
+        guard let capture = voiceInput.finishShortCapture() else {
             state = .idle
-            NotificationCenter.default.post(name: .clawTalkWakeRestartRequested, object: nil)
             return
         }
 
         state = .transcribing
         sendTask = Task {
             defer {
-                // 录音发送流程结束（成功或失败）：麦克风已释放，恢复唤醒监听
-                NotificationCenter.default.post(name: .clawTalkWakeRestartRequested, object: nil)
+                // 录音发送流程结束（成功或失败）：恢复唤醒监听（状态机结束会话）
+                voiceInput.endSession()
             }
             do {
                 guard let stt = transcriptionService else {
@@ -210,7 +200,7 @@ final class ChatViewModel {
                 if let doubao = stt as? DoubaoSTTService {
                     transcript = try await doubao.finishStreaming()
                 } else {
-                    transcript = try await stt.transcribe(audioSamples: samples)
+                    transcript = try await stt.transcribe(audioSamples: capture.samples)
                 }
                 guard !transcript.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
                     state = .idle
@@ -220,8 +210,8 @@ final class ChatViewModel {
                 // 语音文件本地存档（WAV 16kHz），消息带附件标记；网关未确认支持语音附件时
                 // 附件仅本地回放，消息按文字发送（诚实标注 sentAsText）。
                 var attachment = try VoiceMessageFileStore.save(
-                    samples: samples,
-                    duration: duration,
+                    samples: capture.samples,
+                    duration: capture.duration,
                     transcript: transcript
                 )
                 attachment.sentAsText = !voiceAttachmentTransportSupported
@@ -237,9 +227,9 @@ final class ChatViewModel {
     func cancelVoiceMessageRecording() {
         guard isRecordingVoiceMessage, state == .recording else { return }
         isRecordingVoiceMessage = false
-        _ = audioCapture.stopRecording()
+        // 统一走语音输入状态机：取消录音并恢复唤醒监听
+        voiceInput.cancel()
         state = .idle
-        NotificationCenter.default.post(name: .clawTalkWakeRestartRequested, object: nil)
     }
 
     /// 微信式上滑「转文字」：停止录音 → STT 转文字 → 直接发送文字（不带语音附件）。
@@ -247,18 +237,16 @@ final class ChatViewModel {
         guard isRecordingVoiceMessage, state == .recording else { return }
         isRecordingVoiceMessage = false
 
-        let samples = audioCapture.stopRecording()
-        let duration = Date().timeIntervalSince(recordingStart ?? Date())
-        guard duration >= 0.5, samples.count > 8000 else {
+        // 统一走语音输入状态机：误触（<0.5s）由状态机判弃并恢复会话
+        guard let capture = voiceInput.finishShortCapture() else {
             state = .idle
-            NotificationCenter.default.post(name: .clawTalkWakeRestartRequested, object: nil)
             return
         }
 
         state = .transcribing
         sendTask = Task {
             defer {
-                NotificationCenter.default.post(name: .clawTalkWakeRestartRequested, object: nil)
+                voiceInput.endSession()
             }
             do {
                 guard let stt = transcriptionService else {
@@ -268,7 +256,7 @@ final class ChatViewModel {
                 if let doubao = stt as? DoubaoSTTService {
                     transcript = try await doubao.finishStreaming()
                 } else {
-                    transcript = try await stt.transcribe(audioSamples: samples)
+                    transcript = try await stt.transcribe(audioSamples: capture.samples)
                 }
                 guard !transcript.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
                     state = .idle
@@ -1004,7 +992,8 @@ final class ChatViewModel {
             isConversationMode = false
             audioCapture.stopContinuousRecording()
         } else if state == .recording {
-            _ = audioCapture.stopRecording()
+            // 按住说话/语音消息统一由状态机丢弃未完成录音
+            voiceInput.discard()
         }
         speechService?.stop()
         audioPlayback.stop()
@@ -1065,7 +1054,11 @@ final class ChatViewModel {
     }
 
     var audioLevel: Float {
-        audioCapture.currentLevel
+        // 语音消息/按住说话录音期间用状态机电平（音频引擎在状态机内），其余用对话录音电平
+        if voiceInput.isCapturing {
+            return voiceInput.audioLevel
+        }
+        return audioCapture.currentLevel
     }
 
     // MARK: - 历史分页（懒加载）
@@ -1146,12 +1139,12 @@ final class ChatViewModel {
 
     private func notifySuccess() {
         guard settings.settings.hapticsEnabled else { return }
-        UINotificationFeedbackGenerator().notificationOccurred(.success)
+        Haptics.success()
     }
 
     private func notifyError() {
         guard settings.settings.hapticsEnabled else { return }
-        UINotificationFeedbackGenerator().notificationOccurred(.error)
+        Haptics.failure()
     }
 }
 

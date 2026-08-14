@@ -80,6 +80,9 @@ struct VoiceMessageBubble: View {
                     .frame(width: 36, height: 36)
                     .background(.white.opacity(0.22), in: Circle())
             }
+            .accessibilityLabel(player.playingID == attachment.id ? "停止播放" : "播放语音")
+            .accessibilityValue(Self.durationText(attachment.duration))
+
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(Self.durationText(attachment.duration))

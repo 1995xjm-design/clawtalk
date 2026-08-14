@@ -62,20 +62,20 @@ enum HomeCardKind: String, CaseIterable, Identifiable, Hashable, Codable {
 
     var tint: Color {
         switch self {
-        case .memory: return .purple
-        case .cloneTalk: return .pink
-        case .record: return .teal
-        case .reminders: return .orange
-        case .health: return .green
-        case .report: return .indigo
-        case .expense: return .green
-        case .travel: return .blue
-        case .knowledge: return .purple
-        case .keyboard: return .indigo
-        case .automation: return .blue
-        case .fileSafe: return .teal
-        case .emergency: return .red
-        case .winddown: return .indigo
+        case .memory: return AppTokens.cardPurple
+        case .cloneTalk: return AppTokens.cardPink
+        case .record: return AppTokens.cardTeal
+        case .reminders: return AppTokens.cardOrange
+        case .health: return AppTokens.cardGreen
+        case .report: return AppTokens.cardIndigo
+        case .expense: return AppTokens.cardGreen
+        case .travel: return AppTokens.cardBlue
+        case .knowledge: return AppTokens.cardPurple
+        case .keyboard: return AppTokens.cardIndigo
+        case .automation: return AppTokens.cardBlue
+        case .fileSafe: return AppTokens.cardTeal
+        case .emergency: return AppTokens.cardRed
+        case .winddown: return AppTokens.cardIndigo
         }
     }
 

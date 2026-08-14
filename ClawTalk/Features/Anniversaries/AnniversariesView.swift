@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// 纪念日列表页：按「下一个纪念日」排序，每条显示名称 / 日期 / 剩余天数徽章 /
-/// 提前提醒设置；顶部「按住说话新建纪念日」（AudioCaptureManager + AppleSTTService
+/// 提前提醒设置；顶部「按住说话新建纪念日」（统一语音输入状态机 + AppleSTTService
 /// + AnniversaryVoiceParser）：说「5月20号是结婚纪念日」自动解析日期+名称+类型创建，
 /// 解析不出日期弹表单手动填（名称预填）；右上角「+」手动添加；空列表诚实空状态。
 struct AnniversariesView: View {
@@ -9,8 +9,8 @@ struct AnniversariesView: View {
     @State private var showAddForm = false
     @State private var editingAnniversary: Anniversary?
 
-    // 语音输入（复用现有语音栈：AudioCaptureManager + TranscriptionService，只读引用）
-    @State private var captureManager = AudioCaptureManager()
+    // 语音输入（复用统一语音输入状态机；STT 保持本页 Apple 服务）
+    @State private var voiceInput = VoiceInputStateMachine()
     @State private var stt: any TranscriptionService = AppleSTTService()
     @State private var isVoiceRecording = false
     @State private var isTranscribing = false
@@ -74,6 +74,8 @@ struct AnniversariesView: View {
                     Image(systemName: "plus")
                         .foregroundStyle(Color.openClawRed)
                 }
+                .accessibilityLabel("添加纪念日")
+
             }
         }
         .sheet(isPresented: $showAddForm) {
@@ -261,7 +263,7 @@ struct AnniversariesView: View {
         Button {} label: {
             HStack(spacing: 12) {
                 Image(systemName: isVoiceRecording ? "waveform" : "mic.fill")
-                    .font(.system(size: 17, weight: .semibold))
+                    .font(.headline)
                     .foregroundStyle(isVoiceRecording ? Color.white : Color.openClawRed)
                     .frame(width: 36, height: 36)
                     .background(isVoiceRecording ? Color.openClawRed : Color.openClawRed.opacity(0.14), in: Circle())
@@ -299,41 +301,33 @@ struct AnniversariesView: View {
         DragGesture(minimumDistance: 0)
             .onChanged { _ in
                 guard !isVoiceRecording, !isTranscribing else { return }
-                // 与提醒页/聊天页一致：先停语音唤醒，避免两个音频引擎抢麦
-                VoiceWakeCapability.shared.stopListening()
-                do {
-                    try captureManager.startRecording()
+                // 统一走语音输入状态机（录音前状态机会先停语音唤醒，避免两个音频引擎抢麦）
+                voiceInput.startShort()
+                if voiceInput.isCapturing {
                     isVoiceRecording = true
-                } catch {
-                    voiceAlert = AnniversaryVoiceAlert(
-                        kind: .error,
-                        message: "无法开始录音：\(AppErrorText.localized(error.localizedDescription))"
-                    )
+                } else if let error = voiceInput.errorMessage {
+                    voiceAlert = AnniversaryVoiceAlert(kind: .error, message: error)
                 }
             }
             .onEnded { _ in
                 guard isVoiceRecording else { return }
                 isVoiceRecording = false
-                let samples = captureManager.stopRecording()
-                Task { await processRecordedSamples(samples) }
+                guard let capture = voiceInput.finishShortCapture() else {
+                    // 误触/过短：状态机已恢复会话，保留原「录音太短」提示
+                    voiceAlert = AnniversaryVoiceAlert(kind: .error, message: "录音太短，请按住说完整一句话")
+                    return
+                }
+                Task { await processRecordedSamples(capture.samples) }
             }
     }
 
     @MainActor
     private func processRecordedSamples(_ samples: [Float]) async {
-        // 与提醒页/语音日记同阈值：约 0.5s（8000 样本 @16kHz）以下视为误触
-        guard samples.count > 8000 else {
-            restoreWakeListening()
-            if !samples.isEmpty {
-                voiceAlert = AnniversaryVoiceAlert(kind: .error, message: "录音太短，请按住说完整一句话")
-            }
-            return
-        }
-
+        // 误触阈值由状态机判定（约 0.5s / 8000 样本 @16kHz），此处直接转写
         isTranscribing = true
         defer {
             isTranscribing = false
-            restoreWakeListening()
+            voiceInput.endSession()
         }
 
         do {
@@ -373,10 +367,6 @@ struct AnniversariesView: View {
         }
     }
 
-    /// 录音/转写结束后恢复语音唤醒监听（App 层已监听该通知，与提醒页一致）。
-    private func restoreWakeListening() {
-        NotificationCenter.default.post(name: .clawTalkWakeRestartRequested, object: nil)
-    }
 }
 
 // MARK: - 类型徽章

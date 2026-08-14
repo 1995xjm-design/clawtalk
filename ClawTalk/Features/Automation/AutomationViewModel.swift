@@ -214,5 +214,7 @@ final class AutomationViewModel {
         if let data = try? JSONEncoder().encode(runHistories) {
             UserDefaults.standard.set(data, forKey: historyKey)
         }
+        // 自动化数据变化：通知主 App 刷新小组件（WidgetDataSync 单入口模式）
+        NotificationCenter.default.post(name: WidgetDataSync.dataDidChangeNotification, object: nil)
     }
 }

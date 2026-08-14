@@ -27,7 +27,7 @@ struct ExpenseCardView: View {
             VStack(alignment: .leading, spacing: 12) {
                 HStack(alignment: .top) {
                     Image(systemName: "yensign.circle.fill")
-                        .font(.system(size: 20, weight: .semibold))
+                        .font(.title3.weight(.semibold))
                         .foregroundStyle(.white)
                         .frame(width: 42, height: 42)
                         .background(Color.green)
@@ -61,6 +61,9 @@ struct ExpenseCardView: View {
             )
         }
         .buttonStyle(.plain)
+        .accessibilityLabel("语音记账卡片")
+        .accessibilityValue(summaryText)
+        .accessibilityHint("点按打开语音记账")
         .task { store.reload() }
     }
 

@@ -303,6 +303,8 @@ struct ParkingView: View {
                     Image(systemName: "arrow.triangle.turn.up.right.circle.fill")
                         .font(.title3)
                 }
+                .accessibilityLabel("导航到停车位置")
+
 
                 Button {
                     photoTargetRecordID = record.id
@@ -312,6 +314,8 @@ struct ParkingView: View {
                     Image(systemName: record.photoPath == nil ? "camera.fill" : "photo.fill")
                         .font(.title3)
                 }
+                .accessibilityLabel("添加停车照片")
+
             }
             .buttonStyle(.borderless)
             .foregroundStyle(.blue)

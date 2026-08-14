@@ -71,7 +71,7 @@ struct DictationListView: View {
     private var emptyState: some View {
         VStack(spacing: 14) {
             Image(systemName: "doc.text")
-                .font(.system(size: 44))
+                .font(.largeTitle)
                 .foregroundStyle(.secondary)
             Text("还没有口述文档")
                 .font(.headline)

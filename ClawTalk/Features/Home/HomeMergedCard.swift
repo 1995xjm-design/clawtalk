@@ -50,7 +50,7 @@ struct HomeMergedCard: View {
     private var smallLayout: some View {
         VStack(alignment: .leading, spacing: 8) {
             Image(systemName: kind.icon)
-                .font(.system(size: 20, weight: .semibold))
+                .font(.title3.weight(.semibold))
                 .foregroundStyle(.white)
                 .frame(width: 40, height: 40)
                 .background(kind.tint)
@@ -71,7 +71,7 @@ struct HomeMergedCard: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .top) {
                 Image(systemName: kind.icon)
-                    .font(.system(size: 20, weight: .semibold))
+                    .font(.title3.weight(.semibold))
                     .foregroundStyle(.white)
                     .frame(width: 42, height: 42)
                     .background(kind.tint)
@@ -202,7 +202,7 @@ struct HomeMergedCardPage: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .top) {
                 Image(systemName: section.icon)
-                    .font(.system(size: 18, weight: .semibold))
+                    .font(.headline)
                     .foregroundStyle(.white)
                     .frame(width: 36, height: 36)
                     .background(section.tint)

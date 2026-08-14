@@ -7,6 +7,9 @@ final class SecureStorage {
 
     private let keychain: Keychain
 
+    /// Keychain 中保存 bootstrapToken（配对码）的键名（SettingsStore 与 GatewayWebSocket 共用）。
+    static let bootstrapTokenKey = "bootstrap_token"
+
     private enum Keys {
         static let gatewayToken = "openclaw_gateway_token"
         static let elevenLabsAPIKey = "elevenlabs_api_key"

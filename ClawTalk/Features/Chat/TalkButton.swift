@@ -46,7 +46,7 @@ struct TalkButton: View {
 
             // Icon
             buttonIcon
-                .font(.system(size: 24, weight: .medium))
+                .font(.title2.weight(.medium))
                 .foregroundStyle(.white)
         }
         .frame(width: size + 50, height: size + 50) // Stable hit area
@@ -62,13 +62,13 @@ struct TalkButton: View {
                         } else {
                             isPressed = true
                             isHolding = false
-                            if hapticsEnabled { UIImpactFeedbackGenerator(style: .medium).impactOccurred() }
+                            if hapticsEnabled { Haptics.impact(.medium) }
 
                             holdTimer = Task { @MainActor in
                                 try? await Task.sleep(nanoseconds: holdThreshold)
                                 guard !Task.isCancelled else { return }
                                 isHolding = true
-                                if hapticsEnabled { UIImpactFeedbackGenerator(style: .heavy).impactOccurred() }
+                                if hapticsEnabled { Haptics.impact(.heavy) }
                                 onHoldStart()
                             }
                         }
@@ -80,10 +80,10 @@ struct TalkButton: View {
                     if isPressed {
                         isPressed = false
                         if isHolding {
-                            if hapticsEnabled { UIImpactFeedbackGenerator(style: .light).impactOccurred() }
+                            if hapticsEnabled { Haptics.impact(.light) }
                             onHoldEnd()
                         } else {
-                            if hapticsEnabled { UIImpactFeedbackGenerator(style: .light).impactOccurred() }
+                            if hapticsEnabled { Haptics.impact(.light) }
                             onTap()
                         }
                     }

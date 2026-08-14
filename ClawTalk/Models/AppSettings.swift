@@ -369,7 +369,7 @@ struct AppSettings: Codable {
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(gatewayURL, forKey: .gatewayURL)
-        try container.encodeIfPresent(bootstrapToken, forKey: .bootstrapToken)
+        // bootstrapToken 为敏感凭据，仅存钥匙串（SettingsStore 管理），不随 JSON 落盘
         try container.encode(ttsProvider, forKey: .ttsProvider)
         try container.encode(sttProvider, forKey: .sttProvider)
         try container.encode(fusionBackendURL, forKey: .fusionBackendURL)

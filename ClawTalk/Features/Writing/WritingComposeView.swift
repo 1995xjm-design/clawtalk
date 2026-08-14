@@ -640,11 +640,12 @@ struct WritingComposeView: View {
                 if let onBack {
                     Button(action: onBack) {
                         Image(systemName: "xmark")
-                            .font(.system(size: 16, weight: .semibold))
+                            .font(.callout.weight(.semibold))
                             .foregroundStyle(.primary)
                             .padding(10)
                             .background(Color(.systemGray5), in: Circle())
                     }
+                    .accessibilityLabel("关闭")
                 }
                 Spacer()
             }
@@ -700,6 +701,7 @@ struct WritingComposeView: View {
                                 .foregroundStyle(.secondary)
                         }
                         .buttonStyle(.plain)
+                        .accessibilityLabel("删除要点")
                     }
                     .padding(10)
                     .background(
@@ -731,7 +733,7 @@ struct WritingComposeView: View {
     private var emptyPointsHint: some View {
         VStack(spacing: 8) {
             Image(systemName: "mic.circle")
-                .font(.system(size: 36))
+                .font(.largeTitle)
                 .foregroundStyle(.secondary)
             Text("按住底部麦克风录音，松开自动转写成一个要点；可以录多条，也可以手动添加。")
                 .font(.subheadline)
@@ -903,7 +905,7 @@ struct WritingComposeView: View {
                 .scaleEffect(isPressed ? 0.9 : 1.0)
 
             buttonIcon
-                .font(.system(size: 28, weight: .medium))
+                .font(.title1.weight(.medium))
                 .foregroundStyle(.white)
         }
         .frame(width: recordButtonSize + 60, height: recordButtonSize + 60)
@@ -964,14 +966,14 @@ struct WritingComposeView: View {
                     return
                 }
                 if hapticsEnabled {
-                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                    Haptics.impact(.medium)
                 }
                 holdTimer = Task { @MainActor in
                     try? await Task.sleep(nanoseconds: holdThreshold)
                     guard !Task.isCancelled else { return }
                     isHolding = true
                     if hapticsEnabled {
-                        UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
+                        Haptics.impact(.heavy)
                     }
                     viewModel.startRecording()
                 }
@@ -982,7 +984,7 @@ struct WritingComposeView: View {
                 guard isPressed else { return }
                 isPressed = false
                 if hapticsEnabled {
-                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    Haptics.impact(.light)
                 }
                 if viewModel.state == .recording || isHolding {
                     viewModel.stopRecordingAndTranscribe()
@@ -1151,7 +1153,7 @@ struct WritingDetailView: View {
                 ForEach(Array(outline.enumerated()), id: \.offset) { index, point in
                     HStack(alignment: .top, spacing: 8) {
                         Image(systemName: "circle.fill")
-                            .font(.system(size: 6))
+                            .font(.caption2)
                             .foregroundStyle(.secondary)
                             .padding(.top, 6)
                         Text(point)

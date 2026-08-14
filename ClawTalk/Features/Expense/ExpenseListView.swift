@@ -340,11 +340,12 @@ struct ExpenseListView: View {
                 if let onBack {
                     Button(action: onBack) {
                         Image(systemName: "xmark")
-                            .font(.system(size: 16, weight: .semibold))
+                            .font(.callout.weight(.semibold))
                             .foregroundStyle(.primary)
                             .padding(10)
                             .background(Color(.systemGray5), in: Circle())
                     }
+                    .accessibilityLabel("关闭")
                 }
                 Spacer()
             }
@@ -512,14 +513,14 @@ struct ExpenseListView: View {
                     return
                 }
                 if hapticsEnabled {
-                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                    Haptics.impact(.medium)
                 }
                 holdTimer = Task { @MainActor in
                     try? await Task.sleep(nanoseconds: holdThreshold)
                     guard !Task.isCancelled else { return }
                     isHolding = true
                     if hapticsEnabled {
-                        UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
+                        Haptics.impact(.heavy)
                     }
                     recording.startRecording()
                 }
@@ -530,7 +531,7 @@ struct ExpenseListView: View {
                 guard isPressed else { return }
                 isPressed = false
                 if hapticsEnabled {
-                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    Haptics.impact(.light)
                 }
                 if recording.state == .recording || isHolding {
                     recording.stopRecordingAndProcess()
@@ -628,7 +629,7 @@ struct ExpenseListView: View {
     private var emptyState: some View {
         VStack(spacing: 14) {
             Image(systemName: "yensign.circle")
-                .font(.system(size: 44))
+                .font(.largeTitle)
                 .foregroundStyle(.secondary)
             Text("还没有记账")
                 .font(.headline)
@@ -947,7 +948,7 @@ private struct ExpenseEntryRow: View {
     var body: some View {
         HStack(spacing: 12) {
             Image(systemName: entry.category.iconName)
-                .font(.system(size: 15, weight: .semibold))
+                .font(.subheadline.weight(.semibold))
                 .foregroundStyle(entry.category.themeColor)
                 .frame(width: 34, height: 34)
                 .background(
@@ -1030,7 +1031,7 @@ private struct ExpenseExportShareSheet: View {
         NavigationStack {
             VStack(spacing: 16) {
                 Image(systemName: "tablecells.badge.ellipsis")
-                    .font(.system(size: 44))
+                    .font(.largeTitle)
                     .foregroundStyle(.green)
                 Text("已生成 \(file.count) 条账目的 Excel 报表")
                     .font(.subheadline)
@@ -1117,7 +1118,7 @@ private struct ExpensePhotoThumbnail: View {
                     .scaledToFill()
             } else {
                 Image(systemName: "photo")
-                    .font(.system(size: 14))
+                    .font(.footnote)
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .background(Color(.secondarySystemFill))

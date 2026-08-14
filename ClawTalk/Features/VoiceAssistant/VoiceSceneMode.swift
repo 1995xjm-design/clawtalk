@@ -127,41 +127,11 @@ enum VoiceAssistantTheme: String, CaseIterable, Identifiable, Codable {
     /// 整卡彩带渐变（SiriBackgroundLayer 主色带）。
     var ribbonColors: [Color] {
         switch self {
-        case .aurora:
-            return [
-                Color(red: 0.62, green: 0.10, blue: 0.22),
-                Color(red: 0.50, green: 0.10, blue: 0.62),
-                Color(red: 0.08, green: 0.28, blue: 0.62),
-                Color(red: 0.62, green: 0.10, blue: 0.22)
-            ]
-        case .ocean:
-            return [
-                Color(red: 0.05, green: 0.45, blue: 0.55),
-                Color(red: 0.10, green: 0.55, blue: 0.75),
-                Color(red: 0.05, green: 0.25, blue: 0.55),
-                Color(red: 0.05, green: 0.45, blue: 0.55)
-            ]
-        case .sunset:
-            return [
-                Color(red: 0.90, green: 0.45, blue: 0.15),
-                Color(red: 0.80, green: 0.25, blue: 0.45),
-                Color(red: 0.55, green: 0.15, blue: 0.55),
-                Color(red: 0.90, green: 0.45, blue: 0.15)
-            ]
-        case .forest:
-            return [
-                Color(red: 0.10, green: 0.45, blue: 0.25),
-                Color(red: 0.05, green: 0.55, blue: 0.45),
-                Color(red: 0.02, green: 0.25, blue: 0.30),
-                Color(red: 0.10, green: 0.45, blue: 0.25)
-            ]
-        case .mono:
-            return [
-                Color(red: 0.25, green: 0.27, blue: 0.32),
-                Color(red: 0.15, green: 0.17, blue: 0.22),
-                Color(red: 0.08, green: 0.09, blue: 0.12),
-                Color(red: 0.25, green: 0.27, blue: 0.32)
-            ]
+        case .aurora: return AppTokens.voiceAuroraRibbon
+        case .ocean: return AppTokens.voiceOceanRibbon
+        case .sunset: return AppTokens.voiceSunsetRibbon
+        case .forest: return AppTokens.voiceForestRibbon
+        case .mono: return AppTokens.voiceMonoRibbon
         }
     }
 
@@ -179,11 +149,11 @@ enum VoiceAssistantTheme: String, CaseIterable, Identifiable, Codable {
     /// 主题强调色（动画主体 / 光晕 / 频谱条着色用）。
     var accentColor: Color {
         switch self {
-        case .aurora: return Color(red: 0.62, green: 0.35, blue: 0.95)
-        case .ocean: return Color(red: 0.30, green: 0.80, blue: 0.95)
-        case .sunset: return Color(red: 1.00, green: 0.55, blue: 0.25)
-        case .forest: return Color(red: 0.35, green: 0.85, blue: 0.55)
-        case .mono: return Color(red: 0.80, green: 0.82, blue: 0.88)
+        case .aurora: return AppTokens.voiceAuroraAccent
+        case .ocean: return AppTokens.voiceOceanAccent
+        case .sunset: return AppTokens.voiceSunsetAccent
+        case .forest: return AppTokens.voiceForestAccent
+        case .mono: return AppTokens.voiceMonoAccent
         }
     }
 
@@ -233,36 +203,11 @@ enum VoiceAssistantTheme: String, CaseIterable, Identifiable, Codable {
     /// 沉浸背景渐变（顶部→底部，模拟参考图深色沉浸氛围）。
     var backgroundColors: [Color] {
         switch self {
-        case .aurora:
-            return [
-                Color(red: 0.02, green: 0.01, blue: 0.10),
-                Color(red: 0.05, green: 0.12, blue: 0.32),
-                Color(red: 0.22, green: 0.08, blue: 0.38)
-            ]
-        case .ocean:
-            return [
-                Color(red: 0.01, green: 0.05, blue: 0.12),
-                Color(red: 0.03, green: 0.20, blue: 0.32),
-                Color(red: 0.05, green: 0.12, blue: 0.30)
-            ]
-        case .sunset:
-            return [
-                Color(red: 0.12, green: 0.02, blue: 0.06),
-                Color(red: 0.35, green: 0.10, blue: 0.20),
-                Color(red: 0.18, green: 0.04, blue: 0.24)
-            ]
-        case .forest:
-            return [
-                Color(red: 0.01, green: 0.08, blue: 0.06),
-                Color(red: 0.05, green: 0.22, blue: 0.16),
-                Color(red: 0.03, green: 0.12, blue: 0.18)
-            ]
-        case .mono:
-            return [
-                Color(red: 0.05, green: 0.05, blue: 0.08),
-                Color(red: 0.10, green: 0.11, blue: 0.15),
-                Color(red: 0.04, green: 0.04, blue: 0.06)
-            ]
+        case .aurora: return AppTokens.voiceAuroraBackground
+        case .ocean: return AppTokens.voiceOceanBackground
+        case .sunset: return AppTokens.voiceSunsetBackground
+        case .forest: return AppTokens.voiceForestBackground
+        case .mono: return AppTokens.voiceMonoBackground
         }
     }
 }

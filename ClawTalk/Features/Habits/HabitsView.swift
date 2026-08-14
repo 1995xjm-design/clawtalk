@@ -92,6 +92,8 @@ struct HabitsView: View {
                     Image(systemName: "plus")
                         .foregroundStyle(Color.openClawRed)
                 }
+                .accessibilityLabel("新建习惯")
+
             }
         }
         .alert("新建习惯", isPresented: $showAdd) {
@@ -150,7 +152,7 @@ struct HabitsView: View {
     private func habitRow(_ habit: Habit) -> some View {
         HStack(spacing: 12) {
             Image(systemName: habit.icon)
-                .font(.system(size: 18, weight: .semibold))
+                .font(.headline)
                 .foregroundStyle(.white)
                 .frame(width: 40, height: 40)
                 .background(Color.teal, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
@@ -194,7 +196,7 @@ struct HabitsView: View {
         if habit.isDue(on: Date()) {
             if habit.isChecked(on: Date()) {
                 Image(systemName: "checkmark.circle.fill")
-                    .font(.system(size: 20))
+                    .font(.title3)
                     .foregroundStyle(Color.green)
             } else {
                 Button {
@@ -241,7 +243,7 @@ struct HabitsView: View {
         Button {} label: {
             HStack(spacing: 12) {
                 Image(systemName: isVoiceRecording ? "waveform" : "mic.fill")
-                    .font(.system(size: 17, weight: .semibold))
+                    .font(.headline)
                     .foregroundStyle(isVoiceRecording ? Color.white : Color.openClawRed)
                     .frame(width: 36, height: 36)
                     .background(isVoiceRecording ? Color.openClawRed : Color.openClawRed.opacity(0.14), in: Circle())

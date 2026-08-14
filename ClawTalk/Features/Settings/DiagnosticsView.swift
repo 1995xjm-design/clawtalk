@@ -185,6 +185,8 @@ struct DiagnosticsView: View {
                         Image(systemName: "arrow.clockwise")
                     }
                     .disabled(isFetchingFixes)
+                    .accessibilityLabel("刷新修复建议")
+
                 }
             } footer: {
                 Text("电脑端分析日志后生成的修复建议。点「同意修复」会把同意指令发到电脑端 inbound；已同意或已忽略的问题不会重复出现。")

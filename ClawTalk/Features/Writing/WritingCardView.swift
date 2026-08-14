@@ -19,7 +19,7 @@ struct WritingCardView: View {
             VStack(alignment: .leading, spacing: 12) {
                 HStack(alignment: .top) {
                     Image(systemName: "square.and.pencil")
-                        .font(.system(size: 20, weight: .semibold))
+                        .font(.title3.weight(.semibold))
                         .foregroundStyle(.white)
                         .frame(width: 42, height: 42)
                         .background(Color.indigo)
@@ -137,7 +137,7 @@ struct WritingListView: View {
     private var emptyState: some View {
         VStack(spacing: 14) {
             Image(systemName: "square.and.pencil")
-                .font(.system(size: 44))
+                .font(.largeTitle)
                 .foregroundStyle(.secondary)
             Text("还没有文章")
                 .font(.headline)

@@ -310,11 +310,12 @@ struct MeetingRecorderView: View {
                 if let onBack {
                     Button(action: onBack) {
                         Image(systemName: "xmark")
-                            .font(.system(size: 16, weight: .semibold))
+                            .font(.callout.weight(.semibold))
                             .foregroundStyle(.primary)
                             .padding(10)
                             .background(Color(.systemGray5), in: Circle())
                     }
+                    .accessibilityLabel("关闭")
                 }
                 Spacer()
             }
@@ -505,7 +506,7 @@ struct MeetingRecorderView: View {
                 .scaleEffect(isPressed ? 0.9 : 1.0)
 
             buttonIcon
-                .font(.system(size: 28, weight: .medium))
+                .font(.title1.weight(.medium))
                 .foregroundStyle(.white)
         }
         .frame(width: recordButtonSize + 60, height: recordButtonSize + 60)
@@ -566,14 +567,14 @@ struct MeetingRecorderView: View {
                     return
                 }
                 if hapticsEnabled {
-                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                    Haptics.impact(.medium)
                 }
                 holdTimer = Task { @MainActor in
                     try? await Task.sleep(nanoseconds: holdThreshold)
                     guard !Task.isCancelled else { return }
                     isHolding = true
                     if hapticsEnabled {
-                        UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
+                        Haptics.impact(.heavy)
                     }
                     viewModel.startRecording()
                 }
@@ -584,7 +585,7 @@ struct MeetingRecorderView: View {
                 guard isPressed else { return }
                 isPressed = false
                 if hapticsEnabled {
-                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    Haptics.impact(.light)
                 }
                 if viewModel.state == .recording || isHolding {
                     viewModel.stopRecordingAndTranscribe()

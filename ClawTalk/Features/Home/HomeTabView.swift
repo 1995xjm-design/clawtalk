@@ -101,7 +101,7 @@ struct HomeTabView: View {
                             if let onOpenRealtimeVoice {
                                 Button(action: onOpenRealtimeVoice) {
                                     Image(systemName: "waveform.circle.fill")
-                                        .font(.system(size: 26))
+                                        .font(.title1)
                                         .foregroundStyle(.white)
                                         .frame(width: 46, height: 46)
                                         .background(.ultraThinMaterial, in: Circle())
@@ -173,7 +173,7 @@ struct HomeTabView: View {
                         withAnimation(.easeIn(duration: 0.15)) { isEditingCards = true }
                     } label: {
                         Image(systemName: "slider.horizontal.3")
-                            .font(.system(size: 15, weight: .semibold))
+                            .font(.subheadline.weight(.semibold))
                             .foregroundStyle(.openClawRed)
                             .frame(width: 34, height: 34)
                             .background(Circle().fill(Color(.systemGray5)))
@@ -184,7 +184,7 @@ struct HomeTabView: View {
                         isManagingCards = true
                     } label: {
                         Image(systemName: "square.grid.2x2")
-                            .font(.system(size: 15, weight: .semibold))
+                            .font(.subheadline.weight(.semibold))
                             .foregroundStyle(.openClawRed)
                             .frame(width: 34, height: 34)
                             .background(Circle().fill(Color(.systemGray5)))
@@ -209,7 +209,7 @@ struct HomeTabView: View {
             if kinds.isEmpty {
                 VStack(spacing: 10) {
                     Image(systemName: "square.grid.2x2")
-                        .font(.system(size: 30))
+                        .font(.title1)
                         .foregroundStyle(.secondary)
                     Text("主页卡片已全部移除")
                         .font(.subheadline.weight(.medium))
@@ -290,6 +290,7 @@ struct HomeTabView: View {
             }
             .buttonStyle(.plain)
             .highPriorityGesture(
+            .accessibilityHint("打开\(kind.title)功能页")
                 LongPressGesture(minimumDuration: 0.45)
                     .onEnded { _ in
                         withAnimation(.easeIn(duration: 0.15)) { isEditingCards = true }
@@ -351,7 +352,7 @@ struct HomeTabView: View {
             }
         } label: {
             Image(systemName: "xmark")
-                .font(.system(size: 11, weight: .bold))
+                .font(.caption2.weight(.bold))
                 .foregroundStyle(.white)
                 .frame(width: 26, height: 26)
                 .background(Color.red, in: Circle())
@@ -555,7 +556,7 @@ private struct OverviewStatCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             Image(systemName: icon)
-                .font(.system(size: 14, weight: .semibold))
+                .font(.footnote.weight(.semibold))
                 .foregroundStyle(.white)
                 .frame(width: 28, height: 28)
                 .background(tint)

@@ -67,7 +67,7 @@ private struct SuggestionRow: View {
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
             Image(systemName: suggestion.type.systemImage)
-                .font(.system(size: 16, weight: .semibold))
+                .font(.callout.weight(.semibold))
                 .foregroundStyle(.white)
                 .frame(width: 34, height: 34)
                 .background(suggestion.type.themeColor)
@@ -154,7 +154,7 @@ struct SuggestionHomeCard: View {
             VStack(alignment: .leading, spacing: 12) {
                 HStack(alignment: .top) {
                     Image(systemName: "sparkles")
-                        .font(.system(size: 20, weight: .semibold))
+                        .font(.title3.weight(.semibold))
                         .foregroundStyle(.white)
                         .frame(width: 42, height: 42)
                         .background(Color.indigo)

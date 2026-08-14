@@ -15,11 +15,11 @@ enum HomeWallpaper {
             let palette: [(CGFloat, CGFloat, CGFloat)]
             switch normalized {
             case 1:
-                palette = [(0.95, 0.45, 0.25), (0.85, 0.22, 0.45), (0.55, 0.15, 0.55)]
+                palette = AppTokens.wallpaperWarm
             case 2:
-                palette = [(0.10, 0.12, 0.20), (0.16, 0.18, 0.30), (0.08, 0.10, 0.18)]
+                palette = AppTokens.wallpaperDark
             default:
-                palette = [(0.30, 0.45, 0.90), (0.55, 0.35, 0.85), (0.75, 0.30, 0.70)]
+                palette = AppTokens.wallpaperBluePurple
             }
             let cgColors = palette.map {
                 UIColor(red: $0.0, green: $0.1, blue: $0.2, alpha: 1).cgColor
@@ -39,7 +39,7 @@ enum HomeWallpaper {
             }
             // 柔光斑（iOS 壁纸的云光感）
             ctx.cgContext.setBlendMode(.screen)
-            ctx.cgContext.setFillColor(UIColor(red: 1, green: 1, blue: 1, alpha: 0.16).cgColor)
+            ctx.cgContext.setFillColor(AppTokens.wallpaperGlowWhite.cgColor)
             for i in 0..<3 {
                 let cx = size.width * (0.22 + CGFloat(i) * 0.32)
                 let cy = size.height * (0.28 + CGFloat(i % 2) * 0.38)

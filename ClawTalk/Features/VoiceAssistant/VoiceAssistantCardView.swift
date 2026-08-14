@@ -137,7 +137,7 @@ struct VoiceAssistantCardView: View, VoiceAssistantCardContent {
             Spacer(minLength: 0)
 
             Text(statusText)
-                .font(.system(size: 27.0 * sceneFontScale, weight: .bold))
+                .font(.title1.weight(.bold))
                 .foregroundStyle(.white)
                 .scaleEffect(viewModel.state == .idle ? (textBreathing ? 1.03 : 1.0) : 1.0)
                 .opacity(viewModel.state == .idle ? (textBreathing ? 0.9 : 1.0) : 1.0)
@@ -146,12 +146,12 @@ struct VoiceAssistantCardView: View, VoiceAssistantCardContent {
 
             if showFirstUseGuide {
                 Text("点按开始说话 · 长按退出")
-                    .font(.system(size: 12.0 * sceneFontScale, weight: .medium))
+                    .font(.caption.weight(.medium))
                     .foregroundStyle(.white.opacity(0.92))
                     .transition(.opacity)
             } else if viewModel.state == .idle {
                 Text(currentTip)
-                    .font(.system(size: 12.0 * sceneFontScale))
+                    .font(.caption)
                     .foregroundStyle(.white.opacity(0.78))
                     .lineLimit(1)
                     .id("tip-\(tipIndex)")
@@ -162,7 +162,7 @@ struct VoiceAssistantCardView: View, VoiceAssistantCardContent {
 
             if let error = viewModel.errorMessage {
                 Text(error)
-                    .font(.system(size: 11, weight: .medium))
+                    .font(.caption2.weight(.medium))
                     .foregroundStyle(.white)
                     .multilineTextAlignment(.center)
                     .lineLimit(2)
@@ -179,7 +179,7 @@ struct VoiceAssistantCardView: View, VoiceAssistantCardContent {
 
             if let feedback = viewModel.lastIntentFeedback {
                 Text(feedback)
-                    .font(.system(size: 11, weight: .medium))
+                    .font(.caption2.weight(.medium))
                     .foregroundStyle(.white)
                     .multilineTextAlignment(.center)
                     .lineLimit(2)
@@ -202,7 +202,7 @@ struct VoiceAssistantCardView: View, VoiceAssistantCardContent {
     private func intentConfirmBar(_ intent: PendingVoiceIntent) -> some View {
         VStack(spacing: 6) {
             Text(intent.summary)
-                .font(.system(size: 12, weight: .medium))
+                .font(.caption.weight(.medium))
                 .foregroundStyle(.white)
                 .multilineTextAlignment(.center)
                 .lineLimit(2)
@@ -211,7 +211,7 @@ struct VoiceAssistantCardView: View, VoiceAssistantCardContent {
                     viewModel.cancelPendingIntent()
                 } label: {
                     Text("取消")
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(.caption.weight(.semibold))
                         .foregroundStyle(.white.opacity(0.9))
                         .padding(.horizontal, 14)
                         .padding(.vertical, 6)
@@ -222,7 +222,7 @@ struct VoiceAssistantCardView: View, VoiceAssistantCardContent {
                     viewModel.confirmPendingIntent()
                 } label: {
                     Text("确认")
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(.caption.weight(.semibold))
                         .foregroundStyle(.white)
                         .padding(.horizontal, 14)
                         .padding(.vertical, 6)
@@ -250,12 +250,12 @@ struct VoiceAssistantCardView: View, VoiceAssistantCardContent {
             case .first:
                 // 长按退出（防死循环兜底之一，另一兜底是 ViewModel.maxRounds）。
                 viewModel.stopConversation()
-                UINotificationFeedbackGenerator().notificationOccurred(.warning)
+                Haptics.warning()
             case .second:
                 let willStart = viewModel.state == .idle
                 viewModel.toggle()
                 // 开始对讲中震动反馈，结束轻反馈。
-                UIImpactFeedbackGenerator(style: willStart ? .medium : .light).impactOccurred()
+                Haptics.impact(willStart ? .medium : .light)
             }
         }
     }
@@ -271,7 +271,7 @@ struct VoiceAssistantCardView: View, VoiceAssistantCardContent {
                     withAnimation(.spring(response: 0.22, dampingFraction: 0.6)) {
                         pressed = true
                     }
-                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    Haptics.impact(.light)
                 } else if abs(value.translation.width) > 8 || abs(value.translation.height) > 8 {
                     // 手指开始移动（滚动主页）：撤销按下反馈，避免滚动时误触感
                     pressStart = nil
@@ -295,7 +295,7 @@ struct VoiceAssistantCardView: View, VoiceAssistantCardContent {
             gatewayStatusDot
             if viewModel.isActive {
                 Text("长按退出")
-                    .font(.system(size: 11, weight: .medium))
+                    .font(.caption2.weight(.medium))
                     .foregroundStyle(.white.opacity(0.9))
                     .padding(.horizontal, 9)
                     .padding(.vertical, 5)
@@ -307,7 +307,7 @@ struct VoiceAssistantCardView: View, VoiceAssistantCardContent {
                 showTranscript = true
             } label: {
                 Image(systemName: "clock.arrow.circlepath")
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.footnote.weight(.semibold))
                     .foregroundStyle(.white)
                     .frame(width: 30, height: 30)
                     .background(Circle().fill(.white.opacity(0.18)))
@@ -318,7 +318,7 @@ struct VoiceAssistantCardView: View, VoiceAssistantCardContent {
                 showQuickSettings = true
             } label: {
                 Image(systemName: "gearshape.fill")
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.footnote.weight(.semibold))
                     .foregroundStyle(.white)
                     .frame(width: 30, height: 30)
                     .background(Circle().fill(.white.opacity(0.18)))
@@ -329,7 +329,7 @@ struct VoiceAssistantCardView: View, VoiceAssistantCardContent {
                 viewModel.cycleSceneMode()
             } label: {
                 Image(systemName: sceneModeIcon)
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.footnote.weight(.semibold))
                     .foregroundStyle(.white)
                     .frame(width: 30, height: 30)
                     .background(Circle().fill(.white.opacity(0.18)))
@@ -530,7 +530,7 @@ struct VoiceAssistantCardView: View, VoiceAssistantCardContent {
             switch viewModel.state {
             case .listening, .thinking:
                 Text(transcriptDisplayText)
-                    .font(.system(size: 12.0 * sceneFontScale))
+                    .font(.caption)
                     .foregroundStyle(.white.opacity(0.9))
                     .lineLimit(3)
                     .multilineTextAlignment(.center)
@@ -539,7 +539,7 @@ struct VoiceAssistantCardView: View, VoiceAssistantCardContent {
                     .transition(.opacity.combined(with: .offset(y: 4)))
             case .speaking:
                 Text(viewModel.lastReply)
-                    .font(.system(size: 12.0 * sceneFontScale))
+                    .font(.caption)
                     .foregroundStyle(.white.opacity(0.92))
                     .lineLimit(3)
                     .multilineTextAlignment(.center)
@@ -1329,9 +1329,9 @@ private struct TopLightBand: View {
                         LinearGradient(
                             colors: [
                                 .clear,
-                                Color(red: 0.30, green: 0.55, blue: 1.0).opacity(0.6),
-                                Color(red: 0.65, green: 0.40, blue: 1.0).opacity(0.6),
-                                Color(red: 0.20, green: 0.85, blue: 0.90).opacity(0.6),
+                                AppTokens.voiceAuraBlue.opacity(0.6),
+                                AppTokens.voiceAuraPurple.opacity(0.6),
+                                AppTokens.voiceAuraCyan.opacity(0.6),
                                 .clear
                             ],
                             startPoint: .leading,
@@ -1340,7 +1340,7 @@ private struct TopLightBand: View {
                     )
                     .frame(width: bandWidth, height: 3.0 + (state == .idle ? 0 : 2.0))
                     .blur(radius: 1)
-                    .shadow(color: Color(red: 0.40, green: 0.55, blue: 1.0).opacity(0.6), radius: 6)
+                    .shadow(color: AppTokens.voiceAuraBlueShadow.opacity(0.6), radius: 6)
                     .position(x: geo.size.width / 2 + offset, y: 14)
             }
         }

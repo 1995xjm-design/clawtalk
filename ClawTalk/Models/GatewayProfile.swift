@@ -150,5 +150,7 @@ final class GatewayProfileStore {
             defaults.set(data, forKey: profilesKey)
         }
         defaults.set(activeProfileID?.uuidString, forKey: activeKey)
+        // 网关档案数据变化：通知主 App 刷新小组件（WidgetDataSync 单入口模式）
+        NotificationCenter.default.post(name: WidgetDataSync.dataDidChangeNotification, object: nil)
     }
 }

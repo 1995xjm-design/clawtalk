@@ -84,6 +84,8 @@ struct TerminalView: View {
                 }
                 .buttonStyle(.borderedProminent)
                 .disabled(isRunning || command.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .accessibilityLabel("发送命令")
+
             }
             .padding(10)
         }

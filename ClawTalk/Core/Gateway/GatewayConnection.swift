@@ -265,7 +265,7 @@ final class GatewayConnection {
         // Don't add duplicates
         if !pendingApprovals.contains(where: { $0.id == approval.id }) {
             pendingApprovals.append(approval)
-            UINotificationFeedbackGenerator().notificationOccurred(.warning)
+            Haptics.warning()
             logger.info("approval requested: \(approval.displayCommand, privacy: .public)")
         }
     }

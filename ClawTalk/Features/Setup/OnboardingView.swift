@@ -80,7 +80,7 @@ struct OnboardingView: View {
             Spacer()
 
             Image(systemName: "server.rack")
-                .font(.system(size: 48))
+                .font(.largeTitle)
                 .foregroundStyle(.openClawRed)
 
             Text("需要网关")
@@ -147,7 +147,7 @@ struct OnboardingView: View {
             Spacer()
 
             Image(systemName: "qrcode.viewfinder")
-                .font(.system(size: 44))
+                .font(.largeTitle)
                 .foregroundStyle(.openClawRed)
 
             Text("连接网关")

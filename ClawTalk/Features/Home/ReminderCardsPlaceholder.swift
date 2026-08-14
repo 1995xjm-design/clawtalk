@@ -92,7 +92,7 @@ struct HomeCardPlaceholderView: View {
             Section {
                 VStack(spacing: 14) {
                     Image(systemName: icon)
-                        .font(.system(size: 34))
+                        .font(.largeTitle)
                         .foregroundStyle(.white)
                         .frame(width: 72, height: 72)
                         .background(color)

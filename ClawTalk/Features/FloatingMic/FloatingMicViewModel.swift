@@ -2,16 +2,14 @@ import Foundation
 import UIKit
 
 /// 全局语音悬浮球 ViewModel（F4）：
-/// 按住说话 → 松开转写（复用 AudioCaptureManager + TranscriptionService 只读引用，
+/// 按住说话 → 松开转写（复用统一语音输入状态机，
 /// 规则与 ClawTalkApp.configureServices / 全局语音输入一致：跟随设置 STT 提供商）。
 @Observable
 @MainActor
 final class FloatingMicViewModel {
     private let settingsStore: SettingsStore
-    private let audioCapture = AudioCaptureManager()
-    private var transcriptionService: (any TranscriptionService)?
-    private var levelTimer: Timer?
-    private var recordingStart: Date?
+    /// 语音输入统一状态机（录音/STT/会话生命周期，规则与全局语音输入一致）
+    private let voiceInput: VoiceInputStateMachine
 
     enum PanelState: Equatable {
         case idle
@@ -20,7 +18,7 @@ final class FloatingMicViewModel {
     }
 
     private(set) var state: PanelState = .idle
-    var audioLevel: Float = 0
+    var audioLevel: Float { voiceInput.audioLevel }
     var transcript = ""
     var errorMessage: String? {
         didSet { if let errorMessage { LogCollector.record(module: "悬浮球", errorMessage) } }
@@ -30,67 +28,56 @@ final class FloatingMicViewModel {
 
     init(settingsStore: SettingsStore) {
         self.settingsStore = settingsStore
+        self.voiceInput = VoiceInputStateMachine(settingsStore: settingsStore)
     }
 
     // MARK: - 按住说话
 
     func startRecording() {
         guard state == .idle else { return }
-        VoiceWakeCapability.shared.stopListening()
+        // 统一走语音输入状态机（录音前状态机会先停语音唤醒）
         errorMessage = nil
-        do {
-            try audioCapture.startRecording()
-            recordingStart = Date()
+        voiceInput.startShort()
+        if voiceInput.isCapturing {
             state = .recording
-            startLevelTimer()
-        } catch {
-            errorMessage = "麦克风访问失败：\(AppErrorText.localized(error.localizedDescription))"
-            state = .idle
+        } else if let error = voiceInput.errorMessage {
+            errorMessage = error
         }
     }
 
     func stopRecordingAndProcess() {
         guard state == .recording else { return }
-        stopLevelTimer()
-        let samples = audioCapture.stopRecording()
-        let duration = Date().timeIntervalSince(recordingStart ?? Date())
-        recordingStart = nil
-        // 与聊天页/语音日记同阈值：<0.5s 或样本过少视为误触
-        guard duration >= 0.5, samples.count > 8000 else {
+        // 统一走语音输入状态机：误触（<0.5s 或样本过少）由状态机判弃并恢复会话
+        guard let capture = voiceInput.finishShortCapture() else {
             state = .idle
             return
         }
         state = .transcribing
         Task {
-            guard let stt = makeTranscriptionService() else {
-                errorMessage = "语音输入已在设置中关闭，请到设置页开启后重试"
+            defer { voiceInput.endSession() }
+            guard let text = await voiceInput.transcribe(capture.samples) else {
+                if let error = voiceInput.errorMessage {
+                    errorMessage = error
+                }
                 state = .idle
                 return
             }
-            do {
-                let text = try await stt.transcribe(audioSamples: samples)
-                let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-                guard !trimmed.isEmpty else {
-                    errorMessage = "没有识别到内容，请再试一次"
-                    state = .idle
-                    return
-                }
-                transcript = trimmed
-                onTranscript?(trimmed)
+            let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else {
+                errorMessage = "没有识别到内容，请再试一次"
                 state = .idle
-            } catch {
-                errorMessage = "转写失败：\(AppErrorText.localized(error.localizedDescription))"
-                state = .idle
+                return
             }
+            transcript = trimmed
+            onTranscript?(trimmed)
+            state = .idle
         }
     }
 
     /// 取消未完成的录音（关闭面板/打断时调用）。
     func cancelRecording() {
         guard state == .recording else { return }
-        stopLevelTimer()
-        _ = audioCapture.stopRecording()
-        recordingStart = nil
+        voiceInput.cancel()
         state = .idle
     }
 
@@ -102,49 +89,8 @@ final class FloatingMicViewModel {
         UIPasteboard.general.string = transcript
     }
 
-    // MARK: - STT 工厂（与全局语音输入同规则）
-
-    private func makeTranscriptionService() -> (any TranscriptionService)? {
-        let settings = settingsStore.settings
-        guard settings.voiceInputEnabled else { return nil }
-        if let cached = transcriptionService { return cached }
-        let service: any TranscriptionService
-        switch settings.sttProvider {
-        case .apple:
-            service = AppleSTTService(language: settings.whisperLanguage)
-        case .doubao:
-            if let key = SecureStorage.shared.doubaoAPIKey, !key.isEmpty {
-                service = DoubaoSTTService(apiKey: key, language: settings.whisperLanguage)
-            } else {
-                service = AppleSTTService(language: settings.whisperLanguage)
-            }
-        }
-        transcriptionService = service
-        return service
-    }
-
-    // MARK: - 电平轮询
-
-    private func startLevelTimer() {
-        stopLevelTimer()
-        let timer = Timer(timeInterval: 0.08, repeats: true) { [weak self] _ in
-            Task { @MainActor [weak self] in
-                guard let self, self.state == .recording else { return }
-                self.audioLevel = self.audioCapture.currentLevel
-            }
-        }
-        RunLoop.main.add(timer, forMode: .common)
-        levelTimer = timer
-    }
-
-    private func stopLevelTimer() {
-        levelTimer?.invalidate()
-        levelTimer = nil
-        audioLevel = 0
-    }
-
-    /// 会话结束后恢复语音唤醒监听（App 层已监听该通知）。
+    /// 会话结束后恢复语音唤醒监听（App 层已监听该通知，委托状态机）。
     func restoreWakeListening() {
-        NotificationCenter.default.post(name: .clawTalkWakeRestartRequested, object: nil)
+        voiceInput.endSession()
     }
 }

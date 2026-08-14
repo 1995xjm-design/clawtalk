@@ -97,14 +97,14 @@ struct HealthDetailView: View {
         Section {
             HStack(spacing: 10) {
                 Image(systemName: "figure.walk")
-                    .font(.system(size: 20, weight: .semibold))
+                    .font(.title3.weight(.semibold))
                     .foregroundStyle(.green)
                 Text("今日步数")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                 Spacer()
                 Text("\(viewModel.todaySteps ?? 0)")
-                    .font(.system(size: 30, weight: .bold))
+                    .font(.title1.weight(.bold))
                     .monospacedDigit()
                     .foregroundStyle(.primary)
                 Text("步")

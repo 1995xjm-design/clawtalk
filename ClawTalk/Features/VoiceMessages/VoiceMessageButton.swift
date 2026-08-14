@@ -34,12 +34,12 @@ struct VoiceMessageButton: View {
                     guard !isPressed, !isRecording else { return }
                     isPressed = true
                     isHolding = false
-                    if hapticsEnabled { UIImpactFeedbackGenerator(style: .medium).impactOccurred() }
+                    if hapticsEnabled { Haptics.impact(.medium) }
                     holdTimer = Task { @MainActor in
                         try? await Task.sleep(nanoseconds: holdThreshold)
                         guard !Task.isCancelled else { return }
                         isHolding = true
-                        if hapticsEnabled { UIImpactFeedbackGenerator(style: .heavy).impactOccurred() }
+                        if hapticsEnabled { Haptics.impact(.heavy) }
                         onHoldStart()
                     }
                 }
@@ -48,7 +48,7 @@ struct VoiceMessageButton: View {
                     holdTimer = nil
                     guard isPressed else { return }
                     isPressed = false
-                    if hapticsEnabled { UIImpactFeedbackGenerator(style: .light).impactOccurred() }
+                    if hapticsEnabled { Haptics.impact(.light) }
                     if isHolding {
                         onHoldEnd()
                     }

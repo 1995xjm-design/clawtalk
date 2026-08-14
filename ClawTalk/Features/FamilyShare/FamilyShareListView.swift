@@ -38,6 +38,8 @@ struct FamilyShareListView: View {
                 } label: {
                     Image(systemName: "arrow.clockwise")
                 }
+                .accessibilityLabel("刷新")
+
             }
         }
         .onAppear {

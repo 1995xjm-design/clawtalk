@@ -46,6 +46,7 @@ struct RealtimeVoiceView: View {
                     .frame(width: 36, height: 36)
                     .background(Color(.systemGray5), in: Circle())
             }
+            .accessibilityLabel("关闭")
 
             Spacer()
 
@@ -104,7 +105,7 @@ struct RealtimeVoiceView: View {
                 .scaleEffect(isPressed ? 0.9 : 1.0)
 
             Image(systemName: buttonIcon)
-                .font(.system(size: 30, weight: .medium))
+                .font(.title1.weight(.medium))
                 .foregroundStyle(.white)
         }
         .frame(width: 140, height: 140)
@@ -115,12 +116,12 @@ struct RealtimeVoiceView: View {
                     guard !isPressed, session.state == .idle else { return }
                     isPressed = true
                     isHolding = false
-                    if hapticsEnabled { UIImpactFeedbackGenerator(style: .medium).impactOccurred() }
+                    if hapticsEnabled { Haptics.impact(.medium) }
                     holdTimer = Task { @MainActor in
                         try? await Task.sleep(nanoseconds: holdThreshold)
                         guard !Task.isCancelled else { return }
                         isHolding = true
-                        if hapticsEnabled { UIImpactFeedbackGenerator(style: .heavy).impactOccurred() }
+                        if hapticsEnabled { Haptics.impact(.heavy) }
                         session.beginTalk()
                     }
                 }
@@ -129,7 +130,7 @@ struct RealtimeVoiceView: View {
                     holdTimer = nil
                     guard isPressed else { return }
                     isPressed = false
-                    if hapticsEnabled { UIImpactFeedbackGenerator(style: .light).impactOccurred() }
+                    if hapticsEnabled { Haptics.impact(.light) }
                     if isHolding {
                         session.endTalk()
                     }

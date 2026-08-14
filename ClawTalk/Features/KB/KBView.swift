@@ -205,7 +205,7 @@ struct KBView: View {
                     askFromText()
                 } label: {
                     Image(systemName: "paperplane.fill")
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(.subheadline.weight(.semibold))
                         .foregroundStyle(.white)
                         .frame(width: 40, height: 40)
                         .background(canSend ? Color.openClawRed : Color.gray.opacity(0.5))
@@ -213,6 +213,8 @@ struct KBView: View {
                 }
                 .buttonStyle(.plain)
                 .disabled(!canSend)
+                .accessibilityLabel("发送问题")
+
             }
 
 
@@ -350,7 +352,7 @@ struct KBView: View {
                 .scaleEffect(isPressed ? 0.9 : 1.0)
 
             recordButtonIcon
-                .font(.system(size: 22, weight: .medium))
+                .font(.title2.weight(.medium))
                 .foregroundStyle(.white)
         }
         .frame(width: recordButtonSize + 30, height: recordButtonSize + 30)
@@ -404,14 +406,14 @@ struct KBView: View {
                     return
                 }
                 if hapticsEnabled {
-                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                    Haptics.impact(.medium)
                 }
                 holdTimer = Task { @MainActor in
                     try? await Task.sleep(nanoseconds: holdThreshold)
                     guard !Task.isCancelled else { return }
                     isHolding = true
                     if hapticsEnabled {
-                        UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
+                        Haptics.impact(.heavy)
                     }
                     voiceRecorder.startRecording()
                 }
@@ -422,7 +424,7 @@ struct KBView: View {
                 guard isPressed else { return }
                 isPressed = false
                 if hapticsEnabled {
-                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    Haptics.impact(.light)
                 }
                 if voiceRecorder.state == .recording || isHolding {
                     askFromVoice()

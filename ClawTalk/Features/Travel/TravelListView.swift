@@ -73,6 +73,8 @@ struct TravelListView: View {
                 } label: {
                     Image(systemName: "plus")
                 }
+                .accessibilityLabel("新增出行")
+
             }
         }
         .sheet(isPresented: $showAddSheet) {
