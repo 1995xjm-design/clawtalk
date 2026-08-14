@@ -24,6 +24,7 @@ struct SettingsView: View {
     @State private var isPairing = false
     @State private var isRequestingPairingCode = false
     @State private var deepSeekTestState: DeepSeekTestState = .idle
+    @State private var gatewayChannelTestState: VoiceAgentGatewayTestState = .idle
 
 
     // MARK: - 唤醒词编辑（本地 UUID 列表，避免 ForEach(id: \.offset) 删除/编辑越界崩溃）
@@ -346,6 +347,9 @@ struct SettingsView: View {
                 }
             }
             .pickerStyle(.segmented)
+            if store.settings.voiceAgentChannel == .gateway {
+                gatewayChannelStatusContent
+            }
             if store.settings.voiceAgentChannel == .directDeepSeek {
                 SecureField("DeepSeek API Key", text: $deepSeekKey)
                     .textContentType(.password)
@@ -415,6 +419,84 @@ struct SettingsView: View {
             Text("语音助手通道")
         } footer: {
             Text("网关=走 OpenClaw 网关回复；直连 DeepSeek=绕过网关直连模型（需 API Key），配合记忆快照离线可用。")
+        }
+    }
+
+    /// 网关模式连接状态显示（语音助手通道区）：当前网关地址 + WebSocket 连接状态 + 令牌状态。
+    private var gatewayChannelStatusContent: some View {
+        Group {
+            LabeledContent("当前网关", value: store.settings.gatewayURL.isEmpty ? "未配置" : store.settings.gatewayURL)
+                .lineLimit(1)
+                .truncationMode(.middle)
+            HStack(spacing: 6) {
+                Circle()
+                    .fill(gatewayConnectionStateColor)
+                    .frame(width: 8, height: 8)
+                Text(gatewayConnectionStateText)
+                    .foregroundStyle(gatewayConnectionStateColor)
+            }
+            if gatewayConnection.connectionState == .disconnected, let error = gatewayConnection.lastError {
+                Text(error)
+                    .font(.caption)
+                    .foregroundStyle(.red)
+            }
+            Button(action: { testGatewayChannel() }) {
+                HStack {
+                    Text("测试网关连接")
+                    Spacer()
+                    switch gatewayChannelTestState {
+                    case .idle:
+                        Image(systemName: "bolt.horizontal.circle")
+                            .foregroundStyle(.openClawRed)
+                    case .testing:
+                        ProgressView().scaleEffect(0.8)
+                    case .success:
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundStyle(.green)
+                    case .failed:
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundStyle(.red)
+                    }
+                }
+            }
+            .disabled(store.settings.gatewayURL.isEmpty || gatewayChannelTestState == .testing)
+            if case .failed(let message) = gatewayChannelTestState {
+                Text(message)
+                    .font(.caption)
+                    .foregroundStyle(.red)
+            }
+            if case .success = gatewayChannelTestState {
+                Text("网关连接正常：地址可达，令牌有效。")
+                    .font(.caption)
+                    .foregroundStyle(.green)
+            }
+        }
+    }
+
+    private var gatewayConnectionStateColor: Color {
+        switch gatewayConnection.connectionState {
+        case .connected: return .green
+        case .connecting: return .secondary
+        case .disconnected: return .red
+        }
+    }
+
+    private var gatewayConnectionStateText: String {
+        switch gatewayConnection.connectionState {
+        case .connected: return "网关已连接"
+        case .connecting: return "网关连接中…"
+        case .disconnected: return "网关未连接"
+        }
+    }
+
+    /// 测试网关连接：复用 DiagnosticsView 检测逻辑（resolveHTTPToken 探测 /v1/models，
+    /// 404 回退 /health），401/429/超时给明确中文提示。
+    private func testGatewayChannel() {
+        store.save()
+        gatewayChannelTestState = .testing
+        Task {
+            let result = await VoiceAgentGatewayProbe.run(settings: store)
+            gatewayChannelTestState = result.success ? .success : .failed(result.message)
         }
     }
 

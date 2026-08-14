@@ -7,7 +7,7 @@ import SwiftUI
 /// - 卡片尺寸：小（1 列）/ 中（2 列）/ 大（4 列），AppStorage 持久化；
 /// - 拖动排序：编辑态 draggable + dropDestination，顺序持久化；
 /// - 编辑态：长按卡片进入（抖动 + 移除 × + 尺寸切换），点空白或「完成」退出；
-/// - 毛玻璃：卡片背景 .ultraThinMaterial + 细描边 + 轻阴影；
+/// - 毛玻璃：卡片背景 .ultraThinMaterial + 细描边 + 轻阴影（S11：跟随「全局毛玻璃」开关，关=纯色）；
 /// - 「我的记忆」并入网格（默认中卡，今日概览下方第一格）。
 struct HomeTabView: View {
     private let settings: SettingsStore
@@ -409,8 +409,14 @@ struct HomeTabView: View {
                         .blur(radius: CGFloat((1 - settings.settings.homeBlurStrength) * 22))
                         .clipped()
                     Color.black.opacity(0.12)
+                    // S11：全局毛玻璃开启时，壁纸上覆盖磨砂材质（配合壁纸效果最佳）。
+                    if settings.settings.globalGlassEnabled {
+                        Rectangle().fill(.ultraThinMaterial)
+                    }
                 } else {
-                    Color(.systemGroupedBackground)
+                    // S11：全局毛玻璃开 = 磨砂材质背景；关 = 系统纯色。
+                    Rectangle()
+                        .fill(HomeWallpaper.glassBackground(enabled: settings.settings.globalGlassEnabled))
                 }
             }
             .ignoresSafeArea()
@@ -431,25 +437,29 @@ struct HomeTabView: View {
                     title: "今日提醒",
                     value: "\(careStore.todayReminderCount)",
                     icon: "bell.badge.fill",
-                    tint: .orange
+                    tint: .orange,
+                    glassEnabled: settings.settings.globalGlassEnabled
                 )
                 OverviewStatCard(
                     title: "今日日记",
                     value: "\(todayDiaryCount)",
                     icon: "book.fill",
-                    tint: .pink
+                    tint: .pink,
+                    glassEnabled: settings.settings.globalGlassEnabled
                 )
                 OverviewStatCard(
                     title: "待办",
                     value: "\(todayTodoCount)",
                     icon: "checklist",
-                    tint: .green
+                    tint: .green,
+                    glassEnabled: settings.settings.globalGlassEnabled
                 )
                 OverviewStatCard(
                     title: "下次执行",
                     value: automationNextRunText,
                     icon: "bolt.fill",
-                    tint: .blue
+                    tint: .blue,
+                    glassEnabled: settings.settings.globalGlassEnabled
                 )
             }
         }
@@ -528,6 +538,8 @@ private struct OverviewStatCard: View {
     let value: String
     let icon: String
     let tint: Color
+    /// S11：全局毛玻璃开关——开=磨砂卡片；关=纯色卡片底。
+    let glassEnabled: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -554,7 +566,7 @@ private struct OverviewStatCard: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(.ultraThinMaterial)
+                .fill(HomeWallpaper.glassCardBackground(enabled: glassEnabled))
         )
     }
 }

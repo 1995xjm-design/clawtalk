@@ -37,6 +37,14 @@ enum ClawTalkLiveActivity {
                 }
                 return
             }
+            if activity.attributes.channelName == previewChannelName {
+                // 正在显示样式预览：先结束预览再开启真实对话卡片
+                Task {
+                    await activity.end(nil, dismissalPolicy: .immediate)
+                    createActivity(channelName: channelName, initialStatus: composedText)
+                }
+                return
+            }
             let content = ActivityContent(
                 state: ClawTalkLiveActivityAttributes.ContentState(statusText: composedText, style: currentStyle.rawValue),
                 staleDate: nil
@@ -89,6 +97,94 @@ enum ClawTalkLiveActivity {
         }
     }
 
+    // MARK: - 样式预览（真实 Live Activity）
+
+    /// 预览专用频道名：与对话/随时唤醒/语音助手区分，endPreview 只结束预览卡。
+    private static let previewChannelName = "样式预览"
+
+    /// 预览固定文案（简约档为纯文字）。
+    private static let previewStatusText = "样式预览进行中"
+
+    /// 当前是否有预览活动（供设置页按钮态使用）。
+    static var isPreviewActive: Bool {
+        previewActivity != nil
+    }
+
+    private static var previewActivity: Activity<ClawTalkLiveActivityAttributes>? {
+        Activity<ClawTalkLiveActivityAttributes>.activities.first {
+            $0.attributes.channelName == previewChannelName
+        }
+    }
+
+    /// 按档位给出预览进度：简约=无进度条；标准/详细=不同进度值，便于肉眼区分。
+    private static func previewProgress(for style: LiveActivityStyle) -> Double? {
+        switch style {
+        case .minimal: return nil
+        case .standard: return 0.66
+        case .detailed: return 0.42
+        }
+    }
+
+    /// 开始真实预览：真启动 Live Activity（当前档位）。
+    /// 已有预览卡时仅按新档位刷新；已有其他卡片（对话/随时唤醒/语音助手）时先结束再创建预览卡。
+    static func startPreview(style: LiveActivityStyle) {
+        guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
+        if previewActivity != nil {
+            updatePreview(style: style)
+            return
+        }
+        if let activity = Activity<ClawTalkLiveActivityAttributes>.activities.first {
+            Task {
+                await activity.end(nil, dismissalPolicy: .immediate)
+                createPreview(style: style)
+            }
+            return
+        }
+        createPreview(style: style)
+    }
+
+    /// 切换预览档位：Activity.update 实时刷新内容（简约=纯文字 / 标准=文字+进度 / 详细=详细卡片）。
+    static func updatePreview(style: LiveActivityStyle) {
+        guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
+        guard let activity = previewActivity else { return }
+        let content = ActivityContent(
+            state: ClawTalkLiveActivityAttributes.ContentState(
+                statusText: previewStatusText,
+                style: style.rawValue,
+                progress: previewProgress(for: style)
+            ),
+            staleDate: nil
+        )
+        Task { await activity.update(content) }
+    }
+
+    /// 结束样式预览（只结束预览卡，不影响对话/随时唤醒/语音助手）。
+    static func endPreview() {
+        Task {
+            for activity in Activity<ClawTalkLiveActivityAttributes>.activities
+            where activity.attributes.channelName == previewChannelName {
+                await activity.end(nil, dismissalPolicy: .immediate)
+            }
+        }
+    }
+
+    private static func createPreview(style: LiveActivityStyle) {
+        let attributes = ClawTalkLiveActivityAttributes(channelName: previewChannelName)
+        let content = ActivityContent(
+            state: ClawTalkLiveActivityAttributes.ContentState(
+                statusText: previewStatusText,
+                style: style.rawValue,
+                progress: previewProgress(for: style)
+            ),
+            staleDate: nil
+        )
+        do {
+            _ = try Activity.request(attributes: attributes, content: content, pushType: nil)
+        } catch {
+            LogCollector.record(module: "锁屏状态", "Live Activity 样式预览启动失败：\(AppErrorText.localized(error.localizedDescription))")
+        }
+    }
+
     // MARK: - 更新
 
     /// 更新锁屏状态文案。对话状态会按当前风格组合（频道名/图标 + 状态）；
@@ -96,6 +192,11 @@ enum ClawTalkLiveActivity {
     static func update(statusText: String, icon: String = ClawTalkLiveActivity.defaultIcon) {
         guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
         guard let activity = Activity<ClawTalkLiveActivityAttributes>.activities.first else { return }
+        if activity.attributes.channelName == previewChannelName {
+            // 样式预览卡：保持预览文案，仅按当前档位重刷
+            updatePreview(style: currentStyle)
+            return
+        }
         let isWake = activity.attributes.channelName == wakeChannelName
         let composedText = Self.compose(
             channelName: activity.attributes.channelName,

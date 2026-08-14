@@ -61,6 +61,21 @@ enum HomeWallpaper {
         return false
     }
 
+    /// S11：全局毛玻璃背景材质——开=ultraThinMaterial 磨砂；关=系统分组背景纯色。
+    /// 主页/功能页背景统一走这里，一处跟随 globalGlassEnabled。
+    static func glassBackground(enabled: Bool) -> AnyShapeStyle {
+        enabled
+            ? AnyShapeStyle(.ultraThinMaterial)
+            : AnyShapeStyle(Color(.systemGroupedBackground))
+    }
+
+    /// S11：全局毛玻璃卡片材质——开=ultraThinMaterial 磨砂；关=纯色卡片底。
+    static func glassCardBackground(enabled: Bool) -> AnyShapeStyle {
+        enabled
+            ? AnyShapeStyle(.ultraThinMaterial)
+            : AnyShapeStyle(Color(.secondarySystemBackground))
+    }
+
     /// 当前主页背景图：自定义照片优先，否则内置壁纸；
     /// 「默认」状态（noWallpaper）返回 nil = 无壁纸纯色；内置壁纸 id 0（蓝紫渐变）正常显示。
     static func currentImage(settings: AppSettings, screenSize: CGSize = UIScreen.main.bounds.size) -> UIImage? {

@@ -6,6 +6,35 @@ private struct WakeWordEdit: Identifiable, Equatable {
     var word: String
 }
 
+/// 语音助手通道网关探测：复用 DiagnosticsView 的鉴权检测逻辑
+/// （resolveHTTPToken 解析令牌 + Bearer 探测 /v1/models，404 回退 /health），
+/// 401/429/超时给明确中文提示。设置页与语音大卡共用。
+enum VoiceAgentGatewayProbe {
+    struct ProbeResult: Equatable {
+        let success: Bool
+        let message: String
+    }
+
+    static func run(settings: SettingsStore) async -> ProbeResult {
+        let result = await ConnectionDiagnostics.runAuth(settings: settings)
+        var message = result.detail
+        if result.detail.contains("HTTP 429") {
+            message = "请求过于频繁（HTTP 429）：网关限流，请稍后再试。"
+        } else if result.detail.contains("HTTP 408") {
+            message = "请求超时（HTTP 408）：请检查网关负载或稍后重试。"
+        }
+        return ProbeResult(success: result.success, message: message)
+    }
+}
+
+/// 语音助手通道「测试网关连接」按钮状态（设置页与语音大卡共用）。
+enum VoiceAgentGatewayTestState: Equatable {
+    case idle
+    case testing
+    case success
+    case failed(String)
+}
+
 /// 语音设置页：语音开关、文字转语音、语音转文字（原设置页三块原样搬入）。
 struct VoiceSettingsView: View {
     @Bindable var store: SettingsStore
@@ -17,10 +46,12 @@ struct VoiceSettingsView: View {
     @State private var showAddWakeWord = false
     @State private var newWakeWord = ""
     @State private var wakeWordEdits: [WakeWordEdit] = []
+    @State private var gatewayChannelTestState: VoiceAgentGatewayTestState = .idle
 
     var body: some View {
         NavigationStack {
             Form {
+                voiceAgentChannelSection
                 voiceSection
                 ttsSection
                 sttSection
@@ -70,6 +101,79 @@ struct VoiceSettingsView: View {
                 }
                 .presentationDetents([.height(220)])
             }
+        }
+    }
+
+    // MARK: - 语音助手通道连接
+
+    /// 语音助手通道连接区：网关模式下显示当前网关地址/令牌状态 + 测试按钮
+    /// （复用 DiagnosticsView 检测逻辑，401/429/超时给明确中文提示）。
+    private var voiceAgentChannelSection: some View {
+        Section {
+            LabeledContent("通道", value: voiceAgentChannelLabel)
+            switch store.settings.voiceAgentChannel {
+            case .gateway:
+                LabeledContent("网关地址", value: store.settings.gatewayURL.isEmpty ? "未配置" : store.settings.gatewayURL)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                LabeledContent("网关令牌", value: store.gatewayToken.isEmpty ? "未设置" : "已设置")
+                Button(action: { testGatewayChannel() }) {
+                    HStack {
+                        Text("测试网关连接")
+                        Spacer()
+                        switch gatewayChannelTestState {
+                        case .idle:
+                            Image(systemName: "bolt.horizontal.circle")
+                                .foregroundStyle(.openClawRed)
+                        case .testing:
+                            ProgressView().scaleEffect(0.8)
+                        case .success:
+                            Image(systemName: "checkmark.circle.fill")
+                                .foregroundStyle(.green)
+                        case .failed:
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundStyle(.red)
+                        }
+                    }
+                }
+                .disabled(store.settings.gatewayURL.isEmpty || gatewayChannelTestState == .testing)
+                if case .failed(let message) = gatewayChannelTestState {
+                    Text(message)
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                }
+                if case .success = gatewayChannelTestState {
+                    Text("网关连接正常：地址可达，令牌有效。")
+                        .font(.caption)
+                        .foregroundStyle(.green)
+                }
+            case .directDeepSeek:
+                let hasKey = !(SecureStorage.shared.getString("deepseek_api_key") ?? "").isEmpty
+                LabeledContent("DeepSeek API Key", value: hasKey ? "已配置" : "未配置")
+                Text("直连 DeepSeek 的 API Key 在「设置 > 语音助手通道」填写。")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        } header: {
+            Text("语音助手通道")
+        } footer: {
+            Text("语音助手回复走网关（OpenClaw）还是直连 DeepSeek；「测试网关连接」复用诊断页检测逻辑，401/429/超时会给出明确提示。")
+        }
+    }
+
+    private var voiceAgentChannelLabel: String {
+        switch store.settings.voiceAgentChannel {
+        case .gateway: return "网关"
+        case .directDeepSeek: return "直连 DeepSeek"
+        }
+    }
+
+    private func testGatewayChannel() {
+        store.save()
+        gatewayChannelTestState = .testing
+        Task {
+            let result = await VoiceAgentGatewayProbe.run(settings: store)
+            gatewayChannelTestState = result.success ? .success : .failed(result.message)
         }
     }
 

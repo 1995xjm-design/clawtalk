@@ -40,6 +40,11 @@ struct VoiceAssistantCardView: View, VoiceAssistantCardContent {
     @State private var showTranscript = false
     // 错误横幅自动消失任务
     @State private var errorAutoClearTask: Task<Void, Never>?
+    // 网关连接状态点：绿/红，点开显示原因（实时探测复用 DiagnosticsView 检测逻辑）
+    @State private var gatewayProbeResult: VoiceAgentGatewayProbe.ProbeResult?
+    @State private var isProbingGateway = false
+    @State private var showGatewayStatus = false
+    @State private var gatewayStatusMessage = ""
 
     private let cardHeight: CGFloat = 250
     private let firstUseDefaultsKey = "voiceAssistant.didShowFirstUseGuide"
@@ -94,6 +99,7 @@ struct VoiceAssistantCardView: View, VoiceAssistantCardContent {
             maybeShowFirstUseGuide()
             startTipRotation()
             startTextBreathing()
+            refreshGatewayProbeOnAppear()
         }
         .onDisappear {
             stopTipRotation()
@@ -286,6 +292,7 @@ struct VoiceAssistantCardView: View, VoiceAssistantCardContent {
 
     private var topBar: some View {
         HStack {
+            gatewayStatusDot
             if viewModel.isActive {
                 Text("长按退出")
                     .font(.system(size: 11, weight: .medium))
@@ -339,6 +346,119 @@ struct VoiceAssistantCardView: View, VoiceAssistantCardContent {
         case .driving: return "car.fill"
         case .night: return "moon.stars.fill"
         }
+    }
+
+    // MARK: - 网关连接状态点（绿/红，点开显示原因）
+
+    /// 语音大卡左上角小连接状态点：绿=通道就绪（网关已配置且令牌有效 / DeepSeek Key 已配置），
+    /// 红=缺少配置或探测失败；点按实时探测并弹出原因（复用 DiagnosticsView 检测逻辑）。
+    private var gatewayStatusDot: some View {
+        Button {
+            presentGatewayStatus()
+        } label: {
+            HStack(spacing: 5) {
+                if isProbingGateway {
+                    ProgressView()
+                        .controlSize(.mini)
+                        .tint(.white)
+                } else {
+                    Circle()
+                        .fill(gatewayDotColor)
+                        .frame(width: 9, height: 9)
+                        .overlay(Circle().stroke(.white.opacity(0.45), lineWidth: 1))
+                }
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 8)
+            .background(Capsule().fill(.black.opacity(0.28)))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(gatewayDotAccessibilityText)
+        .alert("网关连接状态", isPresented: $showGatewayStatus) {
+            Button("好", role: .cancel) {}
+        } message: {
+            Text(gatewayStatusMessage)
+        }
+    }
+
+    private var gatewayDotColor: Color {
+        if isProbingGateway { return .white.opacity(0.9) }
+        if let result = gatewayProbeResult {
+            return result.success ? .green : .red
+        }
+        return gatewayChannelConfigured ? .green : .red
+    }
+
+    /// 通道是否已就绪（网关模式：网关地址 + 令牌齐全；直连 DeepSeek：API Key 已配置）。
+    private var gatewayChannelConfigured: Bool {
+        switch settingsStore.settings.voiceAgentChannel {
+        case .directDeepSeek:
+            return !(SecureStorage.shared.getString("deepseek_api_key") ?? "").isEmpty
+        case .gateway:
+            let urlConfigured = !settingsStore.settings.gatewayURL
+                .trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            let token = OpenClawClient.resolveHTTPToken(
+                settingsToken: settingsStore.gatewayToken,
+                gatewayURL: settingsStore.settings.gatewayURL
+            )
+            return urlConfigured && !token.isEmpty
+        }
+    }
+
+    private var gatewayDotAccessibilityText: String {
+        switch settingsStore.settings.voiceAgentChannel {
+        case .directDeepSeek:
+            return "语音助手通道：直连 DeepSeek"
+        case .gateway:
+            return gatewayChannelConfigured ? "网关连接已配置" : "网关未配置或令牌缺失"
+        }
+    }
+
+    private func presentGatewayStatus() {
+        switch settingsStore.settings.voiceAgentChannel {
+        case .directDeepSeek:
+            let hasKey = !(SecureStorage.shared.getString("deepseek_api_key") ?? "").isEmpty
+            gatewayStatusMessage = hasKey
+                ? "通道：直连 DeepSeek\nAPI Key：已配置"
+                : "通道：直连 DeepSeek\nAPI Key：未配置（请到 设置 > 语音助手通道 填写）"
+            showGatewayStatus = true
+        case .gateway:
+            guard !isProbingGateway else { return }
+            refreshGatewayProbe(showResult: true)
+        }
+    }
+
+    /// 首次出现时静默探测一次，让圆点显示真实连接状态；之后再点按手动刷新。
+    private func refreshGatewayProbeOnAppear() {
+        guard settingsStore.settings.voiceAgentChannel == .gateway, gatewayProbeResult == nil else { return }
+        refreshGatewayProbe(showResult: false)
+    }
+
+    private func refreshGatewayProbe(showResult: Bool) {
+        guard !isProbingGateway else { return }
+        isProbingGateway = true
+        Task { @MainActor in
+            let result = await VoiceAgentGatewayProbe.run(settings: settingsStore)
+            isProbingGateway = false
+            gatewayProbeResult = result
+            if showResult {
+                gatewayStatusMessage = gatewayStatusMessage(for: result)
+                showGatewayStatus = true
+            }
+        }
+    }
+
+    private func gatewayStatusMessage(for result: VoiceAgentGatewayProbe.ProbeResult) -> String {
+        let url = settingsStore.settings.gatewayURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        let token = OpenClawClient.resolveHTTPToken(
+            settingsToken: settingsStore.gatewayToken,
+            gatewayURL: settingsStore.settings.gatewayURL
+        )
+        var lines: [String] = []
+        lines.append(url.isEmpty ? "网关地址：未配置" : "网关地址：\(url)")
+        lines.append(token.isEmpty ? "网关令牌：未获取到" : "网关令牌：已设置")
+        lines.append("探测结果：\(result.message)")
+        return lines.joined(separator: "\n")
     }
 
     // MARK: - 待机文字呼吸与提示轮播

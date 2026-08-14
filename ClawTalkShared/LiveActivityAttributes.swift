@@ -31,6 +31,8 @@ struct ClawTalkLiveActivityAttributes: ActivityAttributes {
         var statusText: String
         /// 卡片风格（LiveActivityStyle.rawValue）；旧活动实例无此字段时为 nil。
         var style: String?
+        /// 进度（0-1，标准/详细档显示进度条）；旧活动实例无此字段时为 nil。
+        var progress: Double? = nil
     }
 
     var channelName: String

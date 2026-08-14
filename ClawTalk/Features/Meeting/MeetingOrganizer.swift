@@ -257,7 +257,8 @@ enum MeetingLocalOrganizer {
     private static func extractAssignee(from text: String) -> String? {
         let patterns = ["由(.+?)负责", "由(.+?)处理", "由(.+?)来做", "交给(.+?)"]
         for pattern in patterns {
-            if let match = firstMatch(pattern, in: text) {
+            if let match = firstMatch(pattern, in: text),
+               match.groups.count > 1 {
                 let name = match.groups[1].trimmingCharacters(in: .whitespacesAndNewlines)
                 if !name.isEmpty {
                     return name
@@ -306,7 +307,8 @@ enum MeetingLocalOrganizer {
             let range = match.range(at: index)
             groups.append(range.location == NSNotFound ? "" : nsText.substring(with: range))
         }
-        return (groups[0], groups)
+        guard let whole = groups.first else { return nil }
+        return (whole, groups)
     }
 }
 

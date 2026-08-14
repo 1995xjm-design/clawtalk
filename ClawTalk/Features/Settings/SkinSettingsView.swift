@@ -1,7 +1,7 @@
 import PhotosUI
 import SwiftUI
 
-/// 皮肤设置页：主题（深/浅/跟随系统）、墙纸、全局毛玻璃、灵动岛。
+/// 皮肤设置页：主题（深/浅/跟随系统）、壁纸、全局毛玻璃、灵动岛。
 /// 由设置页「皮肤」入口打开（原「外观」区重构）。
 struct SkinSettingsView: View {
     @Bindable var store: SettingsStore
@@ -39,7 +39,7 @@ struct SkinSettingsView: View {
         }
     }
 
-    // MARK: - 墙纸（原「外观」区改名）
+    // MARK: - 壁纸（原「外观」区改名）
 
     private var wallpaperSection: some View {
         Section {
@@ -68,10 +68,11 @@ struct SkinSettingsView: View {
                 .accessibilityLabel("无壁纸（默认纯色）")
                 ForEach(0..<HomeWallpaper.builtinCount, id: \.self) { id in
                     Button {
-                        store.settings.homeThemeSource = .systemWallpaper
-                        store.settings.homeWallpaperID = id
-                        store.settings.homeWallpaperChosen = true
-                        store.save()
+                        store.updateSettings { settings in
+                            settings.homeThemeSource = .systemWallpaper
+                            settings.homeWallpaperID = id
+                            settings.homeWallpaperChosen = true
+                        }
                     } label: {
                         if let image = HomeWallpaper.builtinImage(id: id, size: CGSize(width: 54, height: 96)) {
                             Image(uiImage: image)
@@ -108,10 +109,11 @@ struct SkinSettingsView: View {
                     defer { themePhotoItem = nil }
                     guard let data = try? await item.loadTransferable(type: Data.self) else { return }
                     if let path = HomeWallpaper.saveCustomPhoto(data) {
-                        store.settings.customWallpaperPath = path
-                        store.settings.homeThemeSource = .customPhoto
-                        store.settings.homeWallpaperChosen = true
-                        store.save()
+                        store.updateSettings { settings in
+                            settings.customWallpaperPath = path
+                            settings.homeThemeSource = .customPhoto
+                            settings.homeWallpaperChosen = true
+                        }
                     }
                 }
             }
@@ -128,18 +130,19 @@ struct SkinSettingsView: View {
                 applyNoWallpaper()
             }
         } header: {
-            Text("墙纸")
+            Text("壁纸")
         } footer: {
             Text("无壁纸=默认纯色跟随深浅；选壁纸后深浅仅改变叠加与卡片。")
         }
     }
 
     private func applyNoWallpaper() {
-        store.settings.homeThemeSource = .noWallpaper
-        store.settings.homeWallpaperID = 0
-        store.settings.homeWallpaperChosen = false
-        store.settings.customWallpaperPath = nil
-        store.save()
+        store.updateSettings { settings in
+            settings.homeThemeSource = .noWallpaper
+            settings.homeWallpaperID = 0
+            settings.homeWallpaperChosen = false
+            settings.customWallpaperPath = nil
+        }
     }
 
     // MARK: - 全局毛玻璃
@@ -200,6 +203,16 @@ struct SkinSettingsView: View {
             }
             .padding(.vertical, 4)
 
+            Button {
+                ClawTalkLiveActivity.start(
+                    channelName: "语音助手",
+                    initialStatus: "正在聆听…"
+                )
+            } label: {
+                Label("开始预览", systemImage: "play.circle.fill")
+            }
+            .buttonStyle(.bordered)
+
             Toggle("随 agent 切换", isOn: $store.settings.liveActivityFollowAgent)
                 .onChange(of: store.settings.liveActivityFollowAgent) { _, _ in
                     refreshLiveActivityStyle()
@@ -207,7 +220,7 @@ struct SkinSettingsView: View {
         } header: {
             Text("灵动岛")
         } footer: {
-            Text("免提对话期间的锁屏/灵动岛卡片风格：简约=仅状态；标准=频道名+状态；详细=图标+频道名+状态两行。开启「随 agent 切换」后，切换频道/agent 时卡片自动改为新 agent 名称。Live Activity 本地更新仅在 App 前台/后台任务期间生效（未配置 APNs 推送更新）。")
+            Text("免提对话期间的锁屏/灵动岛卡片风格：简约=仅状态；标准=频道名+状态；详细=图标+频道名+状态两行。开启「随 agent 切换」后，切换频道/agent 时卡片自动改为新 agent 名称。Live Activity 本地更新仅在 App 前台/后台任务期间生效（未配置 APNs 推送更新）。「开始预览」会真实启动灵动岛卡片。")
         }
     }
 

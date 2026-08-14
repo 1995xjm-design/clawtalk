@@ -465,7 +465,8 @@ private final class LongAudioRecorder {
         }
         inputBuffer.frameLength = AVAudioFrameCount(samples.count)
         samples.withUnsafeBufferPointer { ptr in
-            inputBuffer.floatChannelData?[0].update(from: ptr.baseAddress!, count: samples.count)
+            guard let base = ptr.baseAddress else { return }
+            inputBuffer.floatChannelData?[0].update(from: base, count: samples.count)
         }
         var error: NSError?
         converter.convert(to: outputBuffer, error: &error) { _, status in

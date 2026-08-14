@@ -13,16 +13,24 @@ struct ClawTalkLiveActivityWidget: Widget {
             LiveActivityLockScreenView(
                 channelName: context.attributes.channelName,
                 statusText: context.state.statusText,
-                style: LiveActivityStyle(rawValue: context.state.style ?? "") ?? .standard
+                style: LiveActivityStyle(rawValue: context.state.style ?? "") ?? .standard,
+                progress: context.state.progress
             )
             .activityBackgroundTint(clawTalkRed.opacity(0.18))
         } dynamicIsland: { context in
+            let style = LiveActivityStyle(rawValue: context.state.style ?? "") ?? .standard
             DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
-                    Text(context.attributes.channelName)
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
+                    if style == .minimal {
+                        Image(systemName: "waveform.circle.fill")
+                            .font(.title3)
+                            .foregroundStyle(clawTalkRed)
+                    } else {
+                        Text(context.attributes.channelName)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
                 }
                 DynamicIslandExpandedRegion(.trailing) {
                     Image(systemName: "waveform.circle.fill")
@@ -30,9 +38,15 @@ struct ClawTalkLiveActivityWidget: Widget {
                         .foregroundStyle(clawTalkRed)
                 }
                 DynamicIslandExpandedRegion(.bottom) {
-                    Text(context.state.statusText)
-                        .font(.headline)
-                        .lineLimit(2)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(context.state.statusText)
+                            .font(.headline)
+                            .lineLimit(2)
+                        if let progress = context.state.progress, style != .minimal {
+                            ProgressView(value: progress)
+                                .tint(clawTalkRed)
+                        }
+                    }
                 }
             } compactLeading: {
                 CompactLeadingView(statusText: context.state.statusText)
@@ -48,12 +62,12 @@ struct ClawTalkLiveActivityWidget: Widget {
     }
 }
 
-/// 锁屏 / 横幅视图：状态文案 + 频道名（小字）。
-/// 锁屏 / 横幅视图：按风格渲染三档布局（简约=仅状态 / 标准=频道名+状态 / 详细=图标+频道名+状态）。
+/// 锁屏 / 横幅视图：按风格渲染三档布局（简约=仅状态 / 标准=状态+进度+频道名 / 详细=图标+频道名+状态+进度）。
 private struct LiveActivityLockScreenView: View {
     let channelName: String
     let statusText: String
     let style: LiveActivityStyle
+    let progress: Double?
 
     var body: some View {
         HStack(spacing: 12) {
@@ -67,6 +81,10 @@ private struct LiveActivityLockScreenView: View {
                     .font(.headline)
                     .lineLimit(2)
                     .minimumScaleFactor(0.8)
+                if let progress = progress, style != .minimal {
+                    ProgressView(value: progress)
+                        .tint(clawTalkRed)
+                }
                 if style != .minimal {
                     Text(channelName)
                         .font(.caption)

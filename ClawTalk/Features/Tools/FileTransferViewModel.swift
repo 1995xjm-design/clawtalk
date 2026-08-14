@@ -70,7 +70,8 @@ final class FileTransferViewModel {
 
     init(settings: SettingsStore) {
         self.settings = settings
-        let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
+            ?? FileManager.default.temporaryDirectory
         self.filesDirectory = documents.appendingPathComponent("files", isDirectory: true)
         try? FileManager.default.createDirectory(at: self.filesDirectory, withIntermediateDirectories: true)
     }

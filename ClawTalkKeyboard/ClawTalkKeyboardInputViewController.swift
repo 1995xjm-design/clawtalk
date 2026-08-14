@@ -9,9 +9,9 @@ import HamsterKeyboardKit
 import UIKit
 
 public class ClawTalkKeyboardInputViewController: KeyboardInputViewController {
-  /// 极简简体拼音九宫格：默认使用 chineseNineGrid 布局
+  /// 极简简体拼音九宫格：默认使用「IOS原生」布局（v049m；配置里显式选其他类型时由运行时 subject 切换）
   public override func viewDidLoad() {
     super.viewDidLoad()
-    setKeyboardType(.chineseNineGrid)
+    setKeyboardType(.chineseNineGridIOS)
   }
 }

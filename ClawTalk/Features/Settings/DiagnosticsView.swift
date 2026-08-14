@@ -766,7 +766,10 @@ struct ConnectionDiagnostics {
                     task.cancel(with: .goingAway, reason: nil)
                     throw StepError.timeout("等待网关消息超时")
                 }
-                let first = try await group.next()!
+                guard let first = try await group.next() else {
+                    group.cancelAll()
+                    throw StepError.timeout("等待网关消息超时")
+                }
                 group.cancelAll()
                 return first
             }
