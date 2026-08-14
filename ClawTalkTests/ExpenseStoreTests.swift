@@ -51,9 +51,7 @@ final class ExpenseStoreTests: XCTestCase {
     func testUpdateReplacesById() {
         let store = makeStore()
         let entry = store.add(amount: 10, type: .expense, category: .food, note: "before")!
-        var updated = entry
-        updated.note = "after"
-        updated.amount = 12
+        let updated = ExpenseEntry(id: entry.id, date: entry.date, amount: 12, type: .expense, category: .food, note: "after", createdAt: entry.createdAt)
         store.update(updated)
         XCTAssertEqual(store.entries.count, 1)
         XCTAssertEqual(store.entries[0].note, "after")
@@ -63,9 +61,7 @@ final class ExpenseStoreTests: XCTestCase {
     func testUpdateUnknownIDIsNoop() {
         let store = makeStore()
         let entry = store.add(amount: 10, type: .expense, category: .food)!
-        var ghost = entry
-        ghost.id = UUID()
-        ghost.note = "ghost"
+        let ghost = ExpenseEntry(amount: 10, type: .expense, category: .food, note: "ghost")
         store.update(ghost)
         XCTAssertEqual(store.entries.count, 1)
         XCTAssertEqual(store.entries[0].note, "")
