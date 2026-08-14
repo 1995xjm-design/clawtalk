@@ -108,7 +108,7 @@ enum ExpenseOCRTextParser {
 
     private static func makeDraft(amount: Double, from text: String) -> ExpenseVoiceParser.Draft? {
         guard amount > 0 else { return nil }
-        let isIncome = incomeKeywords.contains { text.contains($0) }
+        let isIncome = ExpenseVoiceParser.classifyIncome(text: text)
         return ExpenseVoiceParser.Draft(
             amount: amount,
             type: isIncome ? .income : .expense,
@@ -135,8 +135,4 @@ enum ExpenseOCRTextParser {
         return .other
     }
 
-    private static let incomeKeywords = [
-        "工资", "收到", "转入", "收款", "入账", "发了", "收入",
-        "奖金", "红包", "报销", "退款", "补贴"
-    ]
 }

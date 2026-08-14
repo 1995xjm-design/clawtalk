@@ -39,7 +39,7 @@ enum ExpenseVoiceParser {
 
         guard let amount = extractAmount(from: text) else { return nil }
 
-        let isIncome = incomeKeywords.contains { text.contains($0) }
+        let isIncome = classifyIncome(text: text)
         let type: ExpenseType = isIncome ? .income : .expense
         return Draft(
             amount: amount,
@@ -150,10 +150,29 @@ enum ExpenseVoiceParser {
 
     // MARK: - 收入词
 
+    /// 强收入词：单独出现即判收入
     private static let incomeKeywords = [
-        "工资", "收到", "转入", "收款", "入账", "发了", "收入",
-        "奖金", "红包", "报销", "退款", "补贴"
+        "??", "??", "??", "??", "??", "??", "??", "??", "??", "??", "??"
     ]
+    /// 弱收入词：需排除支付场景后才判收入（如收款/红包）
+    private static let incomeAmbiguousKeywords = ["收款", "红包"]
+    /// 支付场景词：支付截图常见（收款方/付款/支付/转账），优先判支出
+    private static let paymentSceneKeywords = ["收款方", "付款", "支付", "转账"]
+
+    /// 收入/支出判定（抗支付截图误判）：
+    /// “收款方”等支付场景词出现时只有强收入词才判收入；红包排除“发红包”。
+    static func classifyIncome(text: String) -> Bool {
+        let hasStrong = incomeKeywords.contains { text.contains($0) }
+        let hasPaymentScene = paymentSceneKeywords.contains { text.contains($0) }
+        if hasPaymentScene {
+            return hasStrong
+        }
+        if hasStrong { return true }
+        guard incomeAmbiguousKeywords.contains(where: { text.contains($0) }) else { return false }
+        // 弱词有明确支出语义时判支出
+        if text.contains("发红包") || text.contains("发了个红包") { return false }
+        return true
+    }
 
     // MARK: - 文本辅助
 
