@@ -595,7 +595,7 @@ struct ExpenseListView: View {
 
     }
 
-    /// ??????????????? List ? ForEach+Section ????????
+    /// Day section (extracted to avoid List ForEach inference ambiguity)
     private func daySection(day: Date, grouped: [Date: [ExpenseEntry]]) -> some View {
         let dayEntries = (grouped[day] ?? []).sorted { $0.createdAt > $1.createdAt }
         return Section(header: Text(Self.dayHeader(for: day))) {
