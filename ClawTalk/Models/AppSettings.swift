@@ -223,6 +223,7 @@ struct AppSettings: Codable {
         voiceInputEnabled: Bool,
         agentAPIMode: AgentAPIMode = .openResponses,
         voiceAgentChannel: VoiceAgentChannel = .gateway,
+        weatherCity: String = "??",
         showTokenUsage: Bool = false,
         useWebSocket: Bool = false,
         webSocketPath: String = "/ws",
@@ -242,8 +243,7 @@ struct AppSettings: Codable {
         homeWallpaperChosen: Bool = false,
         customWallpaperPath: String? = nil,
         globalGlassEnabled: Bool = false,
-        homeBlurStrength: Double = 0.55,
-        weatherCity: String = "??"
+        homeBlurStrength: Double = 0.55
     ) {
         self.gatewayURL = gatewayURL
         self.bootstrapToken = bootstrapToken
