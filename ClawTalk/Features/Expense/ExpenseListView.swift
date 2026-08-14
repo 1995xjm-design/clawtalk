@@ -592,6 +592,9 @@ struct ExpenseListView: View {
         }
         .listStyle(.insetGrouped)
 
+
+    }
+
     /// ??????????????? List ? ForEach+Section ????????
     private func daySection(day: Date, grouped: [Date: [ExpenseEntry]]) -> some View {
         let dayEntries = (grouped[day] ?? []).sorted { $0.createdAt > $1.createdAt }
@@ -607,7 +610,6 @@ struct ExpenseListView: View {
                 }
             }
         }
-    }
     }
 
     /// 日期分组标题：今天 / 昨天 / M月d日 星期X
