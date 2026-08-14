@@ -335,7 +335,7 @@ public final class ClawPanelOverlayView: UIView {
     ])
   }
 
-  override func layoutSubviews() {
+  public override func layoutSubviews() {
     super.layoutSubviews()
     // 波形容器首次布局后按当前状态重绘（bounds 就绪前动画位置无效）
     if !aiWaveContainer.isHidden, aiWaveContainer.bounds.height != lastWaveLayoutHeight {
