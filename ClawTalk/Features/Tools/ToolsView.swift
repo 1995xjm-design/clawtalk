@@ -68,6 +68,12 @@ struct ToolsView: View {
                             .foregroundStyle(Color.openClawRed)
                     }
                 } header: {
+                    NavigationLink {
+                        SkinSettingsView(store: settings)
+                    } label: {
+                        Label("主页壁纸", systemImage: "photo.on.rectangle.angled")
+                            .foregroundStyle(Color.openClawRed)
+                    }
                     Text("本地功能")
                 } footer: {
                     Text("添加 / 移除主页常用卡片，变更即时生效，功能不丢失。")

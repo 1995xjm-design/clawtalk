@@ -80,10 +80,20 @@ enum HomeWallpaper {
     /// 「默认」状态（noWallpaper）返回 nil = 无壁纸纯色；内置壁纸 id 0（蓝紫渐变）正常显示。
     static func currentImage(settings: AppSettings, screenSize: CGSize = UIScreen.main.bounds.size) -> UIImage? {
         if settings.homeThemeSource == .customPhoto,
-           let path = settings.customWallpaperPath,
-           let data = try? Data(contentsOf: URL(fileURLWithPath: path)),
-           let image = UIImage(data: data) {
-            return image
+           let path = settings.customWallpaperPath {
+            // 兼容旧版绝对路径；新版本存相对文件名（iOS 更新后沙箱绝对路径会变，绝对路径会让壁纸失效）
+            let url: URL
+            if path.contains("/") {
+                url = URL(fileURLWithPath: path)
+            } else if let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first {
+                url = dir.appendingPathComponent(path)
+            } else {
+                url = URL(fileURLWithPath: path)
+            }
+            if let data = try? Data(contentsOf: url),
+               let image = UIImage(data: data) {
+                return image
+            }
         }
         guard settings.homeThemeSource == .systemWallpaper else { return nil }
         return builtinImage(id: settings.homeWallpaperID, size: screenSize)
@@ -94,10 +104,12 @@ enum HomeWallpaper {
     static func saveCustomPhoto(_ data: Data) -> String? {
         let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
         guard let dir else { return nil }
-        let url = dir.appendingPathComponent("home-wallpaper.jpg")
+        // 存相对文件名：iOS 更新/重装后沙箱绝对路径会变，绝对路径会让壁纸失效
+        let fileName = "home-wallpaper.jpg"
+        let url = dir.appendingPathComponent(fileName)
         do {
             try data.write(to: url)
-            return url.path
+            return fileName
         } catch {
             return nil
         }
