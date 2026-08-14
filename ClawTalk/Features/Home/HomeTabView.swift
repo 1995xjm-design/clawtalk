@@ -251,6 +251,11 @@ struct HomeTabView: View {
         }
     }
 
+    /// 卡片跨列数：大卡占满整行（全部列），中卡小卡各占 1 列（一行 2 个）。
+    private func gridSpan(for size: HomeCardSize) -> Int {
+        size.gridColumns >= 4 ? columns.count : 1
+    }
+
     /// 单个卡片单元：编辑态 = 可拖动 / 移除 × / 尺寸切换；普通态 = 导航链接。
     @ViewBuilder
     private func cardCell(for kind: HomeCardKind) -> some View {
@@ -285,6 +290,7 @@ struct HomeTabView: View {
                         targetedKind = targeted ? kind : nil
                     }
                 }
+                .gridCellColumns(gridSpan(for: size))
         } else {
             NavigationLink {
                 destination(for: kind, size: size)
@@ -300,6 +306,7 @@ struct HomeTabView: View {
                         withAnimation(.easeIn(duration: 0.15)) { isEditingCards = true }
                     }
             )
+            .gridCellColumns(gridSpan(for: size))
         }
     }
 
