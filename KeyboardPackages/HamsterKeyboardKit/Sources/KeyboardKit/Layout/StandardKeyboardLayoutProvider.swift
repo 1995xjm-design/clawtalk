@@ -57,6 +57,11 @@ open class StandardKeyboardLayoutProvider: KeyboardLayoutProvider {
     return provider
   }()
 
+  /// 旧 Hamster 原版中文九宫格布局（de90be2 按键排布；仅旧 .chineseNineGrid 使用）
+  public lazy var legacyChineseNineGridLayoutProvider: LegacyChineseNineGridLayoutProvider = {
+    LegacyChineseNineGridLayoutProvider()
+  }()
+
   /// 自定义键盘布局
   public lazy var customizeKeyboardLayoutProvider: CustomizeKeyboardLayoutProvider = {
     let provider = CustomizeKeyboardLayoutProvider(keyboardLayoutProvider: self, keyboards: keyboardContext.keyboards)
@@ -100,7 +105,11 @@ open class StandardKeyboardLayoutProvider: KeyboardLayoutProvider {
     }
 
     if context.keyboardType.isChineseNineGrid {
-      return chineseNineGridLayoutProvider
+      // 旧 .chineseNineGrid（Hamster 原版）与 .chineseNineGridIOS（IOS原生）布局分离，
+      // 避免旧中文九键被 IOS 原生按键排布覆盖。
+      return context.keyboardType == .chineseNineGridIOS
+        ? chineseNineGridLayoutProvider
+        : legacyChineseNineGridLayoutProvider
     }
 
     if context.deviceType == .pad {
