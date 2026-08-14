@@ -67,15 +67,8 @@ open class KeyboardInputViewController: UIInputViewController, KeyboardControlle
       // 注意：不在键盘内自动读取剪贴板。iOS 16+ 读取剪贴板内容会弹「xx想从微信粘贴」提示，
       // 改为在 ClawTalk 剪贴板页面手动「立即记录」，避免输入时反复弹窗打扰。
 
-      // 每日洞察：满足间隔条件时后台触发 AI 分析
-      Task.detached(priority: .background) {
-        await AutoInsightService.shared.runIfNeeded()
-      }
-
-      // 智能调频：满足间隔条件时后台触发 AI 分析
-      Task.detached(priority: .background) {
-        await SmartFreqService.shared.runIfNeeded()
-      }
+      // v049i 排查：临时禁用键盘进程内的每日洞察/智能调频后台分析（怀疑 v049 新代码在键盘进程崩溃，
+      // 导致「系统打字键盘选了出不来」）；定位后由主 App/后台恢复。
     }
 
     // fix: 屏幕边缘按键触摸延迟
