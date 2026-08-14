@@ -161,7 +161,8 @@ targets:
         SWIFT_ACTIVE_COMPILATION_CONDITIONS: KEYBOARD_EXTENSION
         CODE_SIGN_ENTITLEMENTS: ClawTalkKeyboard/ClawTalkKeyboard.entitlements
         TARGETED_DEVICE_FAMILY: "1,2"
-        OTHER_LDFLAGS: "-Xlinker -interposable"
+        # FIX-HMSTR-004/005：-interposable 在 iOS 26 dyld 变更下导致键盘扩展加载崩溃（选了呼不出），改用 -no_fixup_chains
+        OTHER_LDFLAGS: "-Xlinker -no_fixup_chains"
 
   ClawTalkWidget:
     type: app-extension
