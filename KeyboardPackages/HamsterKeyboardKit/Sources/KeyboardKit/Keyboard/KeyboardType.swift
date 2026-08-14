@@ -121,6 +121,9 @@ public enum KeyboardType: Codable, Identifiable, Hashable {
    */
   case chineseNineGrid
 
+  /// ClawTalk IOS native 9-grid (shares the new iOS-like layout with chineseNineGrid)
+  case chineseNineGridIOS
+
   /**
    数字九宫格
    */
@@ -136,6 +139,9 @@ public enum KeyboardType: Codable, Identifiable, Hashable {
    */
   case classifySymbolicOfLight
 
+  /// ClawTalk English T9 page
+  case englishT9
+
   public func hash(into hasher: inout Hasher) {
     switch self {
     case .alphabetic(let casing): hasher.combine("alphabetic(\(casing.rawValue))")
@@ -149,6 +155,8 @@ public enum KeyboardType: Codable, Identifiable, Hashable {
     case .chineseNumeric: hasher.combine("chineseNumeric")
     case .chineseSymbolic: hasher.combine("chineseSymbolic")
     case .chineseNineGrid: hasher.combine("chineseNineGrid")
+    case .chineseNineGridIOS: hasher.combine("chineseNineGridIOS")
+    case .englishT9: hasher.combine("englishT9")
     case .numericNineGrid: hasher.combine("numericNineGrid")
     case .classifySymbolic: hasher.combine("classifySymbolic")
     case .classifySymbolicOfLight: hasher.combine("classifySymbolicOfLight")
@@ -173,6 +181,8 @@ public extension KeyboardType {
     case .custom(let name, let casing): return "custom_\(name)_\(casing.id)"
     case .chinese(let casing): return "chinese_\(casing.id)"
     case .chineseNineGrid: return "chineseNineGrid"
+    case .chineseNineGridIOS: return "chineseNineGridIOS"
+    case .englishT9: return "englishT9"
     case .numericNineGrid: return "numericNineGrid"
     case .classifySymbolic: return "classifySymbolic"
     case .classifySymbolicOfLight: return "classifySymbolicOfLight"
@@ -189,6 +199,7 @@ public extension KeyboardType {
   var isAlphabetic: Bool {
     switch self {
     case .alphabetic: return true
+    case .englishT9: return true
     default: return false
     }
   }
@@ -198,6 +209,7 @@ public extension KeyboardType {
     switch self {
     case .chinese: return true
     case .chineseNineGrid: return true
+    case .chineseNineGridIOS: return true
     case .chineseNumeric: return true
     case .chineseSymbolic: return true
     default:
@@ -248,6 +260,7 @@ public extension KeyboardType {
   var isChineseNineGrid: Bool {
     switch self {
     case .chineseNineGrid: return true
+    case .chineseNineGridIOS: return true
     default:
       return false
     }

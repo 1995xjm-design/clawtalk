@@ -71,10 +71,18 @@ final class SettingsStore {
         groupDefaults.set(gatewayToken, forKey: "gateway_token")
         groupDefaults.set("main", forKey: "agent_id")
         // 语音助手通道与 DeepSeek Key 状态同步（键盘 AI 面板据此走统一通道）
-        groupDefaults.set(settings.voiceAgentChannel.rawValue, forKey: "voice_agent_channel")
+        groupDefaults.set(voiceAgentChannelSyncValue, forKey: "voice_agent_channel")
         let hasDeepSeekKey = ((SecureStorage.shared.getString("deepseek_api_key") ?? "").isEmpty == false)
         groupDefaults.set(hasDeepSeekKey, forKey: "deepseek_configured")
         groupDefaults.synchronize()
+    }
+
+    /// 语音助手通道写入 App Group 的稳定英文标识（不用 rawValue：AppSettings 里是历史占位符）
+    private var voiceAgentChannelSyncValue: String {
+        switch settings.voiceAgentChannel {
+        case .gateway: return "gateway"
+        case .directDeepSeek: return "directDeepSeek"
+        }
     }
 
 }

@@ -1037,3 +1037,34 @@ public extension RimeContext {
     })
   }
 }
+
+public extension RimeContext {
+  /// Select a pinyin candidate: replace the current T9 code with the chosen pinyin.
+  /// Used by the pinyin row and the "select pinyin" key on the Chinese 9-grid home page.
+  @MainActor
+  func selectPinyinCandidate(_ pinyin: String) {
+    guard !pinyin.isEmpty else { return }
+
+    var startPos = 0
+    var inputKeys = getInputKeys()
+    let inputKeysCount = inputKeys.utf8.count
+
+    // Find where the chosen pinyin sits in the suffix input.
+    if let symbolT9Pinyin = pinyinToT9Mapping[pinyin] {
+      while !inputKeys.isEmpty {
+        if inputKeys.hasPrefix(symbolT9Pinyin) {
+          break
+        }
+        startPos += inputKeys.first?.utf8.count ?? 0
+        inputKeys = String(inputKeys.dropFirst())
+      }
+    }
+
+    // The pinyin already selected is at the end of the input.
+    if inputKeys.isEmpty, startPos == inputKeysCount, let selectCandidatePinyin = selectCandidatePinyin {
+      startPos = selectCandidatePinyin.1
+    }
+
+    _ = tryHandleReplaceInputTexts(pinyin, startPos: startPos, count: pinyin.utf8.count)
+  }
+}

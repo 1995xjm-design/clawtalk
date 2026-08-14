@@ -23,6 +23,7 @@ struct SettingsView: View {
     @State private var setupCodeInput = ""
     @State private var isPairing = false
     @State private var isRequestingPairingCode = false
+    @State private var deepSeekTestState: DeepSeekTestState = .idle
 
 
     // MARK: - 唤醒词编辑（本地 UUID 列表，避免 ForEach(id: \.offset) 删除/编辑越界崩溃）
@@ -51,6 +52,15 @@ struct SettingsView: View {
         case idle
         case testing
         case success
+        case failed(String)
+    }
+
+    /// DeepSeek ????????
+    /// DeepSeek 直连通道测试状态
+    enum DeepSeekTestState: Equatable {
+        case idle
+        case testing
+        case success(String)
         case failed(String)
     }
 
@@ -332,13 +342,46 @@ struct SettingsView: View {
         Section {
             Picker("通道", selection: $store.settings.voiceAgentChannel) {
                 ForEach(VoiceAgentChannel.allCases) { channel in
-                    Text(channel.rawValue).tag(channel)
+                    Text(voiceAgentChannelLabel(channel)).tag(channel)
                 }
             }
             .pickerStyle(.segmented)
             if store.settings.voiceAgentChannel == .directDeepSeek {
                 SecureField("DeepSeek API Key", text: $deepSeekKey)
                     .textContentType(.password)
+                Button(action: { testDeepSeekChannel() }) {
+                    HStack {
+                        Text("测试通道")
+                        Spacer()
+                        switch deepSeekTestState {
+                        case .idle:
+                            Image(systemName: "bolt.horizontal.circle")
+                                .foregroundStyle(.openClawRed)
+                        case .testing:
+                            ProgressView().scaleEffect(0.8)
+                        case .success:
+                            Image(systemName: "checkmark.circle.fill")
+                                .foregroundStyle(.green)
+                        case .failed:
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundStyle(.red)
+                        }
+                    }
+                }
+                .disabled(
+                    deepSeekKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                        || deepSeekTestState == .testing
+                )
+                if case .failed(let message) = deepSeekTestState {
+                    Text(message)
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                }
+                if case .success(let message) = deepSeekTestState {
+                    Text(message)
+                        .font(.caption)
+                        .foregroundStyle(.green)
+                }
                 Text("直连 DeepSeek 时使用，Key 保存在系统钥匙串（SecureStorage）。")
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -648,6 +691,76 @@ private var connectionSection: some View {
         }
     }
 
+    // MARK: - DeepSeek 通道测试
+
+    /// 语音助手通道中文显示（AppSettings 的 rawValue 是历史占位符，这里统一展示中文）。
+    private func voiceAgentChannelLabel(_ channel: VoiceAgentChannel) -> String {
+        switch channel {
+        case .gateway: return "网关"
+        case .directDeepSeek: return "直连 DeepSeek"
+        }
+    }
+
+    /// 测试 DeepSeek 直连通道：用当前 Key 发一个极小请求探测连通性（max_tokens=1）。
+    private func testDeepSeekChannel() {
+        let key = deepSeekKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !key.isEmpty else {
+            deepSeekTestState = .failed("请先填写 DeepSeek API Key")
+            return
+        }
+        // 先落盘（设置页 onChange 已实时写钥匙串，这里兜底一次）
+        SecureStorage.shared.setString(key, forKey: "deepseek_api_key")
+        deepSeekTestState = .testing
+        Task {
+            do {
+                guard let url = URL(string: DeepSeekDirectClient.endpoint) else {
+                    deepSeekTestState = .failed("DeepSeek 端点地址无效")
+                    return
+                }
+                var request = URLRequest(url: url)
+                request.httpMethod = "POST"
+                request.timeoutInterval = 15
+                request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
+                request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+                request.httpBody = try JSONSerialization.data(withJSONObject: [
+                    "model": "deepseek-chat",
+                    "messages": [["role": "user", "content": "ping"]],
+                    "max_tokens": 1,
+                    "stream": false,
+                ])
+                let (_, response) = try await URLSession.shared.data(for: request)
+                if let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) {
+                    deepSeekTestState = .success("DeepSeek 连通正常")
+                } else if let http = response as? HTTPURLResponse {
+                    deepSeekTestState = .failed(friendlyDeepSeekHTTPError(http.statusCode))
+                } else {
+                    deepSeekTestState = .failed("DeepSeek 返回了无法识别的响应")
+                }
+            } catch let error as URLError {
+                switch error.code {
+                case .notConnectedToInternet:
+                    deepSeekTestState = .failed("无网络连接")
+                case .timedOut:
+                    deepSeekTestState = .failed("连接超时，请检查网络")
+                default:
+                    deepSeekTestState = .failed("网络错误：\(error.localizedDescription)")
+                }
+            } catch {
+                deepSeekTestState = .failed(error.localizedDescription)
+            }
+        }
+    }
+
+    /// DeepSeek HTTP 错误转中文提示。
+    private func friendlyDeepSeekHTTPError(_ code: Int) -> String {
+        switch code {
+        case 401, 403: return "API Key 无效或已过期（\(code)）"
+        case 402: return "账户余额不足（\(code)）"
+        case 429: return "请求过于频繁，请稍后重试（\(code)）"
+        case 500, 502, 503: return "DeepSeek 服务暂时不可用（\(code)）"
+        default: return "DeepSeek 请求失败（\(code)）"
+        }
+    }
 
     // MARK: - Security Info
 

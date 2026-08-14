@@ -583,7 +583,8 @@ public class KeyboardSettingsViewModel: ObservableObject, Hashable, Identifiable
   public var keyboardLayoutList: [KeyboardType] {
     let list: [KeyboardType] = [
       .chinese(.lowercased),
-      .chineseNineGrid
+      .chineseNineGrid,
+      .chineseNineGridIOS
     ]
     return list + (HamsterConfigurationStore.shared.configuration.keyboards ?? []).map { $0.type }
   }
@@ -1695,6 +1696,7 @@ extension KeyboardType {
     switch self {
     case .chinese: return "中文26键"
     case .chineseNineGrid: return "中文9键"
+    case .chineseNineGridIOS: return "IOS原生"
     case .custom(let name, _): return name.isEmpty ? "自定义键盘" : "自定义-\(name)"
     case .numericNineGrid: return "数字九宫格"
     default: return ""
@@ -1705,6 +1707,7 @@ extension KeyboardType {
     switch self {
     case .chinese: return "chinese"
     case .chineseNineGrid: return "chineseNineGrid"
+    case .chineseNineGridIOS: return "chineseNineGridIOS"
     case .custom(let name, _): return "custom(\(name))"
     default: return ""
     }

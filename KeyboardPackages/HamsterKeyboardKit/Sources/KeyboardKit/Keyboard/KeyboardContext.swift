@@ -811,7 +811,7 @@ private extension KeyboardType {
   /// 检测键盘是否为主键盘类型，用于点击符号返回主键盘
   func isPrimaryKeyboard(_ customKeyboards: [Keyboard]) -> Bool {
     switch self {
-    case .chinese, .alphabetic, .chineseNineGrid: return true
+    case .chinese, .alphabetic, .chineseNineGrid, .chineseNineGridIOS: return true
     case .custom(let name, _):
       if let keyboard = customKeyboards.first(where: { $0.name == name }) {
         return keyboard.isPrimary

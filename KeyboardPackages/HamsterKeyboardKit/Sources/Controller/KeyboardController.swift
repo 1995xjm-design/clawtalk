@@ -151,5 +151,11 @@ public protocol KeyboardController: AnyObject {
   func selectSecondaryCandidate()
 
   /// 返回上一次的键盘
+  /// Select a pinyin candidate on the T9 grid.
+  func selectT9Pinyin()
+
+  /// Confirm the highlighted hanzi candidate on the T9 grid.
+  func confirmT9Candidate()
+
   func returnLastKeyboard()
 }

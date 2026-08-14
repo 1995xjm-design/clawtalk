@@ -17,6 +17,7 @@ public extension KeyboardContext {
    上下文的首选键盘类型基于当前键盘类型和 ``textDocumentProxy`` 的自动大写类型。
    */
   var preferredKeyboardType: KeyboardType {
+    if keyboardType == .englishT9 { return keyboardType }
     if keyboardType.isAlphabetic(.capsLocked) { return keyboardType }
     if keyboardType.isChinesePrimaryKeyboard(.capsLocked) { return keyboardType }
     if keyboardType.isCustom(.capsLocked) { return keyboardType }

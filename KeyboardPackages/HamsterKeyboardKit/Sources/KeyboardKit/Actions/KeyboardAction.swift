@@ -161,6 +161,15 @@ public enum KeyboardAction: Codable, Hashable {
   /// 清空拼写区域
   case cleanSpellingArea
 
+  /// Select a pinyin candidate on the T9 grid (replaces the current code with the chosen pinyin).
+  case t9SelectPinyin
+
+  /// Confirm the highlighted hanzi candidate on the T9 grid.
+  case t9ConfirmCandidate
+
+  /// English T9 letter-group key: inserts the first (lowercased) letter of the group.
+  case englishT9(Symbol)
+
   /// 中文分词
   /// 对应 rime 配置中：speller/delimiter 的配置
   case delimiter
@@ -204,6 +213,9 @@ public enum KeyboardAction: Codable, Hashable {
     case .returnLastKeyboard: hasher.combine("returnLastKeyboard")
     case .chineseNineGrid(let ls): hasher.combine("chineseNineGrid(\(ls.char))")
     case .cleanSpellingArea: hasher.combine("cleanSpellingArea")
+    case .t9SelectPinyin: hasher.combine("t9SelectPinyin")
+    case .t9ConfirmCandidate: hasher.combine("t9ConfirmCandidate")
+    case .englishT9(let symbol): hasher.combine("englishT9(${symbol.char})")
     case .delimiter: hasher.combine("delimiter")
     case .shortCommand(let ls): hasher.combine("shortCommand(\(ls.rawValue))")
     case .url(let url, let id): hasher.combine("url(\(url?.path ?? ""),\(id ?? ""))")
@@ -249,6 +261,9 @@ public enum KeyboardAction: Codable, Hashable {
     case (.returnLastKeyboard, .returnLastKeyboard): return true
     case (.chineseNineGrid(let ls), .chineseNineGrid(let rs)): return ls.char == rs.char
     case (.cleanSpellingArea, .cleanSpellingArea): return true
+    case (.t9SelectPinyin, .t9SelectPinyin): return true
+    case (.t9ConfirmCandidate, .t9ConfirmCandidate): return true
+    case (.englishT9(let ls), .englishT9(let rs)): return ls.char == rs.char
     case (.delimiter, .delimiter): return true
     case (.shortCommand(let ls), .shortCommand(let rs)): return ls == rs
     default: return false
@@ -330,6 +345,7 @@ public extension KeyboardAction {
     case .systemImage: return true
     case .symbol: return true
     case .chineseNineGrid: return true
+    case .englishT9: return true
     default: return false
     }
   }

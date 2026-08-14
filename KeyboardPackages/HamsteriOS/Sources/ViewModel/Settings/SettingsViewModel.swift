@@ -296,7 +296,13 @@ extension SettingsViewModel {
 
     // 无需部署：非首次运行 + 已部署 + 沙盒文件齐全 + 无中断残留
     let firstRunning = UserDefaults.standard.isFirstRunning
-    guard firstRunning || !alreadyDeployed || !rimeFilesReady || deployInterrupted else { return }
+    guard firstRunning || !alreadyDeployed || !rimeFilesReady || deployInterrupted else {
+      // 已部署且沙盒就绪：后台顺手把沙盒 Rime 同步到 App Group（键盘拼音；失败不影响启动）
+      DispatchQueue.global(qos: .utility).async {
+        FileManager.syncSandboxUserDataToAppGroupForClawTalkKeyboard()
+      }
+      return
+    }
 
     // 部署中提示（后台执行，主程序不再卡死）
     await ProgressHUD.animate(
@@ -333,6 +339,8 @@ extension SettingsViewModel {
             try self.rimeViewModel.rimeContext.deployment(configuration: &config, forceFullCheck: !alreadyDeployed || !rimeFilesReady)
             UserDefaults.hamster.set(true, forKey: "clawTalk_rime_deployed")
             UserDefaults.hamster.set(false, forKey: "clawTalk_rime_deploy_in_progress")
+            // 部署成功：沙盒 userData 已就绪，同步一份到 App Group 供键盘进程读取 Rime 拼音（失败不影响部署）
+            FileManager.syncSandboxUserDataToAppGroupForClawTalkKeyboard()
             continuation.resume(returning: config)
           } catch {
             UserDefaults.hamster.set(false, forKey: "clawTalk_rime_deploy_in_progress")

@@ -173,6 +173,9 @@ public extension KeyboardAction {
     case .returnLastKeyboard: return { $0?.returnLastKeyboard() }
     case .cleanSpellingArea: return { $0?.resetInputEngine() }
     case .delimiter: return { $0?.insertText("'") }
+    case .t9SelectPinyin: return { $0?.selectT9Pinyin() }
+    case .t9ConfirmCandidate: return { $0?.confirmT9Candidate() }
+    case .englishT9(let symbol): return { $0?.insertText(String(symbol.char.prefix(1)).lowercased()) }
     default: return nil
     }
   }
@@ -246,6 +249,9 @@ public extension KeyboardAction {
     case .returnLastKeyboard: return { $0?.returnLastKeyboard() }
     case .cleanSpellingArea: return { $0?.resetInputEngine() }
     case .delimiter: return { $0?.insertText("'") }
+    case .t9SelectPinyin: return { $0?.selectT9Pinyin() }
+    case .t9ConfirmCandidate: return { $0?.confirmT9Candidate() }
+    case .englishT9(let symbol): return { $0?.insertText(String(symbol.char.prefix(1)).lowercased()) }
     default: return nil
     }
   }

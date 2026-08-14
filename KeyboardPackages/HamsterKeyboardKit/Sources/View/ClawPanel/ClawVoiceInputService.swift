@@ -15,6 +15,11 @@ public final class ClawVoiceInputService: NSObject {
   /// 是否正在录音
   public private(set) var isRecording = false
 
+  /// 实时通话模式：中间识别结果回调
+  private var turnPartialHandler: ((String) -> Void)?
+  /// 实时通话模式：说话停顿自动停止计时器
+  private var silenceWorkItem: DispatchWorkItem?
+
   private override init() {
     super.init()
   }
@@ -105,6 +110,8 @@ public final class ClawVoiceInputService: NSObject {
 
   /// 停止录音，触发最终识别回调
   public func stop() {
+    silenceWorkItem?.cancel()
+    silenceWorkItem = nil
     guard isRecording else { return }
     recognitionRequest?.endAudio()
     audioEngine?.stop()
@@ -115,7 +122,97 @@ public final class ClawVoiceInputService: NSObject {
     isRecording = false
   }
 
+  /// 实时通话一轮识别：连续识别，partialHandler 回调中间结果；
+  /// 说话停顿超过 silenceTimeout 后自动结束本轮，onFinal 返回最终文本。
+  public func startTurn(
+    silenceTimeout: TimeInterval = 1.8,
+    partialHandler: @escaping (String) -> Void,
+    onFinal: @escaping (Result<String, Error>) -> Void
+  ) {
+    stop()
+    guard let recognizer, recognizer.isAvailable else {
+      ClawLog.record(module: "键盘语音", "语音识别器不可用")
+      onFinal(.failure(ClawVoiceError.recognizerUnavailable))
+      return
+    }
+
+    turnPartialHandler = partialHandler
+
+    let audioEngine = AVAudioEngine()
+    let request = SFSpeechAudioBufferRecognitionRequest()
+    request.shouldReportPartialResults = true
+    request.requiresOnDeviceRecognition = false
+
+    let inputNode = audioEngine.inputNode
+    let format = inputNode.outputFormat(forBus: 0)
+    guard format.sampleRate > 0 else {
+      ClawLog.record(module: "键盘语音", "麦克风输入格式无效")
+      turnPartialHandler = nil
+      onFinal(.failure(ClawVoiceError.audioUnavailable))
+      return
+    }
+    inputNode.installTap(onBus: 0, bufferSize: 1024, format: format) { buffer, _ in
+      request.append(buffer)
+    }
+
+    do {
+      let session = AVAudioSession.sharedInstance()
+      try session.setCategory(.record, mode: .measurement, options: [])
+      try session.setActive(true, options: .notifyOthersOnDeactivation)
+      audioEngine.prepare()
+      try audioEngine.start()
+    } catch {
+      inputNode.removeTap(onBus: 0)
+      turnPartialHandler = nil
+      ClawLog.record(module: "键盘语音", "录音启动失败：\(error.localizedDescription)")
+      onFinal(.failure(error))
+      return
+    }
+
+    self.audioEngine = audioEngine
+    self.recognitionRequest = request
+    isRecording = true
+
+    recognitionTask = recognizer.recognitionTask(with: request) { [weak self] result, error in
+      guard let self else { return }
+      if let result {
+        if result.isFinal {
+          self.silenceWorkItem?.cancel()
+          self.silenceWorkItem = nil
+          self.cleanup()
+          self.turnPartialHandler = nil
+          onFinal(.success(result.bestTranscription.formattedString))
+        } else {
+          let text = result.bestTranscription.formattedString
+          self.turnPartialHandler?(text)
+          self.scheduleSilenceStop(after: silenceTimeout)
+        }
+      } else if error != nil {
+        self.silenceWorkItem?.cancel()
+        self.silenceWorkItem = nil
+        self.cleanup()
+        self.turnPartialHandler = nil
+        ClawLog.record(module: "键盘语音", "语音识别失败：\(error?.localizedDescription ?? ClawVoiceError.unknown.localizedDescription)")
+        onFinal(.failure(error ?? ClawVoiceError.unknown))
+      }
+    }
+  }
+
+  /// 说话停顿超时后自动停止本轮，触发最终识别回调
+  private func scheduleSilenceStop(after timeout: TimeInterval) {
+    silenceWorkItem?.cancel()
+    let workItem = DispatchWorkItem { [weak self] in
+      guard let self, self.isRecording else { return }
+      self.stop()
+    }
+    silenceWorkItem = workItem
+    DispatchQueue.main.asyncAfter(deadline: .now() + timeout, execute: workItem)
+  }
+
   private func cleanup() {
+    silenceWorkItem?.cancel()
+    silenceWorkItem = nil
+    turnPartialHandler = nil
     audioEngine?.stop()
     audioEngine?.inputNode.removeTap(onBus: 0)
     audioEngine = nil

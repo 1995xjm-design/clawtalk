@@ -104,6 +104,23 @@ public extension KeyboardInputViewController {
   }
 
   /// 首选候选字上屏
+  /// Select the first pinyin candidate: replace the current T9 code with it.
+  func selectT9Pinyin() {
+    guard let pinyin = rimeContext.getPinyinCandidates().first, !pinyin.isEmpty else { return }
+    rimeContext.selectPinyinCandidate(pinyin)
+  }
+
+  /// Confirm the highlighted (autocomplete) hanzi candidate on the T9 grid.
+  func confirmT9Candidate() {
+    let suggestions = rimeContext.suggestions
+    guard !suggestions.isEmpty else { return }
+    if let index = suggestions.firstIndex(where: { $0.isAutocomplete }) {
+      rimeContext.selectCandidate(index: index)
+    } else {
+      rimeContext.selectCandidate(index: 0)
+    }
+  }
+
   func selectPrimaryCandidate() {
     rimeContext.selectCandidate(index: 0)
   }

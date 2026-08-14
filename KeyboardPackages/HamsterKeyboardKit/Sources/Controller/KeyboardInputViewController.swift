@@ -45,14 +45,11 @@ open class KeyboardInputViewController: UIInputViewController, KeyboardControlle
     // KeyboardUrlOpener.shared.controller = self
     setupCombineRIMEInput()
 
-    // ClawTalk: 面板输入桥接（面板输入框聚焦时按键直输进面板，否则直接上屏）
+    // ClawTalk: 建议条/面板「发送」→ 直接写入外部输入框（textDocumentProxy），
+    // 不经过面板输入框聚焦路由（面板聚焦仅拦截键盘字符/候选上屏）
     ClawPanelInputBridge.shared.sendText = { [weak self] text in
       guard let self else { return }
-      if self.keyboardContext.clawPanelInputActive {
-        ClawPanelInputBridge.shared.insertIntoPanel(text)
-      } else {
-        self.insertTextPatch(text)
-      }
+      self.insertToExternalProxy(text)
     }
   }
 
@@ -1106,6 +1103,15 @@ private extension KeyboardInputViewController {
     if returnToPrimaryKeyboard {
       keyboardContext.setKeyboardType(keyboardContext.returnKeyboardType())
     }
+  }
+
+  /// 建议条/面板「发送」：直接写入外部输入框（textDocumentProxy）。
+  /// 建议/AI 回复为完整句子，不做成对符号包裹；记录输入采集并投喂建议引擎。
+  func insertToExternalProxy(_ text: String) {
+    guard !text.isEmpty else { return }
+    clawTalkAppendText(text)
+    textDocumentProxy.insertText(text)
+    ClawSuggestionEngine.shared.feed(text)
   }
 }
 

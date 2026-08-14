@@ -7,15 +7,13 @@
 
 import UIKit
 
-/// 数字九宫格布局 Provider
+/// 数字页布局（ClawTalk IOS原生）
+/// 行1：1|2|3|4|删除
+/// 行2：5|6|7|8|9
+/// 行3：0|-|/|:|;
+/// 行4：(|)|¥|@|#+=
+/// 行5：ABC|,|.|空格|确认
 open class NumericNineGridKeyboardLayoutProvider: KeyboardLayoutProvider {
-  static let inputRows: InputSetRows = [
-    [InputSetItem("1"), InputSetItem("2"), InputSetItem("3")],
-    [InputSetItem("4"), InputSetItem("5"), InputSetItem("6")],
-    [InputSetItem("7"), InputSetItem("8"), InputSetItem("9")],
-    [InputSetItem("0")],
-  ]
-
   static let insets = UIEdgeInsets(top: 3, left: 3, bottom: 3, right: 3)
 
   private let keyboardContext: KeyboardContext
@@ -29,37 +27,28 @@ open class NumericNineGridKeyboardLayoutProvider: KeyboardLayoutProvider {
   }
 
   public func keyboardLayout(for context: KeyboardContext) -> KeyboardLayout {
-    let inputs = inputRows(for: context)
-    let actions = self.actions(for: inputs, context: context)
-    // TODO: 这里添加 swipe 属性
+    let actions = self.actions(context: context)
     let items = self.items(for: actions, context: context)
     return KeyboardLayout(itemRows: items)
   }
 
   public func register(inputSetProvider: InputSetProvider) {
-    // TODO: 不需要实现此方法
+    // no-op
   }
 
-  open func inputRows(for context: KeyboardContext) -> InputSetRows {
-    return Self.inputRows
-  }
-
-  open func actions(for rows: InputSetRows, context: KeyboardContext) -> KeyboardActionRows {
-    let inputActions = keyboardContext.numberKeyProcessByRimeOnNineGridOfNumericKeyboard
-      ? KeyboardActionRows(characters: rows.characters())
-      : KeyboardActionRows(symbols: rows.characters())
-    var result = KeyboardActionRows()
-    result.append(inputActions[0] + topTrailingActions(for: inputActions, context: context))
-    result.append(inputActions[1] + middleTrailingActions(for: inputActions, context: context))
-    result.append(inputActions[2] + lowerTrailingActions(for: inputActions, context: context))
-    result.append(bottomLeadingActions(for: inputActions, context: context) + inputActions[3] + bottomTrailingActions(for: inputActions, context: context))
-    return result
+  open func actions(context: KeyboardContext) -> KeyboardActionRows {
+    [
+      [.symbol(Symbol(char: "1")), .symbol(Symbol(char: "2")), .symbol(Symbol(char: "3")), .symbol(Symbol(char: "4")), .backspace],
+      [.symbol(Symbol(char: "5")), .symbol(Symbol(char: "6")), .symbol(Symbol(char: "7")), .symbol(Symbol(char: "8")), .symbol(Symbol(char: "9"))],
+      [.symbol(Symbol(char: "0")), .symbol(Symbol(char: "-")), .symbol(Symbol(char: "/")), .symbol(Symbol(char: ":")), .symbol(Symbol(char: ";"))],
+      [.symbol(Symbol(char: "(")), .symbol(Symbol(char: ")")), .symbol(Symbol(char: "¥")), .symbol(Symbol(char: "@")), .keyboardType(.classifySymbolic)],
+      [.keyboardType(.chineseNineGrid), .symbol(Symbol(char: ",")), .symbol(Symbol(char: ".")), .space, .primary(.custom(title: "确认"))],
+    ]
   }
 
   open func items(for actions: KeyboardActionRows, context: KeyboardContext) -> KeyboardLayoutItemRows {
     actions.enumerated().map { row in
       row.element.enumerated().map { action in
-        // TODO: 这里添加 swipe 属性
         item(for: action.element, row: row.offset, index: action.offset, context: context)
       }
     }
@@ -112,64 +101,6 @@ open class NumericNineGridKeyboardLayoutProvider: KeyboardLayoutProvider {
     return .primary(.return)
   }
 
-  /**
-   应用于顶行的附加 trailing 操作。
-   */
-  open func topTrailingActions(
-    for actions: KeyboardActionRows,
-    context: KeyboardContext
-  ) -> KeyboardActions {
-    return [.backspace]
-  }
-
-  /**
-   应用于中间行的附加 trailing 操作。
-   */
-  open func middleTrailingActions(
-    for actions: KeyboardActionRows,
-    context: KeyboardContext
-  ) -> KeyboardActions {
-    let action: KeyboardAction = keyboardContext.rightSymbolProcessByRimeOnNineGridOfNumericKeyboard
-      ? .characterOfDark(".")
-      : .symbolOfDark(.init(char: "."))
-    return [action]
-  }
-
-  /**
-   应用于下一行(相对与 middle 行)的附加 trailing 操作。
-   */
-  open func lowerTrailingActions(
-    for actions: KeyboardActionRows,
-    context: KeyboardContext
-  ) -> KeyboardActions {
-    let action: KeyboardAction = keyboardContext.rightSymbolProcessByRimeOnNineGridOfNumericKeyboard
-      ? .characterOfDark("@")
-      : .symbolOfDark(.init(char: "@"))
-    return [action]
-  }
-
-  /**
-   应用于下一行(相对与 middle 行)的附加 leading 操作。
-   */
-  open func bottomLeadingActions(
-    for actions: KeyboardActionRows,
-    context: KeyboardContext
-  ) -> KeyboardActions {
-    return [.returnLastKeyboard, .keyboardType(.classifySymbolicOfLight)]
-  }
-
-  /**
-    最下面一行
-   */
-  open func bottomTrailingActions(
-    for actions: KeyboardActionRows,
-    context: KeyboardContext
-  ) -> KeyboardActions {
-    return [.space, keyboardReturnAction(for: context)]
-  }
-
-  /// 最后面一行（空格所在行）小的按钮(如 `Return` 键)的宽度。
-  /// 注意：当系统为最后一行添加了更多的按键，则会使用此宽度
   open func smallBottomWidth(for context: KeyboardContext) -> KeyboardLayoutItemWidth {
     .percentage(keyboardContext.interfaceOrientation.isPortrait ? 0.165 : 0.135)
   }

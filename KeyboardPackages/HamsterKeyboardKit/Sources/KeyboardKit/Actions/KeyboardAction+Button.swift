@@ -68,6 +68,9 @@ public extension KeyboardAction {
     case .returnLastKeyboard: return "返回"
     case .symbol(let symbol), .symbolOfDark(let symbol): return symbol.char
     case .chineseNineGrid(let symbol): return symbol.char
+    case .englishT9(let symbol): return symbol.char
+    case .t9SelectPinyin: return "选拼音"
+    case .t9ConfirmCandidate: return "选定"
     case .cleanSpellingArea: return "重输"
     case .delimiter: return "分词"
     default: return nil

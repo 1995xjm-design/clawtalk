@@ -233,8 +233,8 @@ extension CandidateWordsCollectionView: UICollectionViewDelegateFlowLayout {
 
   public func collectionView(_ collectionView: UICollectionView, layout collectionViewLayout: UICollectionViewLayout, sizeForItemAt indexPath: IndexPath) -> CGSize {
     let isVerticalLayout: Bool = !self.candidatesViewState.isCollapse()
-    let heightOfCodingArea: CGFloat = keyboardContext.enableEmbeddedInputMode ? 0 : keyboardContext.heightOfCodingArea
-    let heightOfToolbar: CGFloat = keyboardContext.heightOfToolbar - heightOfCodingArea - 6
+    // ClawTalk IOS native: candidate row height is fixed at 44pt
+    let cellHeight: CGFloat = ClawIOSNativePalette.candidateRowHeight - 6
 
     guard indexPath.item < rimeContext.suggestions.count else { return .zero }
     let candidate = rimeContext.suggestions[indexPath.item]
@@ -263,7 +263,7 @@ extension CandidateWordsCollectionView: UICollectionViewDelegateFlowLayout {
     return CGSize(
       // 垂直布局下，cell 宽度不能大于屏幕宽度
       width: isVerticalLayout ? min(width, maxWidth) : width,
-      height: heightOfToolbar
+      height: cellHeight
     )
   }
 }

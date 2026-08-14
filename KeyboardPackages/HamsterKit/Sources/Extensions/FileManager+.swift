@@ -505,6 +505,17 @@ public extension FileManager {
     Logger.statistics.info("rime copySandboxUserDataDirectoryToAppGroupUserDirectory: filterRegex \(filterRegex)")
     try FileManager.incrementalCopy(src: sandboxUserDataDirectory, dst: appGroupUserDataDirectoryURL, filterRegex: filterRegex, filterMatchBreak: filterMatchBreak)
   }
+  /// ClawTalk 主 App 部署成功路径：把沙盒 userData 增量同步一份到 App Group，
+  /// 供键盘进程（完全访问）读取 Rime 拼音数据。同步失败不影响部署（仅记日志）。
+  static func syncSandboxUserDataToAppGroupForClawTalkKeyboard() {
+    do {
+      // App Group 目标目录可能尚未创建（首次部署），先确保存在再增量拷贝
+      try FileManager.createDirectory(dst: appGroupUserDataDirectoryURL)
+      try copySandboxUserDataDirectoryToAppGroup()
+    } catch {
+      ClawLog.record(module: "键盘RIME", "同步 Rime userData 到 App Group 失败: \(error.localizedDescription)")
+    }
+  }
 
   /// 拷贝 Sandbox 下 SharedSupport 目录至 AppGroup 下 SharedSupport 目录
   static func copySandboxSharedSupportDirectoryToAppleCloud(_ filterRegex: [String] = [], filterMatchBreak: Bool = true) throws {

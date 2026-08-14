@@ -556,6 +556,10 @@ public extension String {
       return .chinese(.lowercased)
     case "chineseNineGrid":
       return .chineseNineGrid
+    case "chineseNineGridIOS":
+      return .chineseNineGridIOS
+    case "englishT9":
+      return .englishT9
     case "numericNineGrid":
       return .numericNineGrid
     case "custom":
@@ -628,6 +632,11 @@ public extension String {
         return nil
       }
       return .chineseNineGrid(Symbol(char: value))
+    case "t9SelectPinyin".lowercased(): return .t9SelectPinyin
+    case "t9ConfirmCandidate".lowercased(): return .t9ConfirmCandidate
+    case "englishT9".lowercased():
+      guard !value.isEmpty else { return nil }
+      return .englishT9(Symbol(char: value))
     case "none": return KeyboardAction.none
     case "nextKeyboard".lowercased(): return KeyboardAction.nextKeyboard
     default:
@@ -676,6 +685,10 @@ public extension KeyboardType {
       return "chinese"
     case .chineseNineGrid:
       return "chineseNineGrid"
+    case .chineseNineGridIOS:
+      return "chineseNineGridIOS"
+    case .englishT9:
+      return "englishT9"
     case .numericNineGrid:
       return "numericNineGrid"
     case .classifySymbolic:
@@ -699,7 +712,9 @@ public extension KeyboardType {
       return "#+="
     case .classifySymbolic:
       return "符"
-    case .chinese, .chineseNineGrid, .custom:
+    case .englishT9:
+      return "ABC"
+    case .chinese, .chineseNineGrid, .chineseNineGridIOS, .custom:
       return "中"
     case .emojis:
       return "􀎸"
@@ -721,6 +736,9 @@ public extension KeyboardAction {
     case .space: return "空格"
     case .returnLastKeyboard: return "返回"
     case .chineseNineGrid(let symbol): return symbol.char
+    case .t9SelectPinyin: return "选拼音"
+    case .t9ConfirmCandidate: return "选定"
+    case .englishT9(let symbol): return symbol.char
     case .cleanSpellingArea: return "重输"
     case .delimiter: return "分词"
     case .shortCommand(let command): return command.text
@@ -755,6 +773,12 @@ public extension KeyboardAction {
       return "shortCommand(\(command.rawValue))"
     case .chineseNineGrid(let symbol):
       return "chineseNineGrid(\(symbol.char))"
+    case .t9SelectPinyin:
+      return "t9SelectPinyin"
+    case .t9ConfirmCandidate:
+      return "t9ConfirmCandidate"
+    case .englishT9(let symbol):
+      return "englishT9(\(symbol.char))"
     case .none:
       return "none"
     case .nextKeyboard:

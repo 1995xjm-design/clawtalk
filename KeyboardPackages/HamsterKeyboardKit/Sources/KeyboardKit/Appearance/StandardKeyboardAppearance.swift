@@ -63,6 +63,12 @@ open class StandardKeyboardAppearance: KeyboardAppearance {
     var style = KeyboardBackgroundStyle.standard
     style.backgroundColor = UIColor.white.withAlphaComponent(0.001)
 
+    // ClawTalk IOS native 9-grid: hardcoded keyboard base color #D2D2D7
+    if keyboardContext.keyboardType.isClawIOSNativeKeyboard {
+      style.backgroundColor = ClawIOSNativePalette.keyboardBackground
+      return style
+    }
+
     // 中文九宫格：跟随主题（默认=苹果原生）键盘底色
     if keyboardContext.keyboardType.isChineseNineGrid {
       style.backgroundColor = ClawPanelPalette.keyboardBackground
@@ -269,6 +275,11 @@ open class StandardKeyboardAppearance: KeyboardAppearance {
   ///
   /// 在给定的 `isPressed` 状态下，用于特定 `action` 的按键样式。
   open func buttonStyle(for action: KeyboardAction, isPressed: Bool) -> KeyboardButtonStyle {
+
+    // ClawTalk IOS native 9-grid: hardcoded colors / corner radius
+    if keyboardContext.keyboardType.isClawIOSNativeKeyboard {
+      return ClawIOSNativePalette.buttonStyle(for: action, isPressed: isPressed)
+    }
     let swipeFont = UIFont.systemFont(ofSize: 8)
 
     // 开启键盘配色

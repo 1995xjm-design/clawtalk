@@ -42,6 +42,13 @@ public final class ClawSuggestionEngine {
     suggestions = []
   }
 
+  /// 建议被发送后调用：清除当前建议，避免重复发送陈旧内容。
+  public func consume(_ text: String) {
+    if suggestions.contains(text) {
+      suggestions = []
+    }
+  }
+
   private func requestSuggestions(for text: String) {
     guard !requestInFlight else { return }
     lastRequestedText = text

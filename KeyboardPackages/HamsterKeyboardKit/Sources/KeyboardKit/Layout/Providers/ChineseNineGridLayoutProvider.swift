@@ -7,15 +7,17 @@
 
 import UIKit
 
-/// 中文九宫格布局
+/// 中文九宫格布局（ClawTalk IOS原生）
+/// 行1：123 | ,。？！ | ABC | DEF | 删除
+/// 行2：#@¥ | GHI | JKL | MNO | 分隔
+/// 行3：ABC | PQRS | TUV | WXYZ | 确认(纵向通高)
+/// 行4：😀表情 | 选拼音 | 选定 | 确认(纵向通高)
 public class ChineseNineGridLayoutProvider: KeyboardLayoutProvider {
   static let actionRows: KeyboardActionRows = [
-    [.chineseNineGrid(Symbol(char: "@/.")), .chineseNineGrid(Symbol(char: "ABC")), .chineseNineGrid(Symbol(char: "DEF")), .backspace],
-    // TODO: 分词
-//    [.delimiter, .chineseNineGrid(Symbol(char: "ABC")), .chineseNineGrid(Symbol(char: "DEF")), .backspace],
-    [.chineseNineGrid(Symbol(char: "GHI")), .chineseNineGrid(Symbol(char: "JKL")), .chineseNineGrid(Symbol(char: "MNO")), .cleanSpellingArea],
-    [.chineseNineGrid(Symbol(char: "PQRS")), .chineseNineGrid(Symbol(char: "TUV")), .chineseNineGrid(Symbol(char: "WXYZ"))],
-    [.keyboardType(.classifySymbolic), .keyboardType(.numericNineGrid), .space, .keyboardType(.alphabetic(.lowercased))],
+    [.keyboardType(.numericNineGrid), .chineseNineGrid(Symbol(char: ",。？！")), .keyboardType(.englishT9), .chineseNineGrid(Symbol(char: "DEF")), .backspace],
+    [.keyboardType(.classifySymbolic), .chineseNineGrid(Symbol(char: "GHI")), .chineseNineGrid(Symbol(char: "JKL")), .chineseNineGrid(Symbol(char: "MNO")), .delimiter],
+    [.keyboardType(.englishT9), .chineseNineGrid(Symbol(char: "PQRS")), .chineseNineGrid(Symbol(char: "TUV")), .chineseNineGrid(Symbol(char: "WXYZ")), .primary(.custom(title: "确认"))],
+    [.keyboardType(.emojis), .t9SelectPinyin, .t9ConfirmCandidate],
   ]
 
   static let insets = UIEdgeInsets(top: 3, left: 3, bottom: 3, right: 3)
@@ -26,29 +28,21 @@ public class ChineseNineGridLayoutProvider: KeyboardLayoutProvider {
 
   public func keyboardLayout(for context: KeyboardContext) -> KeyboardLayout {
     let actions = actions(context: context)
-    // TODO: 这里添加 swipe 属性
     let items = self.items(for: actions, context: context)
     return KeyboardLayout(itemRows: items)
   }
 
   public func register(inputSetProvider: InputSetProvider) {
-    // TODO: 不需要实现此方法
+    // no-op
   }
 
   open func actions(context: KeyboardContext) -> KeyboardActionRows {
-    let inputActions = Self.actionRows
-    var result = KeyboardActionRows()
-    result.append(inputActions[0])
-    result.append(inputActions[1])
-    result.append(inputActions[2] + lowerTrailingActions(for: inputActions, context: context))
-    result.append(inputActions[3])
-    return result
+    Self.actionRows
   }
 
   open func items(for actions: KeyboardActionRows, context: KeyboardContext) -> KeyboardLayoutItemRows {
     actions.enumerated().map { row in
       row.element.enumerated().map { action in
-        // TODO: 这里添加 swipe 属性
         item(for: action.element, row: row.offset, index: action.offset, context: context)
       }
     }
@@ -101,9 +95,7 @@ public class ChineseNineGridLayoutProvider: KeyboardLayoutProvider {
     return .primary(.return)
   }
 
-  /**
-   应用于下一行(相对与 middle 行)的附加 trailing 操作。
-   */
+  /// Trailing actions applied to the second-to-last row.
   open func lowerTrailingActions(
     for actions: KeyboardActionRows,
     context: KeyboardContext
@@ -111,18 +103,12 @@ public class ChineseNineGridLayoutProvider: KeyboardLayoutProvider {
     return [keyboardReturnAction(for: context)]
   }
 
-  /// 最后面一行（空格所在行）小的按钮(如 `Return` 键)的宽度。
-  /// 注意：当系统为最后一行添加了更多的按键，则会使用此宽度
+  /// Width of the small bottom keys (delete / confirm block).
   open func smallBottomWidth(for context: KeyboardContext) -> KeyboardLayoutItemWidth {
     .percentage(context.interfaceOrientation.isPortrait ? 0.165 : 0.135)
   }
 
-  /**
-   The system buttons that are shown to the left and right
-   of the third row's input buttons on a regular keyboard.
-
-   在普通键盘第三行 input 类型按钮的左右两侧，显示的系统按钮（如删除键，Shift键）的布局 item 的宽度
-   */
+  /// Width of the system keys on the bottom row.
   open func lowerSystemButtonWidth(for context: KeyboardContext) -> KeyboardLayoutItemWidth {
     return .percentage(0.13)
   }

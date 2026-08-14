@@ -1,75 +1,71 @@
 //
-//  ChineseNineGrid.swift
+//  EnglishT9Keyboard.swift
 //
-//
-//  Created by morse on 2023/9/5.
+//  ClawTalk「IOS原生」英文 T9 页（点 ABC 进入）。
 //
 
-import Combine
 import HamsterKit
 import HamsterUIKit
-import OSLog
 import UIKit
 
-/// 中文九宫格键盘（ClawTalk IOS原生）
-/// 行1：123 | ,。？！ | ABC | DEF | 删除
-/// 行2：#@¥ | GHI | JKL | MNO | 分隔
-/// 行3：ABC | PQRS | TUV | WXYZ | 确认(右侧纵向通高)
+/// 英文 T9 页（ClawTalk IOS原生）
+/// 行1：123 | QW | ER | TY | 删除
+/// 行2：UI | OP | AS | DF | 分隔
+/// 行3：GH | JK | LZ | XC | 确认(右侧纵向通高)
 /// 行4：😀表情 | 选拼音 | 选定 | 确认(右侧纵向通高)
-public class ChineseNineGridKeyboard: KeyboardTouchView {
-  // MARK: - Properties
-
-  private let keyboardLayoutProvider: ChineseNineGridLayoutProvider
+public class EnglishT9Keyboard: KeyboardTouchView {
   private let actionHandler: KeyboardActionHandler
   private let appearance: KeyboardAppearance
   private var keyboardContext: KeyboardContext
   private var calloutContext: KeyboardCalloutContext
   private var rimeContext: RimeContext
 
-  // 屏幕方向
   private var interfaceOrientation: InterfaceOrientation
-
   private var userInterfaceStyle: UIUserInterfaceStyle
-
-  // 键盘是否浮动
   private var isKeyboardFloating: Bool
 
-  /// 缓存所有按键视图
   private var keyboardRows: [[KeyboardButton]] = []
-
-  /// 静态视图约束
   private var staticConstraints: [NSLayoutConstraint] = []
-
-  private var dynamicHeightConstraints: [NSLayoutConstraint] = []
-
-  // combine
-  private var subscriptions = Set<AnyCancellable>()
+  private var dynamicConstraints: [NSLayoutConstraint] = []
 
   // MARK: - 计算属性
-
-  private var layout: KeyboardLayout {
-    keyboardLayoutProvider.keyboardLayout(for: keyboardContext)
-  }
 
   private var layoutConfig: KeyboardLayoutConfiguration {
     .standard(for: keyboardContext)
   }
 
+  private var actionRows: KeyboardActionRows {
+    [
+      [.keyboardType(.numericNineGrid), .englishT9(Symbol(char: "QW")), .englishT9(Symbol(char: "ER")), .englishT9(Symbol(char: "TY")), .backspace],
+      [.englishT9(Symbol(char: "UI")), .englishT9(Symbol(char: "OP")), .englishT9(Symbol(char: "AS")), .englishT9(Symbol(char: "DF")), .delimiter],
+      [.englishT9(Symbol(char: "GH")), .englishT9(Symbol(char: "JK")), .englishT9(Symbol(char: "LZ")), .englishT9(Symbol(char: "XC")), .primary(.custom(title: "确认"))],
+      [.keyboardType(.emojis), .t9SelectPinyin, .t9ConfirmCandidate],
+    ]
+  }
+
+  private var layout: KeyboardLayout {
+    let items = actionRows.enumerated().map { row -> KeyboardLayoutItemRow in
+      row.element.enumerated().map { action -> KeyboardLayoutItem in
+        KeyboardLayoutItem(
+          action: action.element,
+          size: KeyboardLayoutItemSize(width: .available, height: layoutConfig.rowHeight),
+          insets: UIEdgeInsets(top: 3, left: 3, bottom: 3, right: 3),
+          swipes: []
+        )
+      }
+    }
+    return KeyboardLayout(itemRows: items)
+  }
+
   // MARK: - Initialization
 
   public init(
-    keyboardLayoutProvider: KeyboardLayoutProvider,
     actionHandler: KeyboardActionHandler,
     appearance: KeyboardAppearance,
     keyboardContext: KeyboardContext,
     calloutContext: KeyboardCalloutContext,
     rimeContext: RimeContext
   ) {
-    if let keyboardLayoutProvider = keyboardLayoutProvider as? StandardKeyboardLayoutProvider {
-      self.keyboardLayoutProvider = keyboardLayoutProvider.chineseNineGridLayoutProvider
-    } else {
-      self.keyboardLayoutProvider = ChineseNineGridLayoutProvider()
-    }
     self.actionHandler = actionHandler
     self.appearance = appearance
     self.keyboardContext = keyboardContext
@@ -82,19 +78,11 @@ public class ChineseNineGridKeyboard: KeyboardTouchView {
     super.init(frame: .zero)
 
     setupKeyboardView()
-
-    combine()
   }
 
-  func combine() {
-    // 屏幕方向改变重新计算动态高度
-    keyboardContext.$interfaceOrientation
-      .receive(on: DispatchQueue.main)
-      .sink { [unowned self] in
-        guard interfaceOrientation != $0 else { return }
-        setNeedsUpdateConstraints()
-      }
-      .store(in: &subscriptions)
+  @available(*, unavailable)
+  required init?(coder: NSCoder) {
+    fatalError("init(coder:) has not been implemented")
   }
 
   // MARK: - Layout
@@ -107,7 +95,6 @@ public class ChineseNineGridKeyboard: KeyboardTouchView {
   }
 
   override public func constructViewHierarchy() {
-    // 添加按键
     for (rowIndex, row) in layout.itemRows.enumerated() {
       var tempRow = [KeyboardButton]()
       for (itemIndex, item) in row.enumerated() {
@@ -145,25 +132,23 @@ public class ChineseNineGridKeyboard: KeyboardTouchView {
     engine.build(on: self, rows: keyboardRows)
 
     staticConstraints = engine.staticConstraints
-    dynamicHeightConstraints = engine.dynamicHeightConstraints
+    dynamicConstraints = engine.dynamicHeightConstraints
   }
 
   override public func layoutSubviews() {
     super.layoutSubviews()
 
-    // 样式调整
     if userInterfaceStyle != keyboardContext.colorScheme {
       userInterfaceStyle = keyboardContext.colorScheme
       keyboardRows.forEach { $0.forEach { $0.setNeedsLayout() } }
     }
 
-    // 行高调整
     guard interfaceOrientation != keyboardContext.interfaceOrientation || isKeyboardFloating != keyboardContext.isKeyboardFloating else { return }
     interfaceOrientation = keyboardContext.interfaceOrientation
     isKeyboardFloating = keyboardContext.isKeyboardFloating
 
     let rowHeight = layoutConfig.rowHeight
-    dynamicHeightConstraints.forEach {
+    dynamicConstraints.forEach {
       $0.constant = rowHeight
     }
   }
