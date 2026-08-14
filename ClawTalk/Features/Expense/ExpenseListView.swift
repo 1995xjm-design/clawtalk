@@ -586,7 +586,8 @@ struct ExpenseListView: View {
         let dayKeys: [Date] = grouped.keys.sorted(by: >)
 
         return List {
-            ForEach(dayKeys, id: \.self) { day in
+            ForEach(dayKeys.indices, id: \.self) { index in
+                let day = dayKeys[index]
                 let dayEntries = (grouped[day] ?? []).sorted { $0.createdAt > $1.createdAt }
                 Section(header: Text(Self.dayHeader(for: day))) {
                     ForEach(dayEntries) { entry in
