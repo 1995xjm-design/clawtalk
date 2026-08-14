@@ -19,7 +19,7 @@ struct ClawTalkLiveActivityWidget: Widget {
             .activityBackgroundTint(clawTalkRed.opacity(0.18))
         } dynamicIsland: { context in
             let style = LiveActivityStyle(rawValue: context.state.style ?? "") ?? .standard
-            DynamicIsland {
+            return DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
                     if style == .minimal {
                         Image(systemName: "waveform.circle.fill")

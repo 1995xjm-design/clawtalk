@@ -1,11 +1,14 @@
 import Foundation
 
-/// 深链接处理：解析 clawtalk:// 链接（网关配对 / 打开频道）。
+/// 深链接处理：解析 clawtalk:// 链接（网关配对 / 打开频道 / 小组件快捷入口）。
 ///
 /// 支持格式：
 /// - clawtalk://pair?gateway=https%3A%2F%2Fhost&token=xxx&setupCode=xxx
 /// - clawtalk://connect?gateway=https%3A%2F%2Fhost&token=xxx
 /// - clawtalk://open?channel=频道名
+/// - clawtalk://expense（小组件：打开记账页）
+/// - clawtalk://camera（小组件：打开拍照记账入口）
+/// - clawtalk://home（小组件：只打开 App）
 ///
 /// 接线（由主智能体在 ClawTalkApp 完成）：
 /// 在 WindowGroup 根视图加 `.onOpenURL { url in DeepLinkHandler.handle(url, settings: settingsStore) }`，
@@ -17,6 +20,12 @@ enum DeepLinkHandler {
             case pair = "pair"
             case connect = "connect"
             case open = "open"
+            /// 小组件快捷入口：打开记账页（跳转由 ClawTalkApp 处理）
+            case expense = "expense"
+            /// 小组件快捷入口：打开拍照记账（跳转由 ClawTalkApp 处理）
+            case camera = "camera"
+            /// 小组件兜底：只打开 App
+            case home = "home"
         }
 
         let action: Action
@@ -55,6 +64,7 @@ enum DeepLinkHandler {
     /// 处理链接并写入设置；返回是否已处理。
     /// - pair/connect：写入网关地址与令牌（setupCode 作为令牌兜底），并跳过新手引导
     /// - open：仅解析，返回 channelName 是否存在，由调用方负责选中频道
+    /// - expense/camera/home：小组件快捷入口，仅确认已识别，页面跳转由 ClawTalkApp 负责
     @discardableResult
     static func handle(_ url: URL, settings: SettingsStore) -> Bool {
         guard let payload = parse(url) else { return false }
@@ -82,6 +92,9 @@ enum DeepLinkHandler {
 
         case .open:
             return payload.channelName != nil
+
+        case .expense, .camera, .home:
+            return true
         }
     }
 }

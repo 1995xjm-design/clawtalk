@@ -138,6 +138,8 @@ final class CareReminderStore {
         if let data = try? JSONEncoder().encode(reminders) {
             UserDefaults.standard.set(data, forKey: storageKey)
         }
+        // 提醒数据变化：通知主 App 刷新小组件（WidgetCenter.reloadAllTimelines）
+        NotificationCenter.default.post(name: WidgetDataSync.dataDidChangeNotification, object: nil)
     }
 
     private func sortByTime() {

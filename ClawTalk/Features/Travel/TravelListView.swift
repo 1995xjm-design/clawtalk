@@ -18,20 +18,14 @@ struct TravelListView: View {
     }
 
     var body: some View {
-        List {
-            Section {
-                GlobalVoiceInputEmbedded(settingsStore: settingsStore) { text, _ in
-                    applyVoiceText(text)
-                }
-            } header: {
-                Text("按住说话新建出行，松手识别")
-            }
+        VStack(spacing: 0) {
+            List {
 
             if store.trips.isEmpty {
                 ContentUnavailableView {
                     Label("暂无出行", systemImage: "airplane")
                 } description: {
-                    Text("点右上角「+」或按住上方按钮说「下周三去上海出差三天」。\n出行与清单数据只保存在本机。")
+                    Text("点右上角「+」或按住底部按钮说「下周三去上海出差三天」。\n出行与清单数据只保存在本机。")
                 } actions: {
                     Button("手动添加出行") {
                         openAddAlert()
@@ -117,6 +111,10 @@ struct TravelListView: View {
         .onAppear {
             voiceController.restoreWakeListening()
         }
+
+            Divider().opacity(0.3)
+            bottomArea
+        }
     }
 
     // MARK: - 出行行
@@ -196,6 +194,15 @@ struct TravelListView: View {
         for offset in offsets {
             store.delete(id: group[offset].id)
         }
+    }
+
+    // MARK: - 底部录音区（与长文摘要页一致）
+
+    private var bottomArea: some View {
+        GlobalVoiceInputEmbedded(settingsStore: settingsStore) { text, _ in
+            applyVoiceText(text)
+        }
+        .padding(.vertical, 10)
     }
 
     // MARK: - 手动新增（alert 表单）
@@ -345,15 +352,15 @@ struct TravelDetailView: View {
     }
 
     var body: some View {
-        List {
-            if let trip {
-                headerSection(trip)
-                reminderSection(trip)
-                checklistSection(trip)
-                itinerarySection(trip)
-                notesSection(trip)
-                voiceUpdateSection(trip)
-            } else {
+        VStack(spacing: 0) {
+            List {
+                if let trip {
+                    headerSection(trip)
+                    reminderSection(trip)
+                    checklistSection(trip)
+                    itinerarySection(trip)
+                    notesSection(trip)
+                } else {
                 Section {
                     ContentUnavailableView("出行不存在", systemImage: "questionmark.circle")
                 }
@@ -379,6 +386,22 @@ struct TravelDetailView: View {
         }
         .onAppear {
             voiceController.restoreWakeListening()
+        }
+
+            Divider().opacity(0.3)
+            bottomArea
+        }
+    }
+
+    // MARK: - 底部录音区（与长文摘要页一致）
+
+    @ViewBuilder
+    private var bottomArea: some View {
+        if let trip {
+            GlobalVoiceInputEmbedded(settingsStore: settingsStore) { text, _ in
+                applyVoiceUpdate(text)
+            }
+            .padding(.vertical, 10)
         }
     }
 

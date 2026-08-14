@@ -41,10 +41,11 @@ final class ExpenseStore {
         type: ExpenseType,
         category: ExpenseCategory,
         note: String = "",
+        photoFileName: String? = nil,
         date: Date = Date()
     ) -> ExpenseEntry? {
         guard amount > 0 else { return nil }
-        let entry = ExpenseEntry(date: date, amount: amount, type: type, category: category, note: note)
+        let entry = ExpenseEntry(date: date, amount: amount, type: type, category: category, note: note, photoFileName: photoFileName)
         entries.append(entry)
         persist()
         return entry
@@ -60,6 +61,9 @@ final class ExpenseStore {
     /// 删除单条
     func delete(_ id: UUID) {
         guard let index = entries.firstIndex(where: { $0.id == id }) else { return }
+        if let photoFileName = entries[index].photoFileName {
+            deletePhoto(fileName: photoFileName)
+        }
         entries.remove(at: index)
         persist()
     }
@@ -92,6 +96,24 @@ final class ExpenseStore {
         monthSummary(for: date).expense
     }
 
+    // MARK: - 照片附件
+
+    /// 保存记账照片数据（Application Support/ClawTalk/ExpensePhotos/），返回相对文件名。
+    func savePhoto(_ data: Data) -> String? {
+        try? ExpensePhotoStore.save(data)
+    }
+
+    /// 删除记账照片文件（幂等；账目删除时联动调用）。
+    func deletePhoto(fileName: String) {
+        ExpensePhotoStore.delete(fileName: fileName)
+    }
+
+    /// 按文件名取照片完整 URL（目录创建失败返回 nil）。
+    func photoURL(fileName: String) -> URL? {
+        ExpensePhotoStore.url(fileName: fileName)
+    }
+
+
     // MARK: - 持久化
 
     /// 从 UserDefaults 重新读取（主页卡片返回时刷新摘要）
@@ -103,6 +125,8 @@ final class ExpenseStore {
         if let data = try? JSONEncoder().encode(entries) {
             UserDefaults.standard.set(data, forKey: Self.defaultsKey)
         }
+        // 记账数据变化：通知主 App 刷新小组件（WidgetCenter.reloadAllTimelines）
+        NotificationCenter.default.post(name: WidgetDataSync.dataDidChangeNotification, object: nil)
     }
 
     private func load() {
@@ -112,5 +136,38 @@ final class ExpenseStore {
             return
         }
         entries = decoded
+    }
+}
+
+
+/// 记账照片文件存储：Application Support/ClawTalk/ExpensePhotos/（复用 ParkingPhotoStore 模式）。
+enum ExpensePhotoStore {
+
+    static func directory() throws -> URL {
+        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+            ?? FileManager.default.temporaryDirectory
+        let dir = base.appendingPathComponent("ClawTalk/ExpensePhotos", isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir
+    }
+
+    /// 保存照片数据（调用方统一转 JPEG），返回相对文件名。
+    static func save(_ data: Data) throws -> String {
+        let name = "expense-\\(UUID().uuidString.prefix(8).lowercased()).jpg"
+        let url = try directory().appendingPathComponent(name)
+        try data.write(to: url, options: .atomic)
+        return name
+    }
+
+    /// 删除照片文件（幂等）。
+    static func delete(fileName: String) {
+        guard let url = url(fileName: fileName) else { return }
+        try? FileManager.default.removeItem(at: url)
+    }
+
+    /// 按文件名拼完整 URL（目录创建失败返回 nil）。
+    static func url(fileName: String) -> URL? {
+        guard let dir = try? directory() else { return nil }
+        return dir.appendingPathComponent(fileName)
     }
 }

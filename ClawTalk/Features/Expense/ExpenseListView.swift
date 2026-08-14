@@ -1,5 +1,8 @@
 import Foundation
+import HamsterKit
+import PhotosUI
 import SwiftUI
+import UIKit
 
 /// 语音记账录音状态。
 enum ExpenseRecordingState: Equatable {
@@ -198,6 +201,25 @@ struct ExpenseListView: View {
     @State private var manualCategory: ExpenseCategory = .other
     @State private var manualNote = ""
     @State private var manualError: String?
+    // 拍照记账（相机 / 相册 → OCR）
+    @State private var showPhotoActionSheet = false
+    @State private var showCamera = false
+    @State private var showPhotoPicker = false
+    @State private var photoPickerItem: PhotosPickerItem?
+    @State private var manualPhotoItem: PhotosPickerItem?
+    @State private var isOCRWorking = false
+    @State private var ocrError: String?
+    /// 待保存/待补齐的记账照片（OCR 结果或手动附件；保存后清空）
+    @State private var pendingPhotoData: Data?
+
+    // 导出 Excel
+    @State private var showExportRangeSheet = false
+    @State private var exportFile: ExpenseExportFile?
+    @State private var exportError: String?
+
+    // 查看大图
+    @State private var previewPhoto: ExpensePhotoPreview?
+
 
     private let settingsStore: SettingsStore
     private let hapticsEnabled: Bool
@@ -237,6 +259,11 @@ struct ExpenseListView: View {
             } else {
                 entryList
             }
+
+            Divider().opacity(0.3)
+                .padding(.top, 12)
+            bottomArea
+                .padding(.horizontal, 16)
         }
         .background(Color(.systemBackground))
         .onAppear {
@@ -249,18 +276,58 @@ struct ExpenseListView: View {
         .alert(item: $confirmItem) { item in
             Alert(
                 title: Text("已记一笔"),
-                message: Text("\(item.draft.type.rawValue) ¥\(item.draft.amount.expenseAmountText) · \(item.draft.category.rawValue)\n「\(item.draft.note)」"),
+                message: Text("\(item.draft.type.rawValue) ¥\(item.draft.amount.expenseAmountText) · \(item.draft.category.rawValue)\n「\(item.draft.note)」" + (item.photoData != nil ? "\n（已附带照片）" : "")),
                 primaryButton: .default(Text("好")) {
-                    saveDraft(item.draft)
+                    saveDraft(item.draft, photoData: item.photoData)
                 },
                 secondaryButton: .cancel(Text("记错了")) {
-                    presentManualEdit(from: item.draft)
+                    presentManualEdit(from: item.draft, photoData: item.photoData)
                 }
             )
         }
         .sheet(isPresented: $showManualSheet) {
             manualSheet
         }
+        .sheet(isPresented: $showCamera) {
+            ExpenseCameraPicker { image in
+                guard let data = image.jpegData(compressionQuality: 0.85) else {
+                    ocrError = "照片处理失败，请重试"
+                    return
+                }
+                handleSelectedPhotoData(data)
+            }
+            .ignoresSafeArea()
+        }
+        .photosPicker(isPresented: $showPhotoPicker, selection: $photoPickerItem, matching: .images)
+        .onChange(of: photoPickerItem) { _, newItem in
+            loadPickedPhoto(newItem)
+        }
+        .sheet(item: $exportFile) { file in
+            ExpenseExportShareSheet(file: file) {
+                exportFile = nil
+            }
+        }
+        .sheet(item: $previewPhoto) { preview in
+            ExpensePhotoViewer(fileName: preview.fileName)
+        }
+
+    }
+
+    // MARK: - 底部录音区（与长文摘要页一致）
+
+    private var bottomArea: some View {
+        GlobalVoiceInputEmbedded(settingsStore: settingsStore) { text, _ in
+            handleExpenseTranscript(text)
+        }
+        .alert("没听清金额", isPresented: $showParseFailAlert) {
+            Button("手动填写") {
+                presentManualEdit(transcript: parseFailTranscript)
+            }
+            Button("取消", role: .cancel) {}
+        } message: {
+            Text("这句话里没找到金额，请手动填写金额和类别。")
+        }
+        .padding(.vertical, 10)
     }
 
     // MARK: - 导航栏
@@ -290,18 +357,6 @@ struct ExpenseListView: View {
 
     private var actionArea: some View {
         VStack(spacing: 10) {
-            GlobalVoiceInputEmbedded(settingsStore: settingsStore) { text, _ in
-                handleExpenseTranscript(text)
-            }
-            .alert("没听清金额", isPresented: $showParseFailAlert) {
-                    Button("手动填写") {
-                        presentManualEdit(transcript: parseFailTranscript)
-                    }
-                    Button("取消", role: .cancel) {}
-                } message: {
-                    Text("这句话里没找到金额，请手动填写金额和类别。")
-                }
-
             Button(action: presentManualAdd) {
                 Label("手动添加", systemImage: "plus")
                     .font(.subheadline.weight(.medium))
@@ -314,6 +369,54 @@ struct ExpenseListView: View {
                     )
             }
             .buttonStyle(.plain)
+            HStack(spacing: 10) {
+                Button {
+                    showPhotoActionSheet = true
+                } label: {
+                    Label(isOCRWorking ? "识别中…" : "拍照记账", systemImage: isOCRWorking ? "hourglass" : "camera.fill")
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(.primary)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                        .background(
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .fill(Color(.secondarySystemGroupedBackground))
+                        )
+                }
+                .buttonStyle(.plain)
+                .disabled(isOCRWorking)
+                .confirmationDialog("拍照记账", isPresented: $showPhotoActionSheet, titleVisibility: .visible) {
+                    Button("拍照") {
+                        presentCameraIfAvailable()
+                    }
+                    Button("从相册选择") {
+                        showPhotoPicker = true
+                    }
+                    Button("取消", role: .cancel) {}
+                }
+
+                Button {
+                    showExportRangeSheet = true
+                } label: {
+                    Label("导出 Excel", systemImage: "tablecells")
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(.primary)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                        .background(
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .fill(Color(.secondarySystemGroupedBackground))
+                        )
+                }
+                .buttonStyle(.plain)
+                .disabled(isOCRWorking)
+                .confirmationDialog("导出范围", isPresented: $showExportRangeSheet, titleVisibility: .visible) {
+                    Button("本月账目") { buildExportFile(scope: .month) }
+                    Button("全部账目") { buildExportFile(scope: .all) }
+                    Button("取消", role: .cancel) {}
+                }
+            }
+
 
             if let errorMessage = recording.errorMessage {
                 Text(errorMessage)
@@ -322,6 +425,29 @@ struct ExpenseListView: View {
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: .infinity)
             }
+            if isOCRWorking {
+                HStack(spacing: 8) {
+                    ProgressView()
+                    Text("正在识别小票文字…")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            if let ocrError {
+                Text(ocrError)
+                    .font(.footnote)
+                    .foregroundStyle(.red)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: .infinity)
+            }
+            if let exportError {
+                Text(exportError)
+                    .font(.footnote)
+                    .foregroundStyle(.red)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: .infinity)
+            }
+
         }
     }
 
@@ -464,7 +590,9 @@ struct ExpenseListView: View {
                 let dayEntries = (grouped[day] ?? []).sorted { $0.createdAt > $1.createdAt }
                 Section(header: Text(Self.dayHeader(for: day))) {
                     ForEach(dayEntries) { entry in
-                        ExpenseEntryRow(entry: entry)
+                        ExpenseEntryRow(entry: entry) { fileName in
+                            previewPhoto = ExpensePhotoPreview(fileName: fileName)
+                        }
                     }
                     .onDelete { offsets in
                         for offset in offsets {
@@ -497,7 +625,7 @@ struct ExpenseListView: View {
                 .foregroundStyle(.secondary)
             Text("还没有记账")
                 .font(.headline)
-            Text("按住上方「按住说话记账」说一句，比如「买咖啡花了28」或「收到工资8000」，会自动记一笔；也可以点「手动添加」自己填。")
+            Text("按住底部麦克风说一句，比如「买咖啡花了28」或「收到工资8000」，会自动记一笔；也可以点「拍照记账」拍小票自动识别，或「手动添加」自己填。")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -521,20 +649,23 @@ struct ExpenseListView: View {
     private func handleOutcome(_ outcome: ExpenseRecordingController.Outcome) {
         switch outcome {
         case .parsed(let draft):
-            confirmItem = ExpenseConfirmItem(draft: draft)
+            confirmItem = ExpenseConfirmItem(draft: draft, photoData: nil)
         case .needsManual(let transcript):
             parseFailTranscript = transcript
             showParseFailAlert = true
         }
     }
 
-    private func saveDraft(_ draft: ExpenseVoiceParser.Draft) {
+    private func saveDraft(_ draft: ExpenseVoiceParser.Draft, photoData: Data? = nil) {
+        let photoFileName = savePendingPhoto(photoData)
         store.add(
             amount: draft.amount,
             type: draft.type,
             category: draft.category,
-            note: draft.note
+            note: draft.note,
+            photoFileName: photoFileName
         )
+        pendingPhotoData = nil
     }
 
     // MARK: - 手动填写
@@ -545,6 +676,7 @@ struct ExpenseListView: View {
         manualCategory = .other
         manualNote = ""
         manualError = nil
+        pendingPhotoData = nil
         showManualSheet = true
     }
 
@@ -555,8 +687,20 @@ struct ExpenseListView: View {
         manualCategory = draft.category
         manualNote = draft.note
         manualError = nil
+        pendingPhotoData = nil
         showManualSheet = true
     }
+    /// OCR 识别成功但用户点「记错了」：带入已解析的值 + 照片
+    private func presentManualEdit(from draft: ExpenseVoiceParser.Draft, photoData: Data?) {
+        manualAmountText = draft.amount.expenseAmountText
+        manualType = draft.type
+        manualCategory = draft.category
+        manualNote = draft.note
+        pendingPhotoData = photoData
+        manualError = nil
+        showManualSheet = true
+    }
+
 
     /// 解析失败：原话带入备注，金额留空手动填
     private func presentManualEdit(transcript: String) {
@@ -565,8 +709,131 @@ struct ExpenseListView: View {
         manualCategory = .other
         manualNote = transcript
         manualError = nil
+        pendingPhotoData = nil
         showManualSheet = true
     }
+
+    /// OCR 没识别出金额：OCR 原文带入备注，照片自动带上（诚实，手动补齐）。
+    private func presentManualEdit(photoData: Data, note: String) {
+        manualAmountText = ""
+        manualType = .expense
+        manualCategory = .other
+        manualNote = note
+        pendingPhotoData = photoData
+        manualError = nil
+        showManualSheet = true
+    }
+
+    // MARK: - 拍照记账（相机 / 相册 → OCR）
+
+    /// 相机可用才弹相机，否则回退相册（模拟器/无相机设备）。
+    private func presentCameraIfAvailable() {
+        guard UIImagePickerController.isSourceTypeAvailable(.camera) else {
+            ocrError = "此设备没有可用相机，已改为从相册选择"
+            showPhotoPicker = true
+            return
+        }
+        showCamera = true
+    }
+
+    /// 相册选中照片 → 读取数据 → OCR。
+    private func loadPickedPhoto(_ item: PhotosPickerItem?) {
+        photoPickerItem = nil
+        guard let item else { return }
+        Task {
+            do {
+                if let data = try await item.loadTransferable(type: Data.self) {
+                    handleSelectedPhotoData(data)
+                } else if let url = try await item.loadTransferable(type: URL.self) {
+                    handleSelectedPhotoData(try Data(contentsOf: url))
+                } else {
+                    ocrError = "读取所选照片失败，请换一张重试"
+                }
+            } catch {
+                ocrError = "读取所选照片失败：\(AppErrorText.localized(error.localizedDescription))"
+            }
+        }
+    }
+
+    /// 手动填写页添加照片 → 存为待保存照片。
+    private func loadManualPhoto(_ item: PhotosPickerItem?) {
+        manualPhotoItem = nil
+        guard let item else { return }
+        Task {
+            do {
+                if let data = try await item.loadTransferable(type: Data.self) {
+                    pendingPhotoData = data
+                } else if let url = try await item.loadTransferable(type: URL.self) {
+                    pendingPhotoData = try Data(contentsOf: url)
+                } else {
+                    manualError = "读取所选照片失败，请换一张重试"
+                }
+            } catch {
+                manualError = "读取所选照片失败：\(AppErrorText.localized(error.localizedDescription))"
+            }
+        }
+    }
+
+    /// 拍照/选图后：本机 OCR → 解析金额+类别 → 确认保存；解析不出如实弹手动补齐（带照片）。
+    private func handleSelectedPhotoData(_ data: Data) {
+        isOCRWorking = true
+        ocrError = nil
+        guard let image = UIImage(data: data) else {
+            isOCRWorking = false
+            ocrError = "无法读取这张图片，请换一张"
+            return
+        }
+        VisionOCRService.shared.recognizeText(in: image) { result in
+            self.isOCRWorking = false
+            switch result {
+            case .success(let text):
+                let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                if trimmed.isEmpty {
+                    self.ocrError = "没有识别到文字，已打开手动填写（照片已带上）"
+                    self.presentManualEdit(photoData: data, note: "")
+                } else if let draft = ExpenseOCRTextParser.parse(trimmed) {
+                    self.confirmItem = ExpenseConfirmItem(draft: draft, photoData: data)
+                } else {
+                    self.ocrError = "没有识别到金额，已打开手动补齐（照片已带上）"
+                    self.presentManualEdit(photoData: data, note: trimmed)
+                }
+            case .failure(let error):
+                self.ocrError = "OCR 识别失败：\(AppErrorText.localized(error.localizedDescription))，已打开手动填写（照片已带上）"
+                self.presentManualEdit(photoData: data, note: "")
+            }
+        }
+    }
+
+    /// 待保存照片落盘，返回文件名（无照片返回 nil）。
+    private func savePendingPhoto(_ data: Data?) -> String? {
+        guard let data else { return nil }
+        return store.savePhoto(data)
+    }
+
+    // MARK: - 导出 Excel
+
+    private func buildExportFile(scope: ExpenseExportScope) {
+        exportError = nil
+        let entries: [ExpenseEntry]
+        switch scope {
+        case .month:
+            entries = store.entries.filter {
+                Calendar.current.isDate($0.date, equalTo: Date(), toGranularity: .month)
+            }
+        case .all:
+            entries = store.entries
+        }
+        guard !entries.isEmpty else {
+            exportError = "当前范围内还没有账目，暂无可导出的报表"
+            return
+        }
+        guard let result = ExpenseXLSXExporter.export(entries: entries, scopeTitle: scope.title) else {
+            exportError = "生成 Excel 文件失败，请重试"
+            return
+        }
+        exportFile = ExpenseExportFile(url: result.url, title: "记账报表 · \(scope.title)", count: result.entryCount)
+    }
+
 
     private var manualSheet: some View {
         NavigationStack {
@@ -595,6 +862,28 @@ struct ExpenseListView: View {
                         }
                     }
                 }
+                Section("照片") {
+                    if let pendingPhotoData, let image = UIImage(data: pendingPhotoData) {
+                        HStack(spacing: 12) {
+                            Image(uiImage: image)
+                                .resizable()
+                                .scaledToFill()
+                                .frame(width: 64, height: 64)
+                                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                            Text("已附带 1 张照片")
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                            Spacer()
+                            Button("移除") { self.pendingPhotoData = nil }
+                                .font(.footnote)
+                        }
+                    } else {
+                        PhotosPicker(selection: $manualPhotoItem, matching: .images) {
+                            Label("添加照片", systemImage: "photo.badge.plus")
+                        }
+                    }
+                }
+
                 Section("备注") {
                     TextField("备注（可选）", text: $manualNote)
                 }
@@ -612,6 +901,10 @@ struct ExpenseListView: View {
             }
         }
         .presentationDetents([.medium, .large])
+        .onChange(of: manualPhotoItem) { _, newItem in
+            loadManualPhoto(newItem)
+        }
+
     }
 
     private func saveManualEntry() {
@@ -621,11 +914,13 @@ struct ExpenseListView: View {
             return
         }
         let note = manualNote.trimmingCharacters(in: .whitespacesAndNewlines)
-        store.add(amount: amount, type: manualType, category: manualCategory, note: note)
+        let photoFileName = savePendingPhoto(pendingPhotoData)
+        store.add(amount: amount, type: manualType, category: manualCategory, note: note, photoFileName: photoFileName)
         showManualSheet = false
         manualAmountText = ""
         manualNote = ""
         manualError = nil
+        pendingPhotoData = nil
     }
 }
 
@@ -633,10 +928,13 @@ struct ExpenseListView: View {
 private struct ExpenseConfirmItem: Identifiable {
     let id = UUID()
     let draft: ExpenseVoiceParser.Draft
+    /// OCR 附带照片（nil = 语音/手动流程无照片）
+    let photoData: Data?
 }
 
 /// 账目列表行：类别图标 + 类别/备注 + 时间 + 带符号金额。
 private struct ExpenseEntryRow: View {
+    var onPreviewPhoto: (String) -> Void = { _ in }
     let entry: ExpenseEntry
 
     var body: some View {
@@ -667,6 +965,15 @@ private struct ExpenseEntryRow: View {
                     .foregroundStyle(.tertiary)
             }
 
+            if let photoFileName = entry.photoFileName {
+                ExpensePhotoThumbnail(fileName: photoFileName)
+                    .frame(width: 40, height: 40)
+                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    .onTapGesture {
+                        onPreviewPhoto(photoFileName)
+                    }
+            }
+
             Spacer(minLength: 8)
 
             Text(signText)
@@ -686,5 +993,135 @@ private struct ExpenseEntryRow: View {
         formatter.locale = Locale(identifier: "zh_CN")
         formatter.dateFormat = "HH:mm"
         return formatter.string(from: date)
+    }
+}
+
+/// 导出范围：本月 / 全部。
+private enum ExpenseExportScope: String, CaseIterable, Identifiable {
+    case month = "本月"
+    case all = "全部"
+
+    var id: String { rawValue }
+
+    var title: String { rawValue }
+}
+
+/// 已生成的 Excel 导出文件（Identifiable 供 .sheet(item:) 使用）。
+private struct ExpenseExportFile: Identifiable {
+    let id = UUID()
+    let url: URL
+    let title: String
+    let count: Int
+}
+
+/// 导出完成后的分享页：预览 + ShareLink + 完成。
+private struct ExpenseExportShareSheet: View {
+    let file: ExpenseExportFile
+    var onDone: () -> Void
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 16) {
+                Image(systemName: "tablecells.badge.ellipsis")
+                    .font(.system(size: 44))
+                    .foregroundStyle(.green)
+                Text("已生成 \(file.count) 条账目的 Excel 报表")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                ShareLink(item: file.url, preview: SharePreview(file.title)) {
+                    Label("分享 Excel 文件", systemImage: "square.and.arrow.up")
+                        .font(.headline)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 6)
+                }
+                .buttonStyle(.borderedProminent)
+                .padding(.horizontal)
+            }
+            .navigationTitle("导出 Excel")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("完成") { onDone() }
+                }
+            }
+        }
+        .presentationDetents([.medium])
+    }
+}
+
+/// 大图预览携带项（Identifiable 供 .sheet(item:) 使用）。
+private struct ExpensePhotoPreview: Identifiable {
+    let id = UUID()
+    let fileName: String
+}
+
+/// 记账照片大图查看：加载本地照片文件，点右上角关闭。
+private struct ExpensePhotoViewer: View {
+    let fileName: String
+    @Environment(\.dismiss) private var dismiss
+    @State private var image: UIImage?
+
+    var body: some View {
+        NavigationStack {
+            Group {
+                if let image {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .background(Color.black)
+                } else {
+                    ContentUnavailableView(
+                        "照片加载失败",
+                        systemImage: "photo",
+                        description: Text("照片文件可能已被移除。")
+                    )
+                }
+            }
+            .navigationTitle("记账照片")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("关闭") { dismiss() }
+                }
+            }
+        }
+        .presentationDetents([.large])
+        .task { load() }
+    }
+
+    private func load() {
+        guard let url = ExpensePhotoStore.url(fileName: fileName),
+              let data = try? Data(contentsOf: url) else { return }
+        image = UIImage(data: data)
+    }
+}
+
+/// 列表行缩略图：异步加载本地照片，失败显示占位图（不假装有图）。
+private struct ExpensePhotoThumbnail: View {
+    let fileName: String
+    @State private var image: UIImage?
+
+    var body: some View {
+        Group {
+            if let image {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+            } else {
+                Image(systemName: "photo")
+                    .font(.system(size: 14))
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(Color(.secondarySystemFill))
+            }
+        }
+        .task { load() }
+    }
+
+    private func load() {
+        guard let url = ExpensePhotoStore.url(fileName: fileName),
+              let data = try? Data(contentsOf: url) else { return }
+        image = UIImage(data: data)
     }
 }

@@ -96,6 +96,11 @@ final class HealthViewModel {
             accessState = .failed
             errorMessage = "读取每日步数失败：\(error.localizedDescription)"
         }
+
+        // 小组件数据：授权成功后才写步数/健康摘要（未授权保持诚实空态）
+        if accessState == .authorized {
+            WidgetDataSync.writeHealth(stepsToday: todaySteps, weeklyTotal: weeklyTotal)
+        }
     }
 
     // MARK: - 每日步数查询

@@ -41,15 +41,8 @@ struct HabitsView: View {
     }
 
     var body: some View {
-        List {
-            Section {
-                GlobalVoiceInputEmbedded(settingsStore: SettingsStore()) { text, _ in
-                    applyVoiceText(text)
-                }
-
-            } header: {
-                Text("按住说话打卡，松手识别")
-            }
+        VStack(spacing: 0) {
+            List {
 
             if !store.habits.isEmpty {
                 monthSection
@@ -59,7 +52,7 @@ struct HabitsView: View {
                 ContentUnavailableView {
                     Label("暂无习惯", systemImage: "checkmark.seal")
                 } description: {
-                    Text("点右上角「+」添加习惯，比如喝水、运动、早睡、阅读。\n也可以按住上方按钮说「喝水打卡」直接打卡。数据只保存在本机。")
+                    Text("点右上角「+」添加习惯，比如喝水、运动、早睡、阅读。\n也可以按住底部按钮说「喝水打卡」直接打卡。数据只保存在本机。")
                 } actions: {
                     Button("添加习惯") {
                         showAdd = true
@@ -137,6 +130,19 @@ struct HabitsView: View {
             store.errorMessage = nil
             store.reload()
         }
+
+            Divider().opacity(0.3)
+            bottomArea
+        }
+    }
+
+    // MARK: - 底部录音区（与长文摘要页一致）
+
+    private var bottomArea: some View {
+        GlobalVoiceInputEmbedded(settingsStore: SettingsStore()) { text, _ in
+            applyVoiceText(text)
+        }
+        .padding(.vertical, 10)
     }
 
     // MARK: - 行

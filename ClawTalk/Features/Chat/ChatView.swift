@@ -47,6 +47,7 @@ struct ChatView: View {
         }
         .sheet(isPresented: $showSearch) {
             ChatSearchView(messages: viewModel.messages) { messageID in
+                viewModel.revealMessage(id: messageID)
                 scrollTargetID = messageID
             }
         }
@@ -168,24 +169,17 @@ struct ChatView: View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(spacing: 4) {
-                    ForEach(viewModel.messages) { message in
-                        if let attachment = viewModel.voiceAttachment(for: message.id) {
-                            VoiceMessageBubble(
-                                message: message,
-                                attachment: attachment,
-                                onRetry: message.hasFailed ? { viewModel.retryMessage(id: message.id) } : nil,
-                                onDelete: { viewModel.deleteMessage(id: message.id) }
-                            )
-                            .id(message.id)
-                        } else {
-                            MessageBubble(
-                                message: message,
-                                showTokenUsage: settingsStore.settings.showTokenUsage,
-                                onRetry: message.hasFailed ? { viewModel.retryMessage(id: message.id) } : nil,
-                                onDelete: { viewModel.deleteMessage(id: message.id) }
-                            )
-                            .id(message.id)
-                        }
+                    if viewModel.canLoadEarlier || viewModel.isLoadingEarlier {
+                        earlierHistoryHeader
+                    }
+                    ForEach(viewModel.displayedMessages) { message in
+                        ChatMessageRow(
+                            message: message,
+                            voiceAttachment: viewModel.voiceAttachment(for: message.id),
+                            showTokenUsage: settingsStore.settings.showTokenUsage,
+                            onRetry: message.hasFailed ? { viewModel.retryMessage(id: message.id) } : nil,
+                            onDelete: { viewModel.deleteMessage(id: message.id) }
+                        )
                     }
                 }
                 .padding(.vertical, 12)
@@ -225,6 +219,30 @@ struct ChatView: View {
     }
 
     // MARK: - 滚动与手势辅助
+
+    /// 顶部「加载更早消息」：滚动到顶自动触发，也可点按；诚实展示加载中状态。
+    private var earlierHistoryHeader: some View {
+        HStack(spacing: 6) {
+            if viewModel.isLoadingEarlier {
+                ProgressView()
+                    .controlSize(.small)
+                Text("正在加载更早消息…")
+            } else {
+                Image(systemName: "chevron.up")
+                Text("加载更早消息")
+            }
+        }
+        .font(.caption)
+        .foregroundStyle(.secondary)
+        .padding(.vertical, 10)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            viewModel.loadEarlierMessages()
+        }
+        .onAppear {
+            viewModel.loadEarlierMessages()
+        }
+    }
 
     // 滚到最新一条消息（无消息时不动作）
     private func scrollToBottom(using proxy: ScrollViewProxy) {
@@ -557,5 +575,68 @@ extension UIImage {
         return renderer.image { _ in
             draw(in: CGRect(origin: .zero, size: newSize))
         }
+    }
+}
+
+
+/// 单条消息渲染行：把「语音/文本气泡选择 + 附件查询」拆到独立视图，
+/// 减少列表 body 重复计算与视图重建，外观与原有渲染完全一致。
+private struct ChatMessageRow: View {
+    let message: Message
+    let voiceAttachment: VoiceMessageAttachment?
+    let showTokenUsage: Bool
+    let onRetry: (() -> Void)?
+    let onDelete: (() -> Void)?
+
+    var body: some View {
+        Group {
+            if let voiceAttachment {
+                VoiceMessageBubble(
+                    message: message,
+                    attachment: voiceAttachment,
+                    onRetry: onRetry,
+                    onDelete: onDelete
+                )
+            } else {
+                MessageBubble(
+                    message: message,
+                    showTokenUsage: showTokenUsage,
+                    onRetry: onRetry,
+                    onDelete: onDelete
+                )
+            }
+        }
+        .id(message.id)
+    }
+}
+
+/// 单条消息渲染行：把「语音/文本气泡选择 + 附件查询」拆到独立视图，
+/// 减少列表 body 重复计算与视图重建，外观与原有渲染完全一致。
+private struct ChatMessageRow: View {
+    let message: Message
+    let voiceAttachment: VoiceMessageAttachment?
+    let showTokenUsage: Bool
+    let onRetry: (() -> Void)?
+    let onDelete: (() -> Void)?
+
+    var body: some View {
+        Group {
+            if let voiceAttachment {
+                VoiceMessageBubble(
+                    message: message,
+                    attachment: voiceAttachment,
+                    onRetry: onRetry,
+                    onDelete: onDelete
+                )
+            } else {
+                MessageBubble(
+                    message: message,
+                    showTokenUsage: showTokenUsage,
+                    onRetry: onRetry,
+                    onDelete: onDelete
+                )
+            }
+        }
+        .id(message.id)
     }
 }

@@ -42,9 +42,10 @@ toolbar:
 keyboard:
   # 使用键盘类型:
   # chinese: 中文26键
-  # chineseNineGrid: 中文九宫格
+  # chineseNineGrid: 中文9键（Hamster 原版九宫格）
+  # chineseNineGridIOS: IOS原生（默认，装完即生效）
   # custom(name): 自定义键盘，其中 name 对应自定义键盘配置(customizeKeyboards)中的 name。如: custom(中文26键)
-  useKeyboardType: chineseNineGrid
+  useKeyboardType: chineseNineGridIOS
   # 关闭划动文本显示
   disableSwipeLabel: false
   # 上下显示划动文本不规则布局

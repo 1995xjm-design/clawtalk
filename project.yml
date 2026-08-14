@@ -170,6 +170,9 @@ targets:
     sources:
       - ClawTalkWidget
       - ClawTalkShared
+    dependencies:
+      # 可切换卡片小组件（AppIntentConfiguration）需要 AppIntents 框架
+      - sdk: AppIntents.framework
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: app.lgm.7517.widget

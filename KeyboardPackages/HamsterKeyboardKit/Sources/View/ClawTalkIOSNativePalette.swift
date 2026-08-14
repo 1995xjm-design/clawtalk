@@ -207,11 +207,13 @@ extension UIColor {
 }
 
 extension KeyboardContext {
-  /// 当前键盘候选栏高度：中文九宫格（含 IOS原生）双层 88pt，其余页面单层 44pt
+  /// 当前键盘候选栏高度：IOS原生九宫格双层 88pt；旧中文九宫格 = 原版工具栏高度（默认55）；其余页面单层 44pt
   var clawCandidateBarHeight: CGFloat {
-    keyboardType.isChineseNineGrid
-      ? ClawIOSNativePalette.candidateRowHeight * 2
-      : ClawIOSNativePalette.candidateRowHeight
+    switch keyboardType {
+    case .chineseNineGridIOS: return ClawIOSNativePalette.candidateRowHeight * 2
+    case .chineseNineGrid: return keyboardContext.heightOfToolbar
+    default: return ClawIOSNativePalette.candidateRowHeight
+    }
   }
 
   /// 是否为 ClawTalk「IOS原生」模式（主页为 IOS原生 九宫格时，英文页也走 QWERTY/原生配色）
@@ -229,7 +231,8 @@ extension KeyboardType {
   /// 是否为 ClawTalk「IOS原生」系列页面（色值写死的键盘页面）
   var isClawIOSNativeKeyboard: Bool {
     switch self {
-    case .chineseNineGrid, .chineseNineGridIOS, .numericNineGrid, .classifySymbolic, .englishT9,
+    // 注意：不含 .chineseNineGrid（旧 Hamster 原版九宫格走主题外观，不套 IOS原生 写死配色）
+    case .chineseNineGridIOS, .numericNineGrid, .classifySymbolic, .englishT9,
          .numericMoreSymbols, .classifySymbolicMore, .englishNumeric, .englishSymbolsMore:
       return true
     default:

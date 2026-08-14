@@ -979,23 +979,81 @@ private struct KeyboardSettingsHost: UIViewControllerRepresentable {
 
 private final class KeyboardSettingsHostViewController: UIViewController {
     private var child: UIViewController?
+    private var isLoadingOverlay: UIView?
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        do {
-            let settingsVC = try loadSettingsViewController()
-            embed(settingsVC)
-        } catch {
-            showFailure(error.localizedDescription)
+        view.backgroundColor = .systemGroupedBackground
+        showLoading()
+        loadSettingsAsync()
+    }
+
+    /// 容器初始化（RimeContext/解压/配置加载）放后台，避免点进键盘设置卡主线程；
+    /// 完成后回主线程创建页面并嵌入，期间展示「正在加载…」。
+    private func loadSettingsAsync() {
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            // 重活：容器初始化（RimeContext、SharedSupport 解压、配置加载）不在主线程执行
+            let container = HamsterAppDependencyContainer.shared
+            DispatchQueue.main.async {
+                guard let self else { return }
+                do {
+                    let settingsVC = try self.loadSettingsViewController(container: container)
+                    self.hideLoading()
+                    self.embed(settingsVC)
+                } catch {
+                    self.hideLoading()
+                    self.showFailure(error.localizedDescription)
+                }
+            }
         }
     }
 
     /// 加载键盘设置页。容器/页面创建失败时抛错，由调用方兜底，绝不导致主程序崩溃。
     /// 包一层 UINavigationController：HamsteriOS 设置页子页跳转依赖 navigationController?.pushViewController，
     /// 裸嵌入 SwiftUI 时 navigationController 为 nil，子页按钮会「点了没反应」。
-    private func loadSettingsViewController() throws -> UIViewController {
-        let settingsVC = HamsterAppDependencyContainer.shared.makeSettingsViewController()
+    private func loadSettingsViewController(container: HamsterAppDependencyContainer) throws -> UIViewController {
+        let settingsVC = container.makeSettingsViewController()
         return UINavigationController(rootViewController: settingsVC)
+    }
+
+    /// 加载中转圈提示：避免异步加载期间白屏。
+    private func showLoading() {
+        let overlay = UIView()
+        overlay.backgroundColor = .systemGroupedBackground
+        overlay.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(overlay)
+        NSLayoutConstraint.activate([
+            overlay.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            overlay.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            overlay.topAnchor.constraint(equalTo: view.topAnchor),
+            overlay.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+        ])
+
+        let spinner = UIActivityIndicatorView(style: .medium)
+        spinner.hidesWhenStopped = true
+        spinner.startAnimating()
+
+        let label = UILabel()
+        label.text = "正在加载键盘设置…"
+        label.font = .preferredFont(forTextStyle: .footnote)
+        label.textColor = .secondaryLabel
+
+        let stack = UIStackView(arrangedSubviews: [spinner, label])
+        stack.axis = .vertical
+        stack.alignment = .center
+        stack.spacing = 12
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        overlay.addSubview(stack)
+        NSLayoutConstraint.activate([
+            stack.centerXAnchor.constraint(equalTo: overlay.centerXAnchor),
+            stack.centerYAnchor.constraint(equalTo: overlay.centerYAnchor),
+        ])
+        isLoadingOverlay = overlay
+    }
+
+    private func hideLoading() {
+        isLoadingOverlay?.removeFromSuperview()
+        isLoadingOverlay = nil
     }
 
     private func embed(_ settingsVC: UIViewController) {

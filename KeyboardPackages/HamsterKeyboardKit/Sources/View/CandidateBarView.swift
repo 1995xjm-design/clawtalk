@@ -68,6 +68,17 @@ public class CandidateBarView: NibLessView {
     }
   }
 
+  /// 拼音 Label（仅旧中文九宫格单层候选栏：Hamster 原版组字区）
+  lazy var phoneticLabel: UILabel = {
+    let label = UILabel(frame: .zero)
+    label.textAlignment = .left
+    label.numberOfLines = 1
+    label.adjustsFontSizeToFitWidth = true
+    label.minimumScaleFactor = 0.5
+    label.translatesAutoresizingMaskIntoConstraints = false
+    return label
+  }()
+
   /// 滚动分页的候选文字区域
   lazy var candidatesArea: CandidateWordsCollectionView = {
     let view = CandidateWordsCollectionView(
@@ -162,12 +173,18 @@ public class CandidateBarView: NibLessView {
   /// 当前界面样式（深浅切换刷新外观）
   private var userInterfaceStyle: UIUserInterfaceStyle = .light
 
-  /// 是否双层模式（中文九宫格主页面）
+  /// 是否双层模式（仅 IOS原生九宫格主页）
   private var isDoubleMode: Bool {
-    keyboardContext.keyboardType.isChineseNineGrid
+    keyboardContext.keyboardType == .chineseNineGridIOS
+  }
+
+  /// 是否旧版单层模式（Hamster 原版中文九宫格：拼音行 + 单行候选）
+  private var isLegacyMode: Bool {
+    keyboardContext.keyboardType == .chineseNineGrid
   }
 
   private var doubleConstraints: [NSLayoutConstraint] = []
+  private var legacyConstraints: [NSLayoutConstraint] = []
   private var singleConstraints: [NSLayoutConstraint] = []
   private var expandedConstraints: [NSLayoutConstraint] = []
 
@@ -201,6 +218,7 @@ public class CandidateBarView: NibLessView {
   override public func constructViewHierarchy() {
     addSubview(pinyinRowView)
     addSubview(hanziRowView)
+    addSubview(phoneticLabel)
     addSubview(candidatesArea)
     addSubview(candidatesPagingArea)
     addSubview(controlColumn)
@@ -211,6 +229,12 @@ public class CandidateBarView: NibLessView {
     let buttonInsets = layoutConfig.buttonInsets
 
     NSLayoutConstraint.activate([
+      // 旧版拼音行：仅旧中文九宫格单层模式显示（Hamster 原版组字区）
+      phoneticLabel.topAnchor.constraint(equalTo: topAnchor),
+      phoneticLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: buttonInsets.left),
+      phoneticLabel.trailingAnchor.constraint(equalTo: controlColumn.leadingAnchor),
+      phoneticLabel.heightAnchor.constraint(equalToConstant: keyboardContext.heightOfCodingArea),
+
       // 拼音行：双层模式第 1 层（44pt）
       pinyinRowView.topAnchor.constraint(equalTo: topAnchor),
       pinyinRowView.leadingAnchor.constraint(equalTo: leadingAnchor),
@@ -254,8 +278,9 @@ public class CandidateBarView: NibLessView {
 
   /// 根据当前形态重建候选区约束
   func rebuildLayout() {
-    NSLayoutConstraint.deactivate(doubleConstraints + singleConstraints + expandedConstraints)
+    NSLayoutConstraint.deactivate(doubleConstraints + legacyConstraints + singleConstraints + expandedConstraints)
     doubleConstraints.removeAll(keepingCapacity: true)
+    legacyConstraints.removeAll(keepingCapacity: true)
     singleConstraints.removeAll(keepingCapacity: true)
     expandedConstraints.removeAll(keepingCapacity: true)
 
@@ -267,7 +292,15 @@ public class CandidateBarView: NibLessView {
       candidatesArea.trailingAnchor.constraint(equalTo: controlColumn.leadingAnchor),
     ]
 
-    if isDoubleMode {
+    if isLegacyMode {
+      // 旧中文九宫格：拼音行（组字区）+ 单行候选（Hamster 原版）
+      legacyConstraints = [
+        candidatesArea.topAnchor.constraint(equalTo: phoneticLabel.bottomAnchor),
+        candidatesArea.bottomAnchor.constraint(equalTo: bottomAnchor),
+        candidatesArea.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 8),
+        candidatesArea.trailingAnchor.constraint(equalTo: controlColumn.leadingAnchor),
+      ]
+    } else if isDoubleMode {
       let leadingAnchor = businessButtonContainer?.trailingAnchor ?? hanziRowView.leadingAnchor
       let leadingConstant: CGFloat = businessButtonContainer != nil ? 6 : 8
       doubleConstraints = [
@@ -290,26 +323,37 @@ public class CandidateBarView: NibLessView {
     pinyinRowView.isHidden = isExpanded || !isDoubleMode
     hanziRowView.isHidden = isExpanded || !isDoubleMode
     businessButtonContainer?.isHidden = isExpanded || !isDoubleMode
+    phoneticLabel.isHidden = isExpanded || !isLegacyMode
     candidatesPagingArea.isHidden = true
 
     if isExpanded {
       NSLayoutConstraint.activate(expandedConstraints)
     } else if isDoubleMode {
       NSLayoutConstraint.activate(doubleConstraints)
+    } else if isLegacyMode {
+      NSLayoutConstraint.activate(legacyConstraints)
     } else {
       NSLayoutConstraint.activate(singleConstraints)
     }
   }
 
   override public func setupAppearance() {
-    // 候选栏背景：按深浅套写死（浅 #E8E8E8 / 深 #2C2C2E）
-    backgroundColor = ClawIOSNativePalette.candidateBarBackground(for: keyboardContext.colorScheme)
+    // 候选栏背景：旧中文九宫格跟随主题；其余按深浅套写死（浅 #E8E8E8 / 深 #2C2C2E）
+    backgroundColor = keyboardContext.keyboardType == .chineseNineGrid
+      ? ClawPanelPalette.toolbarBackground
+      : ClawIOSNativePalette.candidateBarBackground(for: keyboardContext.colorScheme)
+
+    // 旧版拼音行样式（仅旧中文九宫格显示）
+    phoneticLabel.font = style.phoneticTextFont
+    phoneticLabel.textColor = style.phoneticTextColor
 
     // 收起箭头：按深浅套
     stateImageView.tintColor = ClawIOSNativePalette.collapseArrow(for: keyboardContext.colorScheme)
 
-    // 候选文字样式：按深浅套写死（选中 #007AFF）
-    style = ClawIOSNativePalette.candidateBarStyle(for: keyboardContext.colorScheme)
+    // 候选文字样式：旧中文九宫格保留主题样式；其余按深浅套写死（选中 #007AFF）
+    if keyboardContext.keyboardType != .chineseNineGrid {
+      style = ClawIOSNativePalette.candidateBarStyle(for: keyboardContext.colorScheme)
+    }
     candidatesArea.setupStyle(style)
     candidatesPagingArea.setupStyle(style)
   }

@@ -15,6 +15,19 @@ enum ChatState: Equatable {
 @MainActor
 final class ChatViewModel {
     var messages: [Message] = []
+    /// 分页懒加载：进入聊天页只渲染最近 pageSize 条，滚动到顶再向前加载更早历史。
+    private let pageSize = 50
+    /// 当前展示窗口最早一条消息在 messages 中的下标（0 = 已展示全部历史）。
+    private(set) var oldestShownIndex = 0
+    /// 正在加载更早消息（UI 据此诚实展示「正在加载更早消息…」）。
+    private(set) var isLoadingEarlier = false
+    /// 是否还有更早历史未展示。
+    var canLoadEarlier: Bool { oldestShownIndex > 0 }
+    /// 当前展示的消息窗口：随 messages 实时派生（O(1) 切片，不复制数组）。
+    var displayedMessages: ArraySlice<Message> {
+        guard !messages.isEmpty else { return [] }
+        return messages[min(oldestShownIndex, messages.count - 1)...]
+    }
     var state: ChatState = .idle {
         didSet {
             guard oldValue != state else { return }
@@ -84,7 +97,9 @@ final class ChatViewModel {
         self.channel = channel
         self.channelStore = channelStore
         self.gatewayConnection = gatewayConnection
-        self.messages = conversationStore.load(channelId: channel.id)
+        let loaded = conversationStore.load(channelId: channel.id)
+        self.messages = loaded
+        self.oldestShownIndex = max(0, loaded.count - pageSize)
     }
 
     // MARK: - Voice Input
@@ -943,6 +958,7 @@ final class ChatViewModel {
                 // overwrite local messages to prevent data loss.
                 if messages.isEmpty {
                     messages = converted
+                    oldestShownIndex = max(0, converted.count - pageSize)
                     conversationStore.save(messages, channelId: channel.id)
                 }
             } catch {
@@ -961,6 +977,7 @@ final class ChatViewModel {
 
     func clearHistory() {
         messages.removeAll()
+        oldestShownIndex = 0
         conversationStore.clear(channelId: channel.id)
         channel.sessionVersion += 1
         channelStore?.update(channel)
@@ -1051,6 +1068,30 @@ final class ChatViewModel {
         audioCapture.currentLevel
     }
 
+    // MARK: - 历史分页（懒加载）
+
+    /// 滚动到顶加载更早消息：向前扩一页窗口；本地历史已在内存，仅做窗口展开。
+    /// 保留短暂「正在加载」状态，让 UI 诚实展示加载过程。
+    func loadEarlierMessages() {
+        guard !isLoadingEarlier, canLoadEarlier else { return }
+        isLoadingEarlier = true
+        Task { @MainActor in
+            defer { isLoadingEarlier = false }
+            // 先让「正在加载更早消息…」渲染出来，再展开窗口
+            try? await Task.sleep(nanoseconds: 250_000_000)
+            guard canLoadEarlier else { return }
+            oldestShownIndex = max(0, oldestShownIndex - pageSize)
+        }
+    }
+
+    /// 搜索跳转：若目标消息早于当前窗口，先把窗口扩展到包含该消息。
+    func revealMessage(id: UUID) {
+        guard let idx = messages.firstIndex(where: { $0.id == id }) else { return }
+        if idx < oldestShownIndex {
+            oldestShownIndex = idx
+        }
+    }
+
     // MARK: - Message Management
 
     func deleteMessage(id: UUID) {
@@ -1058,6 +1099,8 @@ final class ChatViewModel {
             VoiceMessageFileStore.delete(attachment)
         }
         messages.removeAll { $0.id == id }
+        // 窗口随消息数收缩，避免切片越界
+        oldestShownIndex = min(oldestShownIndex, max(messages.count - 1, 0))
         conversationStore.save(messages, channelId: channel.id)
     }
 

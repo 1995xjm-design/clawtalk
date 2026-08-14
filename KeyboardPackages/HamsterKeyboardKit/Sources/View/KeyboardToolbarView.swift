@@ -234,8 +234,10 @@ class KeyboardToolbarView: NibLessView {
     // 面板配色跟随当前键盘主题
     ClawPanelPalette.sync(with: keyboardContext)
     self.style = appearance.candidateBarStyle
-    // 候选栏背景：按深浅套写死（浅 #E8E8E8 / 深 #2C2C2E）
-    backgroundColor = ClawIOSNativePalette.candidateBarBackground(for: keyboardContext.colorScheme)
+    // 候选栏背景：旧中文九宫格跟随主题；其余按深浅套写死（浅 #E8E8E8 / 深 #2C2C2E）
+    backgroundColor = keyboardContext.keyboardType == .chineseNineGrid
+      ? ClawPanelPalette.toolbarBackground
+      : ClawIOSNativePalette.candidateBarBackground(for: keyboardContext.colorScheme)
 
     updateEntryButtonStates()
     updateEyeButtonState()
@@ -286,6 +288,11 @@ class KeyboardToolbarView: NibLessView {
         guard let self = self else { return }
         self.lastInputEmpty = $0.isEmpty
         self.updateSuggestionBarVisibility()
+
+        // 旧中文九宫格：候选栏顶部显示 T9 拼音（Hamster 原版组字区）
+        if self.keyboardContext.keyboardType == .chineseNineGrid {
+          self.candidateBarView.phoneticLabel.text = self.rimeContext.t9UserInputKey
+        }
       }
       .store(in: &subscriptions)
 

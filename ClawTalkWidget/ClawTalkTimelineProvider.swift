@@ -8,6 +8,9 @@ import WidgetKit
 /// - widget_next_reminder:  下一条提醒文案（String，如「14:30 喝水」）
 /// - widget_steps:          今日步数文案（String，如「今日 5,234 步」；主 App 格式化）
 /// - widget_expense:        本月记账文案（String，如「本月支出 ¥123」；主 App 格式化）
+/// - widget_expense_today:  今日收支文案（String，如「支出 ¥28.00 · 收入 ¥100.00」；主 App 格式化）
+/// - widget_expense_month:  本月收支文案（String，如「支出 ¥1,234.50 · 收入 ¥2,000.00」；主 App 格式化）
+/// - widget_health:         健康摘要文案（String，如「今日 5,234 步 · 近7天 35,000 步」；主 App 格式化）
 /// - widget_travel:         出行/停车文案（String，如「停车：商场 B2」；主 App 格式化）
 /// - widget_updated_at:     最后更新时间戳（TimeInterval）
 enum WidgetAppGroup {
@@ -18,6 +21,9 @@ enum WidgetAppGroup {
     static let nextReminderKey = "widget_next_reminder"
     static let stepsKey = "widget_steps"
     static let expenseKey = "widget_expense"
+    static let expenseTodayKey = "widget_expense_today"
+    static let expenseMonthKey = "widget_expense_month"
+    static let healthKey = "widget_health"
     static let travelKey = "widget_travel"
     static let updatedAtKey = "widget_updated_at"
 
@@ -31,6 +37,9 @@ enum WidgetAppGroup {
             nextReminder: defaults?.string(forKey: nextReminderKey) ?? "",
             steps: defaults?.string(forKey: stepsKey) ?? "",
             expense: defaults?.string(forKey: expenseKey) ?? "",
+            todayExpense: defaults?.string(forKey: expenseTodayKey) ?? "",
+            monthExpense: defaults?.string(forKey: expenseMonthKey) ?? "",
+            health: defaults?.string(forKey: healthKey) ?? "",
             travel: defaults?.string(forKey: travelKey) ?? ""
         )
     }
@@ -50,6 +59,12 @@ enum WidgetAppGroup {
 
     /// 功能卡通用打开链接：打开 App 主页（主 App 处理深链）。
     static let homeURL = URL(string: "clawtalk://home")
+
+    /// 记账页打开链接：clawtalk://expense → 主 App 打开记账页。
+    static let expenseURL = URL(string: "clawtalk://expense")
+
+    /// 拍照记账打开链接：clawtalk://camera → 主 App 打开记账页（拍照记账入口）。
+    static let cameraURL = URL(string: "clawtalk://camera")
 }
 
 struct ClawTalkWidgetEntry: TimelineEntry {
@@ -62,6 +77,12 @@ struct ClawTalkWidgetEntry: TimelineEntry {
     let steps: String
     /// 本月记账文案（空 = 无数据）
     let expense: String
+    /// 今日收支文案（空 = 无数据）
+    let todayExpense: String
+    /// 本月收支文案（空 = 无数据）
+    let monthExpense: String
+    /// 健康摘要文案（空 = 无数据）
+    let health: String
     /// 出行/停车文案（空 = 无数据）
     let travel: String
 }
@@ -77,6 +98,9 @@ struct ClawTalkTimelineProvider: TimelineProvider {
             nextReminder: "",
             steps: "",
             expense: "",
+            todayExpense: "",
+            monthExpense: "",
+            health: "",
             travel: ""
         )
     }

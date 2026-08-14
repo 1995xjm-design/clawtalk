@@ -35,14 +35,8 @@ struct ReminderListView: View {
     }
 
     var body: some View {
-        List {
-            Section {
-                GlobalVoiceInputEmbedded(settingsStore: SettingsStore()) { text, _ in
-                    applyVoiceText(text)
-                }
-            } header: {
-                Text("按住说话，松手识别")
-            }
+        VStack(spacing: 0) {
+            List {
             Section {
                 ForEach(CareReminderStore.defaultTemplates) { template in
                     Button {
@@ -78,7 +72,7 @@ struct ReminderListView: View {
                 ContentUnavailableView {
                     Label("暂无提醒", systemImage: "bell.badge")
                 } description: {
-                    Text("按住上方按钮直接说「明天下午3点提醒我开会」，\n或点右上角「+」手动添加。提醒只保存在本机，不会上传。")
+                    Text("按住底部按钮直接说「明天下午3点提醒我开会」，\n或点右上角「+」手动添加。提醒只保存在本机，不会上传。")
                 } actions: {
                     Button("添加提醒") {
                         showAdd = true
@@ -141,16 +135,27 @@ struct ReminderListView: View {
                 dismissButton: .default(Text("好"))
             )
         }
-        .safeAreaInset(edge: .bottom) {
+            Divider().opacity(0.3)
+            bottomArea
+        }
+    }
+
+    // MARK: - 底部录音区（与长文摘要页一致）
+
+    private var bottomArea: some View {
+        VStack(spacing: 8) {
             if store.notificationPermissionDenied {
                 Text("通知权限被关闭，提醒不会响铃。请在系统设置里允许通知。")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, alignment: .center)
-                    .padding(.vertical, 6)
-                    .background(.bar)
+            }
+
+            GlobalVoiceInputEmbedded(settingsStore: SettingsStore()) { text, _ in
+                applyVoiceText(text)
             }
         }
+        .padding(.vertical, 10)
     }
 
     // MARK: - 行

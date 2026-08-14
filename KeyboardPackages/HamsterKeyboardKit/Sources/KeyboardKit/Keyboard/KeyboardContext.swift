@@ -700,8 +700,13 @@ public extension KeyboardContext {
     clawEmojiPrevPanel = nil
     clawPanelTab = -1
     if keyboardType.isClawIOSNativeKeyboard || keyboardType == .emojis {
-      // 面板回 9 键主页（文档 Panel.pinyin9）
-      let home = selectKeyboard.isClawIOSNativeKeyboard ? selectKeyboard : ClawKeyboardPanel.pinyin9.keyboardType
+      // 主键盘为九宫格（新旧任一）时回主键盘，否则回 IOS原生 9键主页（文档 Panel.pinyin9）
+      let home: KeyboardType
+      if selectKeyboard.isClawIOSNativeKeyboard || selectKeyboard.isChineseNineGrid {
+        home = selectKeyboard
+      } else {
+        home = ClawKeyboardPanel.pinyin9.keyboardType
+      }
       keyboardType = home
       keyboardTypeSubject.send(home)
     }

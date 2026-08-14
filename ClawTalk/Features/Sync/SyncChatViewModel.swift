@@ -52,6 +52,12 @@ final class SyncChatViewModel {
     private var seenKeys: Set<String> = []
     /// 等待服务端确认的本地乐观消息键（role-content）
     private var pendingLocalKeys: Set<String> = []
+    /// 已收到服务端最新时间戳（增量轮询游标；本地乐观消息不计入）
+    private var lastServerTimestamp: Date?
+    /// 增量回退窗口：桥端时间戳为秒级，回退 60 秒避免同一秒内新增消息被漏掉
+    private static let incrementalAfterWindow: TimeInterval = 60
+    /// 轮询单次请求条数上限（桥端若支持 limit 则生效）
+    private static let pollLimit = 200
 
     // MARK: - 本地黑名单（只影响手机端显示，不动桥上的 /sync 文件）
 
@@ -122,10 +128,24 @@ final class SyncChatViewModel {
             errorMessage = "三端同步地址无效：请检查网关地址。"
             return
         }
+        // 增量轮询：带 limit + after（最后一条服务端时间戳回退 60 秒），减少全量流量；
+        // 桥端暂不支持参数时会忽略并返回全量，客户端 seenKeys 去重兜底，行为不变。
+        var requestURL = url
+        if var components = URLComponents(url: url, resolvingAgainstBaseURL: false) {
+            var queryItems = [URLQueryItem(name: "limit", value: "\(Self.pollLimit)")]
+            if let last = lastServerTimestamp {
+                let after = Int(last.timeIntervalSince1970 - Self.incrementalAfterWindow)
+                queryItems.append(URLQueryItem(name: "after", value: "\(after)"))
+            }
+            components.queryItems = queryItems
+            if let incrementalURL = components.url {
+                requestURL = incrementalURL
+            }
+        }
         isLoading = true
         defer { isLoading = false }
         do {
-            let (data, response) = try await URLSession.shared.data(from: url)
+            let (data, response) = try await URLSession.shared.data(from: requestURL)
             guard let http = response as? HTTPURLResponse else {
                 throw URLError(.badServerResponse)
             }
@@ -151,6 +171,12 @@ final class SyncChatViewModel {
             let content = item.content
             guard !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
             return (ts, role, content)
+        }
+
+        // 推进增量游标：只取服务端返回的时间戳（含已去重项），本地乐观消息不影响
+        if let maxTs = parsed.map({ $0.ts }).max(),
+           maxTs > (lastServerTimestamp ?? .distantPast) {
+            lastServerTimestamp = maxTs
         }
 
         for item in parsed.sorted(by: { $0.ts < $1.ts }) {

@@ -169,13 +169,18 @@ struct KBView: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                inputSection
+        VStack(spacing: 0) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    inputSection
                 statusSection
                 historySection
             }
             .padding(16)
+        }
+
+            Divider().opacity(0.3)
+            bottomArea
         }
         .background(Color(.systemGroupedBackground))
         .navigationTitle("知识库问答")
@@ -186,7 +191,7 @@ struct KBView: View {
         }
     }
 
-    // MARK: - 提问区：文字输入 + 发送 + 按住说话
+    // MARK: - 提问区：文字输入 + 发送
 
     private var inputSection: some View {
         VStack(spacing: 12) {
@@ -210,10 +215,7 @@ struct KBView: View {
                 .disabled(!canSend)
             }
 
-            GlobalVoiceInputEmbedded(settingsStore: settingsStore) { text, _ in
-                query = ""
-                Task { _ = await store.ask(text) }
-            }
+
         }
         .padding(14)
         .background(
@@ -241,6 +243,16 @@ struct KBView: View {
                 _ = await store.ask(text)
             }
         }
+    }
+
+    // MARK: - 底部录音区（与长文摘要页一致）
+
+    private var bottomArea: some View {
+        GlobalVoiceInputEmbedded(settingsStore: settingsStore) { text, _ in
+            query = ""
+            Task { _ = await store.ask(text) }
+        }
+        .padding(.vertical, 10)
     }
 
     // MARK: - 状态区

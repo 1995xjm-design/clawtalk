@@ -31,6 +31,8 @@ struct ClawTalkApp: App {
     @State private var activeChatRoute: ChatRoute?
     @State private var deepLinkPairingMessage: String?
     private let watchSessionCoordinator = ClawTalkWatchSessionCoordinator.shared
+    @State private var widgetReminderStore = CareReminderStore()
+    @State private var showExpenseFromWidget = false
 
     private enum ChatRoute: Hashable {
         case chat
@@ -231,6 +233,11 @@ struct ClawTalkApp: App {
                 }
             }
             .tint(.openClawRed)
+            .sheet(isPresented: $showExpenseFromWidget) {
+                NavigationStack {
+                    ExpenseListView(settingsStore: settingsStore)
+                }
+            }
             .preferredColorScheme(settingsStore.settings.preferredColorScheme)
             .alert("WS 配对", isPresented: Binding(
                 get: { deepLinkPairingMessage != nil },
@@ -347,6 +354,10 @@ struct ClawTalkApp: App {
             }
             .onReceive(NotificationCenter.default.publisher(for: .clawTalkDeviceTokenDidChange)) { _ in
                 Task { await PushManager.shared.reportIfConfigured(settings: settingsStore) }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: WidgetDataSync.dataDidChangeNotification)) { _ in
+                // 记账/提醒数据变化：立即刷新小组件（3 秒同步循环兜底）
+                updateWidgetIfNeeded()
             }
     }
 
@@ -667,12 +678,21 @@ struct ClawTalkApp: App {
         if EmergencyStore.handleSOSDeepLink(url) {
             return
         }
-        // 键盘设置深链接：clawtalk://keyboard-settings 或 clawtalk://keyboard → 弹「键盘」设置页（键盘包搬入前为占位页）
         if url.scheme?.lowercased() == DeepLinkHandler.scheme,
-           let host = url.host?.lowercased(),
-           host == "keyboard-settings" || host == "keyboard" {
-            showKeyboardSettings = true
-            return
+           let host = url.host?.lowercased() {
+            switch host {
+            case "expense", "camera":
+                // 小组件快捷入口（记账/拍照记账）：切到主页并打开记账页
+                selectedTab = 1
+                showExpenseFromWidget = true
+                return
+            case "keyboard-settings", "keyboard":
+                // 键盘设置深链接：clawtalk://keyboard-settings 或 clawtalk://keyboard → 弹「键盘」设置页（键盘包搬入前为占位页）
+                showKeyboardSettings = true
+                return
+            default:
+                break
+            }
         }
         handleDeepLink(url)
     }
@@ -979,18 +999,17 @@ struct ClawTalkApp: App {
         }
     }
 
-    // MARK: - 主屏小组件数据写入（App Group: group.7518554）
-
-    private static let widgetSuiteName = "group.7518554"
-    private static let widgetChannelNameKey = "widget_channel_name"
-    private static let widgetGatewayStatusKey = "widget_gateway_status"
-    private static let widgetRecentSessionKey = "widget_recent_session"
-    private static let widgetUpdatedAtKey = "widget_updated_at"
+    // MARK: - 小组件数据写入（App Group: group.7518554，键契约见 WidgetDataSync / ClawTalkWidget）
 
     private struct WidgetSnapshot: Equatable {
         var channelName: String
         var gatewayStatus: String
         var recentSession: String
+        var todayExpense: String
+        var monthExpense: String
+        var legacyExpense: String
+        var nextReminder: String
+        var travel: String
     }
 
     private func currentWidgetSnapshot() -> WidgetSnapshot {
@@ -1009,25 +1028,42 @@ struct ClawTalkApp: App {
            let last = vm.messages.reversed().first(where: { !$0.isStreaming && !$0.content.isEmpty }) {
             recentSession = String(last.content.prefix(60))
         }
+        let expense = WidgetDataSync.expenseSummaries()
         return WidgetSnapshot(
             channelName: channelName,
             gatewayStatus: status,
-            recentSession: recentSession
+            recentSession: recentSession,
+            todayExpense: expense.today,
+            monthExpense: expense.month,
+            legacyExpense: expense.legacy,
+            nextReminder: nextReminderWidgetText,
+            travel: WidgetDataSync.travelText()
         )
     }
 
-    /// 连接状态/最近会话变化时写入小组件键（仅变化时写），并刷新小组件时间线。
+    /// 下一条提醒文案（如「14:30 喝水」；无提醒返回空串，小组件显示诚实空态）。
+    private var nextReminderWidgetText: String {
+        guard let next = widgetReminderStore.nextReminder else { return "" }
+        let formatter = DateFormatter()
+        formatter.dateFormat = "HH:mm"
+        return "\(formatter.string(from: next.time)) \(next.title)"
+    }
+
+    /// 记账/提醒/会话等数据变化时写入小组件键（仅变化时写），并刷新小组件时间线。
     private func updateWidgetIfNeeded() {
-        guard let groupDefaults = UserDefaults(suiteName: Self.widgetSuiteName) else { return }
         let snapshot = currentWidgetSnapshot()
         guard snapshot != widgetSnapshot else { return }
         widgetSnapshot = snapshot
-        groupDefaults.set(snapshot.channelName, forKey: Self.widgetChannelNameKey)
-        groupDefaults.set(snapshot.gatewayStatus, forKey: Self.widgetGatewayStatusKey)
-        groupDefaults.set(snapshot.recentSession, forKey: Self.widgetRecentSessionKey)
-        groupDefaults.set(Date().timeIntervalSince1970, forKey: Self.widgetUpdatedAtKey)
-        groupDefaults.synchronize()
-        WidgetCenter.shared.reloadAllTimelines()
+        WidgetDataSync.write([
+            WidgetDataSync.channelNameKey: snapshot.channelName,
+            WidgetDataSync.gatewayStatusKey: snapshot.gatewayStatus,
+            WidgetDataSync.recentSessionKey: snapshot.recentSession,
+            WidgetDataSync.nextReminderKey: snapshot.nextReminder,
+            WidgetDataSync.expenseKey: snapshot.legacyExpense,
+            WidgetDataSync.expenseTodayKey: snapshot.todayExpense,
+            WidgetDataSync.expenseMonthKey: snapshot.monthExpense,
+            WidgetDataSync.travelKey: snapshot.travel
+        ])
     }
 
     /// 小组件 + 分享频道列表同步循环：App 生命周期内常驻，每 3 秒自检（仅在变化时写入）。

@@ -240,6 +240,8 @@ struct DictationRecorderView: View {
     @State private var viewModel: DictationRecorderViewModel
     var onBack: (() -> Void)?
 
+    private let settingsStore: SettingsStore
+
     // 按住说话手势状态（参考 VoiceDiaryView / MeetingRecorderView）
     @State private var isPressed = false
     @State private var holdTimer: Task<Void, Never>?
@@ -256,6 +258,7 @@ struct DictationRecorderView: View {
         dictationStore: DictationStore,
         onBack: (() -> Void)? = nil
     ) {
+        self.settingsStore = settingsStore
         _viewModel = State(initialValue: DictationRecorderViewModel(
             settingsStore: settingsStore,
             dictationStore: dictationStore
@@ -410,9 +413,10 @@ struct DictationRecorderView: View {
     }
 
     private var recordArea: some View {
-        VStack(spacing: 8) {
-            recordButton
-            statusLabel
+        GlobalVoiceInputEmbedded(settingsStore: settingsStore) { text, _ in
+            let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else { return }
+            viewModel.transcript = trimmed
         }
     }
 

@@ -72,8 +72,22 @@ class KeyboardRootView: NibLessView {
     return view
   }
 
-  /// 中文九宫格键盘（含中文主页 / IOS原生预设）
-  private var chineseNineGridKeyboardView: ChineseNineGridKeyboard {
+  /// 中文九宫格键盘（IOS原生，新样式）
+  private var chineseNineGridKeyboardView: ChineseNineGridIOSKeyboard {
+    let view = ChineseNineGridIOSKeyboard(
+      keyboardLayoutProvider: keyboardLayoutProvider,
+      actionHandler: actionHandler,
+      appearance: appearance,
+      keyboardContext: keyboardContext,
+      calloutContext: calloutContext,
+      rimeContext: rimeContext
+    )
+    view.translatesAutoresizingMaskIntoConstraints = false
+    return view
+  }
+
+  /// 中文九宫格键盘（Hamster 原版，旧样式）
+  private var legacyChineseNineGridKeyboardView: ChineseNineGridKeyboard {
     let view = ChineseNineGridKeyboard(
       keyboardLayoutProvider: keyboardLayoutProvider,
       actionHandler: actionHandler,
@@ -482,7 +496,11 @@ class KeyboardRootView: NibLessView {
       tempKeyboardView = keyboardContext.isClawIOSNativeMode ? clawEnglishKeyboardView : standerSystemKeyboard
     case .numeric, .symbolic, .chinese, .chineseNumeric, .chineseSymbolic, .custom:
       tempKeyboardView = standerSystemKeyboard
-    case .chineseNineGrid, .chineseNineGridIOS:
+    case .chineseNineGrid:
+      // 旧中文九宫格：Hamster 原版（左侧符号列表 + 原版按键排布 + 原版候选栏）
+      tempKeyboardView = legacyChineseNineGridKeyboardView
+    case .chineseNineGridIOS:
+      // 新中文九宫格：IOS原生（文档布局）
       tempKeyboardView = chineseNineGridKeyboardView
     case .englishT9:
       tempKeyboardView = clawEnglishKeyboardView

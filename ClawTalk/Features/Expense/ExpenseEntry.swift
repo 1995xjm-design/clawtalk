@@ -36,6 +36,8 @@ struct ExpenseEntry: Identifiable, Codable, Equatable {
     let category: ExpenseCategory
     /// 备注（语音记账存转写原文，手动填写可自由输入）
     let note: String
+    /// 附带照片文件名（存 Application Support/ClawTalk/ExpensePhotos/，nil = 无照片）
+    let photoFileName: String?
     /// 条目创建时间（预留：编辑/迁移时保留原始时间戳）
     let createdAt: Date
 
@@ -46,6 +48,7 @@ struct ExpenseEntry: Identifiable, Codable, Equatable {
         type: ExpenseType,
         category: ExpenseCategory,
         note: String,
+        photoFileName: String? = nil,
         createdAt: Date = Date()
     ) {
         self.id = id
@@ -54,6 +57,7 @@ struct ExpenseEntry: Identifiable, Codable, Equatable {
         self.type = type
         self.category = category
         self.note = note
+        self.photoFileName = photoFileName
         self.createdAt = createdAt
     }
 }
