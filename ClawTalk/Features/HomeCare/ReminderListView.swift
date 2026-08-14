@@ -9,7 +9,9 @@ struct ReminderListView: View {
     @State private var store: CareReminderStore
     @State private var showAdd = false
     @State private var draftTitle = ""
-    @State private var draftTime = Date()
+    @State private var draftDateTime = Date()
+    /// 编辑目标（nil = 新建）；点行进入编辑，预填后保存走 update
+    @State private var editingReminder: CareReminder?
     @State private var draftCategory: CareReminderCategory = .sedentary
     @State private var draftRepeat: CareReminderRepeat = .daily
 
@@ -100,6 +102,11 @@ struct ReminderListView: View {
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
+                    editingReminder = nil
+                    draftTitle = ""
+                    draftDateTime = Date()
+                    draftCategory = .sedentary
+                    draftRepeat = .daily
                     showAdd = true
                 } label: {
                     Image(systemName: "plus")
@@ -109,26 +116,8 @@ struct ReminderListView: View {
 
             }
         }
-        .alert("新建提醒", isPresented: $showAdd) {
-            TextField("提醒内容", text: $draftTitle)
-            DatePicker("时间", selection: $draftTime, displayedComponents: .hourAndMinute)
-            Picker("类别", selection: $draftCategory) {
-                ForEach(CareReminderCategory.allCases) { category in
-                    Text(category.rawValue).tag(category)
-                }
-            }
-            Picker("重复", selection: $draftRepeat) {
-                ForEach(CareReminderRepeat.allCases) { repeatType in
-                    Text(repeatType.displayName).tag(repeatType)
-                }
-            }
-            Button("保存") {
-                saveDraft()
-            }
-            .disabled(draftTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            Button("取消", role: .cancel) {}
-        } message: {
-            Text("到点通过本地通知响铃提醒")
+        .sheet(isPresented: $showAdd) {
+            reminderFormSheet
         }
         .alert(item: $voiceAlert) { alert in
             Alert(
@@ -179,6 +168,10 @@ struct ReminderListView: View {
                     .font(.caption2)
                     .foregroundStyle(.tertiary)
             }
+            .contentShape(Rectangle())
+            .onTapGesture {
+                startEditing(reminder)
+            }
 
             Spacer(minLength: 8)
 
@@ -219,9 +212,10 @@ struct ReminderListView: View {
 
     private func applyTemplate(_ template: CareReminderTemplate) {
         draftTitle = template.title
-        draftTime = template.defaultTime
+        draftDateTime = template.defaultTime
         draftCategory = template.category
         draftRepeat = template.repeatType
+        editingReminder = nil
         showAdd = true
     }
 
@@ -346,7 +340,7 @@ struct ReminderListView: View {
             )
         case .failure:
             draftTitle = VoiceReminderParser.extractTitle(from: text)
-            draftTime = Date()
+            draftDateTime = Date()
             showAdd = true
         }
     }
@@ -367,21 +361,97 @@ struct ReminderListView: View {
 
     // MARK: - 手动添加
 
+    /// 点行编辑：预填当前值
+    private func startEditing(_ reminder: CareReminder) {
+        draftTitle = reminder.title
+        draftDateTime = reminder.scheduledDate ?? reminder.time
+        draftCategory = reminder.category
+        draftRepeat = reminder.repeatType
+        editingReminder = reminder
+        showAdd = true
+    }
+
+    /// 新建/编辑提醒表单（sheet）：标题 + 日期时间 + 类别 + 重复
+    private var reminderFormSheet: some View {
+        NavigationStack {
+            Form {
+                Section("提醒内容") {
+                    TextField("例如：开会、喝水、吃药", text: $draftTitle)
+                }
+                Section("时间") {
+                    DatePicker("日期与时间", selection: $draftDateTime, displayedComponents: [.date, .hourAndMinute])
+                    if draftRepeat == .none {
+                        Text("一次性提醒：到点响一次")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                Section("类别") {
+                    Picker("类别", selection: $draftCategory) {
+                        ForEach(CareReminderCategory.allCases) { category in
+                            Text(category.rawValue).tag(category)
+                        }
+                    }
+                }
+                Section("重复") {
+                    Picker("重复", selection: $draftRepeat) {
+                        ForEach(CareReminderRepeat.allCases) { repeatType in
+                            Text(repeatType.displayName).tag(repeatType)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                }
+            }
+            .navigationTitle(editingReminder == nil ? "新建提醒" : "编辑提醒")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("取消") { showAdd = false }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("保存") { saveDraft() }
+                        .fontWeight(.semibold)
+                        .disabled(draftTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
+    }
+
     private func saveDraft() {
         let title = draftTitle.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !title.isEmpty else { return }
-        store.add(
-            CareReminder(
-                title: title,
-                time: draftTime,
-                category: draftCategory,
-                repeatType: draftRepeat
+        // 一次性提醒带完整日期；重复提醒只取时:分
+        let scheduledDate: Date? = draftRepeat == .none ? draftDateTime : nil
+        if let editing = editingReminder {
+            store.update(
+                CareReminder(
+                    id: editing.id,
+                    title: title,
+                    time: draftDateTime,
+                    category: draftCategory,
+                    repeatType: draftRepeat,
+                    enabled: editing.enabled,
+                    scheduledDate: scheduledDate,
+                    createdAt: editing.createdAt
+                )
             )
-        )
+        } else {
+            store.add(
+                CareReminder(
+                    title: title,
+                    time: draftDateTime,
+                    category: draftCategory,
+                    repeatType: draftRepeat,
+                    scheduledDate: scheduledDate
+                )
+            )
+        }
         draftTitle = ""
-        draftTime = Date()
+        draftDateTime = Date()
         draftCategory = .sedentary
         draftRepeat = .daily
+        editingReminder = nil
         showAdd = false
     }
 
