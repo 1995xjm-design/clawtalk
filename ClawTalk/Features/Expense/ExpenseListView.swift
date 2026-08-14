@@ -189,7 +189,6 @@ struct ExpenseListView: View {
     @State private var showHoldHint = false
 
     // 解析成功确认 alert
-    @State private var confirmItem: ExpenseConfirmItem?
     // 解析失败 alert → 手动填写
     @State private var showParseFailAlert = false
     @State private var parseFailTranscript = ""
@@ -273,18 +272,6 @@ struct ExpenseListView: View {
             }
         }
         .onDisappear { recording.discardActiveRecording() }
-        .alert(item: $confirmItem) { item in
-            Alert(
-                title: Text("已记一笔"),
-                message: Text("\(item.draft.type.rawValue) ¥\(item.draft.amount.expenseAmountText) · \(item.draft.category.rawValue)\n「\(item.draft.note)」" + (item.photoData != nil ? "\n（已附带照片）" : "")),
-                primaryButton: .default(Text("好")) {
-                    saveDraft(item.draft, photoData: item.photoData)
-                },
-                secondaryButton: .cancel(Text("记错了")) {
-                    presentManualEdit(from: item.draft, photoData: item.photoData)
-                }
-            )
-        }
         .sheet(isPresented: $showManualSheet) {
             manualSheet
         }
@@ -657,24 +644,13 @@ struct ExpenseListView: View {
     private func handleOutcome(_ outcome: ExpenseRecordingController.Outcome) {
         switch outcome {
         case .parsed(let draft):
-            confirmItem = ExpenseConfirmItem(draft: draft, photoData: nil)
+            presentManualEdit(from: draft)
         case .needsManual(let transcript):
             parseFailTranscript = transcript
             showParseFailAlert = true
         }
     }
 
-    private func saveDraft(_ draft: ExpenseVoiceParser.Draft, photoData: Data? = nil) {
-        let photoFileName = savePendingPhoto(photoData)
-        store.add(
-            amount: draft.amount,
-            type: draft.type,
-            category: draft.category,
-            note: draft.note,
-            photoFileName: photoFileName
-        )
-        pendingPhotoData = nil
-    }
 
     // MARK: - 手动填写
 
@@ -800,7 +776,7 @@ struct ExpenseListView: View {
                     self.ocrError = "没有识别到文字，已打开手动填写（照片已带上）"
                     self.presentManualEdit(photoData: data, note: "")
                 } else if let draft = ExpenseOCRTextParser.parse(trimmed) {
-                    self.confirmItem = ExpenseConfirmItem(draft: draft, photoData: data)
+                    self.presentManualEdit(from: draft, photoData: data)
                 } else {
                     self.ocrError = "没有识别到金额，已打开手动补齐（照片已带上）"
                     self.presentManualEdit(photoData: data, note: trimmed)
@@ -896,7 +872,7 @@ struct ExpenseListView: View {
                     TextField("备注（可选）", text: $manualNote)
                 }
             }
-            .navigationTitle("手动记账")
+            .navigationTitle("确认记账")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -933,12 +909,6 @@ struct ExpenseListView: View {
 }
 
 /// 解析成功确认 alert 的携带项（Identifiable 供 .alert(item:) 使用）。
-private struct ExpenseConfirmItem: Identifiable {
-    let id = UUID()
-    let draft: ExpenseVoiceParser.Draft
-    /// OCR 附带照片（nil = 语音/手动流程无照片）
-    let photoData: Data?
-}
 
 /// 账目列表行：类别图标 + 类别/备注 + 时间 + 带符号金额。
 private struct ExpenseEntryRow: View {
