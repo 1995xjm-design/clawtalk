@@ -91,9 +91,9 @@ struct SkinSettingsView: View {
                         }
                     }
                     .buttonStyle(.plain)
+                        .accessibilityLabel("选择壁纸\(id + 1)")
                 }
                 Spacer()
-                    .accessibilityLabel("选择壁纸\(id + 1)")
 
             }
             Button {

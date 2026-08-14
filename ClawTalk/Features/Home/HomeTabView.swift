@@ -289,8 +289,8 @@ struct HomeTabView: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .highPriorityGesture(
             .accessibilityHint("打开\(kind.title)功能页")
+            .highPriorityGesture(
                 LongPressGesture(minimumDuration: 0.45)
                     .onEnded { _ in
                         withAnimation(.easeIn(duration: 0.15)) { isEditingCards = true }
