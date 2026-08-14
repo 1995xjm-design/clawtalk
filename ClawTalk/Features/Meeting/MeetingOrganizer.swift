@@ -36,6 +36,7 @@ struct MeetingOrganizer {
         title: String?,
         participants: [String],
         date: Date,
+        audioFileName: String? = nil,
         settings: SettingsStore
     ) async -> MeetingOrganizationResult {
         let trimmed = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -45,10 +46,12 @@ struct MeetingOrganizer {
             participants: participants,
             date: date
         )
+        var fallbackNote = fallback
+        fallbackNote.audioFileName = audioFileName
 
         guard !trimmed.isEmpty else {
             return MeetingOrganizationResult(
-                note: fallback,
+                note: fallbackNote,
                 usedFallback: true,
                 fallbackReason: "没有可整理的转写内容",
                 aiError: nil
@@ -58,7 +61,7 @@ struct MeetingOrganizer {
         // ① 网关不可用 → 诚实降级（不假装调用 AI）
         guard settings.isConfigured else {
             return MeetingOrganizationResult(
-                note: fallback,
+                note: fallbackNote,
                 usedFallback: true,
                 fallbackReason: "未配置 OpenClaw 网关",
                 aiError: nil
@@ -77,13 +80,14 @@ struct MeetingOrganizer {
                     actionItems: draft.actionItems,
                     summary: draft.summary.isEmpty ? fallback.summary : draft.summary,
                     rawTranscript: trimmed,
+                    audioFileName: audioFileName,
                     organizedByAI: true
                 )
                 return MeetingOrganizationResult(note: note, usedFallback: false, fallbackReason: nil, aiError: nil)
             }
             // AI 返回了内容但解析不出标准 JSON → 诚实降级，不硬编
             return MeetingOrganizationResult(
-                note: fallback,
+                note: fallbackNote,
                 usedFallback: true,
                 fallbackReason: "AI 返回内容无法解析成纪要",
                 aiError: nil
@@ -91,7 +95,7 @@ struct MeetingOrganizer {
         } catch {
             // 网络失败 / 超时 / 空回复 → 诚实降级
             return MeetingOrganizationResult(
-                note: fallback,
+                note: fallbackNote,
                 usedFallback: true,
                 fallbackReason: "AI 整理失败（\(Self.friendlyError(error))）",
                 aiError: error

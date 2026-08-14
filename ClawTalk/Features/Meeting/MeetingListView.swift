@@ -1,5 +1,6 @@
 import SwiftUI
 import Observation
+import AVFoundation
 import UserNotifications
 
 /// 会议纪要列表页：按日期分组，每条显示标题/议题数/待办数，点击看详情。
@@ -127,6 +128,8 @@ struct MeetingDetailView: View {
     @State private var careReminderStore: CareReminderStore
     @State private var reminderNotice: String?
     @State private var showRawTranscript = false
+    @State private var audioPlayer: AVAudioPlayer?
+    @State private var isPlayingAudio = false
     @Environment(\.dismiss) private var dismiss
 
     init(note: MeetingNote, store: MeetingStore, careReminderStore: CareReminderStore? = nil) {
@@ -150,6 +153,7 @@ struct MeetingDetailView: View {
             if !currentNote.actionItems.isEmpty {
                 actionItemsSection
             }
+            audioSection
             rawTranscriptSection
             deleteSection
         }
@@ -158,6 +162,73 @@ struct MeetingDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
     }
 
+
+    // MARK: - 录音存档回放
+
+    private var audioSection: some View {
+        Group {
+            if let audioFileName = currentNote.audioFileName, !audioFileName.isEmpty {
+                Section {
+                    Button {
+                        toggleAudioPlayback(fileName: audioFileName)
+                    } label: {
+                        Label(
+                            isPlayingAudio ? "停止播放" : "播放录音存档",
+                            systemImage: isPlayingAudio ? "stop.circle.fill" : "play.circle.fill"
+                        )
+                        .foregroundStyle(Color.openClawRed)
+                    }
+                } header: {
+                    Text("录音存档")
+                } footer: {
+                    Text("会议录音原声存档，可随时回听。")
+                }
+            }
+        }
+    }
+
+    private func audioFileURL(fileName: String) -> URL? {
+        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+            ?? FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
+        let direct = base?.appendingPathComponent("ClawTalk/MeetingAudio").appendingPathComponent(fileName)
+        if let direct, FileManager.default.fileExists(atPath: direct.path) {
+            return direct
+        }
+        // 兼容旧版存在 Documents 根目录的情况
+        let doc = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
+            ?? base
+        let legacy = doc?.appendingPathComponent(fileName)
+        if let legacy, FileManager.default.fileExists(atPath: legacy.path) {
+            return legacy
+        }
+        return nil
+    }
+
+    private func toggleAudioPlayback(fileName: String) {
+        if isPlayingAudio {
+            audioPlayer?.stop()
+            audioPlayer = nil
+            isPlayingAudio = false
+            return
+        }
+        guard let url = audioFileURL(fileName: fileName) else {
+            reminderNotice = "录音存档不存在，可能已被清理"
+            return
+        }
+        do {
+            try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default)
+            try AVAudioSession.sharedInstance().setActive(true)
+            let player = try AVAudioPlayer(contentsOf: url)
+            player.delegate = nil
+            audioPlayer = player
+            player.play()
+            isPlayingAudio = true
+        } catch {
+            reminderNotice = "播放失败：\(AppErrorText.localized(error.localizedDescription))"
+        }
+    }
+
+    // MARK: - 头部
     // MARK: - 头部
 
     private var headerSection: some View {

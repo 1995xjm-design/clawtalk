@@ -37,6 +37,8 @@ struct MeetingNote: Identifiable, Codable, Equatable {
     var summary: String
     /// 原始转写全文
     var rawTranscript: String
+    /// 录音存档文件名（保存在 Application Support/ClawTalk/MeetingAudio，可回放；nil = 无录音）
+    var audioFileName: String?
     let createdAt: Date
     /// true = AI 整理；false = 本地规则降级（UI 诚实标注）
     var organizedByAI: Bool
@@ -53,6 +55,7 @@ struct MeetingNote: Identifiable, Codable, Equatable {
         actionItems: [ActionItem] = [],
         summary: String,
         rawTranscript: String,
+        audioFileName: String? = nil,
         createdAt: Date = Date(),
         organizedByAI: Bool,
         linkedReminderIDs: [String] = []
@@ -66,6 +69,7 @@ struct MeetingNote: Identifiable, Codable, Equatable {
         self.actionItems = actionItems
         self.summary = summary
         self.rawTranscript = rawTranscript
+        self.audioFileName = audioFileName
         self.createdAt = createdAt
         self.organizedByAI = organizedByAI
         self.linkedReminderIDs = linkedReminderIDs
@@ -94,6 +98,7 @@ struct MeetingNote: Identifiable, Codable, Equatable {
         actionItems = try container.decodeIfPresent([ActionItem].self, forKey: .actionItems) ?? []
         summary = try container.decodeIfPresent(String.self, forKey: .summary) ?? ""
         rawTranscript = try container.decodeIfPresent(String.self, forKey: .rawTranscript) ?? ""
+        audioFileName = try container.decodeIfPresent(String.self, forKey: .audioFileName)
         createdAt = try container.decodeIfPresent(Date.self, forKey: .createdAt) ?? date
         organizedByAI = try container.decodeIfPresent(Bool.self, forKey: .organizedByAI) ?? false
         linkedReminderIDs = try container.decodeIfPresent([String].self, forKey: .linkedReminderIDs) ?? []

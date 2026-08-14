@@ -1,6 +1,7 @@
 import Foundation
 import SwiftUI
 import Observation
+import AVFoundation
 
 /// 录音纪要页状态。
 enum MeetingRecorderState: Equatable {
@@ -45,6 +46,8 @@ final class MeetingRecorderViewModel {
     var participantsInput: String = ""
     /// 整理完成后的纪要（驱动详情 sheet）
     var savedNote: MeetingNote?
+    /// 本次录音存档文件名（转写成功后随纪要保存，可回放）
+    private(set) var pendingAudioFileName: String?
     /// 整理来源说明（诚实：AI 整理 / 本地整理（未接 AI）及原因）
     var organizationNotice: String?
 
@@ -87,6 +90,9 @@ final class MeetingRecorderViewModel {
             restoreWakeListening()
             return
         }
+
+        // 录音存档：保存 16kHz WAV 到 Application Support，供纪要回放
+        pendingAudioFileName = Self.saveAudioArchive(samples)
 
         state = .transcribing
         Task {
@@ -148,10 +154,12 @@ final class MeetingRecorderViewModel {
                 title: title.isEmpty ? nil : title,
                 participants: participants,
                 date: date,
+                audioFileName: pendingAudioFileName,
                 settings: settingsStore
             )
             meetingStore.add(result.note)
             savedNote = result.note
+            pendingAudioFileName = nil
             if result.usedFallback {
                 organizationNotice = result.fallbackReason.map { "\($0)，已改用本地规则整理" }
                     ?? "本次为本地规则整理（未接 AI）"
@@ -208,6 +216,34 @@ final class MeetingRecorderViewModel {
             .split(separator: ",")
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
+    }
+
+
+    /// 保存录音存档：16kHz 单声道 Float32 样本 -> WAV 文件（Application Support/ClawTalk/MeetingAudio/）。
+    private static func saveAudioArchive(_ samples: [Float]) -> String? {
+        guard !samples.isEmpty else { return nil }
+        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+            ?? FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
+        guard let base else { return nil }
+        let dir = base.appendingPathComponent("ClawTalk/MeetingAudio", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let fileName = "meeting-\(UUID().uuidString).wav"
+        let url = dir.appendingPathComponent(fileName)
+        guard let format = AVAudioFormat(standardFormatWithSampleRate: 16000, channels: 1),
+              let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(samples.count)) else { return nil }
+        buffer.frameLength = AVAudioFrameCount(samples.count)
+        samples.withUnsafeBufferPointer { ptr in
+            guard let basePtr = ptr.baseAddress else { return }
+            buffer.floatChannelData?[0].update(from: basePtr, count: samples.count)
+        }
+        do {
+            let file = try AVAudioFile(forWriting: url, settings: format.settings)
+            try file.write(from: buffer)
+            return fileName
+        } catch {
+            LogCollector.record(module: "会议纪要", "录音存档保存失败：\(error.localizedDescription)")
+            return nil
+        }
     }
 
     private static func defaultTitle(from transcript: String, date: Date) -> String {
