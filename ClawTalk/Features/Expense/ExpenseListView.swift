@@ -583,7 +583,7 @@ struct ExpenseListView: View {
         let grouped = Dictionary(grouping: store.entries) {
             Calendar.current.startOfDay(for: $0.date)
         }
-        let dayKeys = grouped.keys.sorted(by: >)
+        let dayKeys: [Date] = grouped.keys.sorted(by: >)
 
         return List {
             ForEach(dayKeys, id: \.self) { day in
