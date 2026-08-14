@@ -28,6 +28,10 @@ final class SettingsStore {
         didSet { secure.doubaoAPIKey = doubaoAPIKey.isEmpty ? nil : doubaoAPIKey }
     }
 
+    var weatherAPIKey: String = "" {
+        didSet { secure.weatherAPIKey = weatherAPIKey.isEmpty ? nil : weatherAPIKey }
+    }
+
     var isConfigured: Bool {
         guard !settings.gatewayURL.isEmpty else { return false }
         let hasGatewayToken = !gatewayToken.isEmpty
@@ -50,6 +54,7 @@ final class SettingsStore {
         self.elevenLabsAPIKey = secure.elevenLabsAPIKey ?? ""
         self.openAIAPIKey = secure.openAIAPIKey ?? ""
         self.doubaoAPIKey = secure.doubaoAPIKey ?? ""
+        self.weatherAPIKey = secure.weatherAPIKey ?? ""
         self.hasCompletedOnboarding = defaults.bool(forKey: "has_completed_onboarding")
 
         // Auto-skip onboarding for existing configured users

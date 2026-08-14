@@ -17,7 +17,6 @@ struct DailyBriefingView: View {
     @State private var careStore: CareReminderStore
     @State private var diaryViewModel: VoiceDiaryViewModel
     @State private var automationViewModel: AutomationViewModel
-    @State private var engine: DailyBriefingEngine
 
     @State private var content: DailyBriefingEngine.Content?
     @State private var isLoading = false
@@ -44,11 +43,6 @@ struct DailyBriefingView: View {
         _careStore = State(initialValue: resolvedCare)
         _diaryViewModel = State(initialValue: resolvedDiary)
         _automationViewModel = State(initialValue: resolvedAutomation)
-        _engine = State(initialValue: DailyBriefingEngine(
-            careStore: resolvedCare,
-            diaryViewModel: resolvedDiary,
-            automationViewModel: resolvedAutomation
-        ))
     }
 
     var body: some View {
@@ -182,6 +176,14 @@ struct DailyBriefingView: View {
         isLoading = true
         defer { isLoading = false }
         speechError = nil
+        // 每次按当前设置构建引擎：天气 API Key / 城市修改后下拉刷新即生效
+        let engine = DailyBriefingEngine(
+            careStore: careStore,
+            diaryViewModel: diaryViewModel,
+            automationViewModel: automationViewModel,
+            weatherAPIKey: settings.weatherAPIKey.isEmpty ? nil : settings.weatherAPIKey,
+            weatherCity: settings.settings.weatherCity
+        )
         content = await engine.build()
     }
 
@@ -312,15 +314,29 @@ struct DailyBriefingView: View {
 
     private var weatherSection: some View {
         Section {
-            VStack(alignment: .leading, spacing: 8) {
-                Label("天气暂未接入", systemImage: "cloud.sun")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                Text("这里将播报今天的天气概况（气温 / 天气 / 穿衣建议）。需要天气 API key，暂无接口；接入后替换此空状态。")
-                    .font(.caption)
-                    .foregroundStyle(.tertiary)
+            if let content {
+                if let weather = content.weather {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Label("\(weather.city) · \(weather.condition)", systemImage: "cloud.sun")
+                            .font(.subheadline)
+                            .foregroundStyle(.primary)
+                        Text("气温 \(weather.low)～\(weather.high)℃，当前 \(weather.temperature)℃")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(.vertical, 8)
+                } else if let note = content.skippedNotes.first(where: { $0.section == "天气" }) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Label("天气暂未播报", systemImage: "cloud.sun")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                        Text(note.message)
+                            .font(.caption)
+                            .foregroundStyle(.tertiary)
+                    }
+                    .padding(.vertical, 8)
+                }
             }
-            .padding(.vertical, 8)
         } header: {
             Label("天气", systemImage: "cloud.sun")
         }

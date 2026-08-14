@@ -153,7 +153,7 @@ enum ExpensePhotoStore {
 
     /// 保存照片数据（调用方统一转 JPEG），返回相对文件名。
     static func save(_ data: Data) throws -> String {
-        let name = "expense-\\(UUID().uuidString.prefix(8).lowercased()).jpg"
+        let name = "expense-\(UUID().uuidString.prefix(8).lowercased()).jpg"
         let url = try directory().appendingPathComponent(name)
         try data.write(to: url, options: .atomic)
         return name

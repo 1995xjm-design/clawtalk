@@ -19,6 +19,7 @@ struct SettingsView: View {
     @State private var pairingMessage: String?
     @State private var showPairingResult = false
     @State private var deepSeekKey: String = SecureStorage.shared.getString("deepseek_api_key") ?? ""
+    // 天气 API Key 绑定 SettingsStore.weatherAPIKey（设置即生效，播报读取同一来源）
     @State private var memorySyncMessage: String?
     @State private var setupCodeInput = ""
     @State private var isPairing = false
@@ -74,6 +75,7 @@ struct SettingsView: View {
                 skinSection
                 voiceSettingsSection
                 voiceAgentSection
+                briefingSection
                 displaySection
                 wechatSection
                 dataSection
@@ -97,6 +99,7 @@ struct SettingsView: View {
             .onChange(of: deepSeekKey) { _, newValue in
                 SecureStorage.shared.setString(newValue.isEmpty ? nil : newValue, forKey: "deepseek_api_key")
             }
+
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button {
@@ -510,12 +513,28 @@ struct SettingsView: View {
         }
     }
 
+    /// 每日播报 · 天气：API Key 存钥匙串（weather_api_key），城市存 AppSettings。
+    /// 未填 Key 时播报如实跳过天气分区（诚实空态，不造假）。
+    private var briefingSection: some View {
+        Section {
+            SecureField("天气 API Key", text: $store.weatherAPIKey)
+                .textContentType(.password)
+            TextField("天气城市（如 上海）", text: $store.settings.weatherCity)
+                .autocorrectionDisabled()
+                .textInputAutocapitalization(.never)
+        } header: {
+            Label("每日播报 · 天气", systemImage: "cloud.sun")
+        } footer: {
+            Text("每日播报的天气来自 OpenWeatherMap（免费注册即可获得 API Key）。未填 Key 时播报如实跳过天气，不造假。")
+        }
+    }
+
     // MARK: - Connection
 
         private var keyboardSection: some View {
         Section("键盘") {
             NavigationLink {
-                KeyboardSettingsPlaceholderView()
+                KeyboardSettingsFullView()
             } label: {
                 Label("ClawTalk 键盘设置", systemImage: "keyboard.badge.ellipsis")
                     .font(.headline)
@@ -963,8 +982,9 @@ private var connectionSection: some View {
 }
 /// 灵动岛模拟预览卡：按当前风格渲染黑底胶囊卡片（简约/标准/详细）。
 
-/// 键盘设置页：UIViewControllerRepresentable 包 HamsteriOS 完整设置页（工程级整合）。
-struct KeyboardSettingsPlaceholderView: View {
+/// 键盘设置完整页：UIViewControllerRepresentable 包 HamsteriOS 完整设置页（工程级整合）。
+/// 曾为占位页，已替换为完整键盘设置页（深链 clawtalk://keyboard-settings 与设置页入口共用）。
+struct KeyboardSettingsFullView: View {
     var body: some View {
         KeyboardSettingsHost()
     }

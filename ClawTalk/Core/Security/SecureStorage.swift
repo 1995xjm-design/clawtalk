@@ -12,6 +12,7 @@ final class SecureStorage {
         static let elevenLabsAPIKey = "elevenlabs_api_key"
         static let openAIAPIKey = "openai_api_key"
         static let doubaoAPIKey = "doubao_api_key"
+        static let weatherAPIKey = "weather_api_key"
     }
 
     private init() {
@@ -59,6 +60,17 @@ final class SecureStorage {
                 try? keychain.set(value, key: Keys.doubaoAPIKey)
             } else {
                 try? keychain.remove(Keys.doubaoAPIKey)
+            }
+        }
+    }
+
+    var weatherAPIKey: String? {
+        get { try? keychain.get(Keys.weatherAPIKey) }
+        set {
+            if let value = newValue {
+                try? keychain.set(value, key: Keys.weatherAPIKey)
+            } else {
+                try? keychain.remove(Keys.weatherAPIKey)
             }
         }
     }

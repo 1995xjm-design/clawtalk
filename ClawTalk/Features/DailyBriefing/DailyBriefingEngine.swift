@@ -6,7 +6,7 @@ import EventKit
 ///
 /// 诚实原则（不造假）：
 /// - 每个数据源独立读取；失败或未授权时降级跳过，并在 `skippedNotes` 与文案中标注原因。
-/// - 天气暂无 API key，固定输出「天气暂未接入」。
+/// - 天气走 OpenWeatherMap（Key 在「设置 > 每日播报 · 天气」填写）；未填 Key 或读取失败时如实跳过并标注原因。
 /// - 未注入 diaryViewModel / automationViewModel 时，对应分区按「未接入」展示。
 ///
 /// 使用（主智能体接线）：
@@ -57,6 +57,8 @@ struct DailyBriefingEngine {
         let diaryCount: Int
         let automationTaskName: String?
         let automationNextRunAt: Date?
+        /// 今日天气（未配置 Key / 读取失败时为 nil，页面如实显示空态）
+        let weather: WeatherInfo?
         let skippedNotes: [SkipNote]
         /// TTS 朗读用的完整播报文案
         let spokenText: String
@@ -67,17 +69,25 @@ struct DailyBriefingEngine {
     private let careStore: CareReminderStore
     private let diaryViewModel: VoiceDiaryViewModel?
     private let automationViewModel: AutomationViewModel?
+    /// 天气 API Key（nil/空 = 未配置，播报如实跳过天气）
+    private let weatherAPIKey: String?
+    /// 天气查询城市（OpenWeatherMap 按城市名查询）
+    private let weatherCity: String
     private let now: Date
 
     init(
         careStore: CareReminderStore,
         diaryViewModel: VoiceDiaryViewModel? = nil,
         automationViewModel: AutomationViewModel? = nil,
+        weatherAPIKey: String? = nil,
+        weatherCity: String = "上海",
         now: Date = Date()
     ) {
         self.careStore = careStore
         self.diaryViewModel = diaryViewModel
         self.automationViewModel = automationViewModel
+        self.weatherAPIKey = weatherAPIKey
+        self.weatherCity = weatherCity
         self.now = now
     }
 
@@ -90,12 +100,14 @@ struct DailyBriefingEngine {
         let todos = await todayTodos()
         let diary = yesterdayDiaryCount()
         let automation = nextAutomationRun()
+        let weather = await currentWeather()
 
         var notes: [SkipNote] = []
         if let note = schedule.skipNote { notes.append(note) }
         if let note = todos.skipNote { notes.append(note) }
         if let note = diary.skipNote { notes.append(note) }
         if let note = automation.skipNote { notes.append(note) }
+        if let note = weather.skipNote { notes.append(note) }
 
         let spokenText = Self.compose(
             reminderCount: reminders.count,
@@ -110,6 +122,7 @@ struct DailyBriefingEngine {
             diarySkipped: diary.skipNote != nil,
             automationTaskName: automation.taskName,
             automationNextRunAt: automation.nextRunAt,
+            weather: weather.info,
             skippedPhrases: notes.map(\.message),
             now: now
         )
@@ -125,6 +138,7 @@ struct DailyBriefingEngine {
             diaryCount: diary.count,
             automationTaskName: automation.taskName,
             automationNextRunAt: automation.nextRunAt,
+            weather: weather.info,
             skippedNotes: notes,
             spokenText: spokenText
         )
@@ -246,6 +260,21 @@ struct DailyBriefingEngine {
         return (name, next, nil)
     }
 
+    // MARK: - 今日天气（OpenWeatherMap；Key 在「设置 > 每日播报 · 天气」填写）
+
+    /// 天气独立降级：未配置 Key / 请求失败时返回 skipNote，绝不造假。
+    private func currentWeather() async -> (info: WeatherInfo?, skipNote: SkipNote?) {
+        guard let weatherAPIKey, !weatherAPIKey.isEmpty else {
+            return (nil, SkipNote(section: "天气", message: "天气未配置 API Key（设置 > 每日播报 · 天气），暂不播报天气"))
+        }
+        do {
+            let info = try await WeatherService.fetch(city: weatherCity, apiKey: weatherAPIKey)
+            return (info, nil)
+        } catch {
+            return (nil, SkipNote(section: "天气", message: "天气读取失败（\(AppErrorText.localized(error.localizedDescription))）"))
+        }
+    }
+
     // MARK: - 文案生成
 
     /// 生成自然语言播报文案。
@@ -253,7 +282,7 @@ struct DailyBriefingEngine {
     /// - 开头按时间段打招呼（早上好/上午好/中午好/下午好/晚上好/夜深了）。
     /// - 各分区有数据 → 「今天有 N 条提醒：…」；无数据且未跳过 → 诚实说「没有」。
     /// - 分区失败/未授权 → 不写「没有」，改用短句标注（如「日历未授权，日程已跳过」）。
-    /// - 天气无 API key → 固定「天气暂未接入」。
+    /// - 天气已配 Key → 播报城市/天气/气温；无 Key → 不写「没有」，改由末尾跳过短语说明。
     /// - 示例：「早上好！今天有 3 条提醒：「吃药」在 08:00；今天有 2 个日程：「开会」在 10:00。昨天记了 2 篇日记。自动化任务「晨报」下次在 15:00 执行。天气暂未接入。日历未授权，日程已跳过。」
     private static func compose(
         reminderCount: Int,
@@ -268,6 +297,7 @@ struct DailyBriefingEngine {
         diarySkipped: Bool,
         automationTaskName: String?,
         automationNextRunAt: Date?,
+        weather: WeatherInfo?,
         skippedPhrases: [String],
         now: Date
     ) -> String {
@@ -306,7 +336,9 @@ struct DailyBriefingEngine {
             clauses.append("自动化任务\(name)下次在 \(Self.timeText(automationNextRunAt)) 执行")
         }
 
-        clauses.append("天气暂未接入")
+        if let weather {
+            clauses.append("\(weather.city)今天\(weather.condition)，气温 \(weather.low)～\(weather.high)℃，当前 \(weather.temperature)℃")
+        }
 
         var text = greeting + " " + clauses.joined(separator: "；")
         if !skippedPhrases.isEmpty {

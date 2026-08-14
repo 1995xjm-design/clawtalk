@@ -125,9 +125,15 @@ struct AddChannelView: View {
                 token: settings.gatewayToken
             )
             let wrapper = try JSONDecoder().decode(ToolResultWrapper<AgentsListResult>.self, from: data)
-            agents = wrapper.details?.agents ?? []
+            let list = wrapper.details?.agents ?? []
+            agents = list
+            if list.isEmpty {
+                loadError = "网关已响应，但没有返回智能体列表（可能未启用 agents_list 工具）。可手动输入智能体 ID。"
+            } else {
+                loadError = nil
+            }
         } catch {
-            loadError = "无法加载智能体列表。"
+            loadError = "无法加载智能体列表：\(AppErrorText.localized(error.localizedDescription))。请确认网关已连接并已启用 agents_list 工具后重试。"
         }
         isLoading = false
     }

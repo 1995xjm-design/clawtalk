@@ -30,7 +30,7 @@ public class SettingsRootView: NibLessView {
 
   private lazy var featureHeader: FeatureCardsHeaderView = {
     let header = FeatureCardsHeaderView()
-    header.clawTalkAction = { [unowned self] in settingsViewModel.navigateToGuru() }
+    header.clawTalkAction = { [unowned self] in settingsViewModel.navigateToClawTalk() }
     header.autoInsightAction = { [unowned self] in settingsViewModel.navigateToAutoInsight() }
     header.smartFreqAction = { [unowned self] in settingsViewModel.navigateToSmartFreq() }
     return header

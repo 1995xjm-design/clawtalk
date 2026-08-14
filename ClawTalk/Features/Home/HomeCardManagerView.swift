@@ -1,16 +1,15 @@
 import SwiftUI
 
-/// 主页卡片管理（主页「常用卡片」标题行「管理」按钮弹出）：
+/// 主页卡片管理（主页「常用卡片」标题行「管理」按钮弹出；工具页「主页卡片管理」入口共用）：
 /// 列出全部可配置卡，点按在主页显示 / 移除；支持一键恢复默认、清空。
-/// 读写同一 UserDefaults key（HomeCardRegistry），主页 @AppStorage 自动同步。
+/// 读写同一 UserDefaults key（HomeCardRegistry），主页 @AppStorage 自动同步，本页变更即时生效。
 struct HomeCardManagerView: View {
     @Environment(\.dismiss) private var dismiss
-    @State private var enabled: [HomeCardKind]
+    @AppStorage(HomeCardRegistry.storageKey) private var storage = HomeCardRegistry.defaultStorageValue
 
-    init() {
-        let storage = UserDefaults.standard.string(forKey: HomeCardRegistry.storageKey)
-            ?? HomeCardRegistry.defaultStorageValue
-        _enabled = State(initialValue: HomeCardRegistry.enabledKinds(from: storage))
+    /// 当前启用的卡片（顺序即主页排布顺序）。
+    private var enabled: [HomeCardKind] {
+        HomeCardRegistry.enabledKinds(from: storage)
     }
 
     var body: some View {
@@ -49,17 +48,15 @@ struct HomeCardManagerView: View {
                 } header: {
                     Text("主页卡片")
                 } footer: {
-                    Text("点按在主页显示 / 移除。移除后仍可从本页加回，功能不丢失。")
+                    Text("已显示 \(enabled.count) / \(HomeCardKind.allCases.count) 张。点按在主页显示 / 移除，移除后仍可从本页加回，功能不丢失。")
                 }
 
                 Section {
                     Button("恢复默认卡片") {
-                        enabled = HomeCardKind.allCases
-                        apply()
+                        storage = HomeCardRegistry.defaultStorageValue
                     }
                     Button("清空主页卡片", role: .destructive) {
-                        enabled = []
-                        apply()
+                        storage = ""
                     }
                 }
             }
@@ -76,15 +73,12 @@ struct HomeCardManagerView: View {
     }
 
     private func toggle(_ kind: HomeCardKind) {
-        if let index = enabled.firstIndex(of: kind) {
-            enabled.remove(at: index)
+        var list = enabled
+        if let index = list.firstIndex(of: kind) {
+            list.remove(at: index)
         } else {
-            enabled.append(kind)
+            list.append(kind)
         }
-        apply()
-    }
-
-    private func apply() {
-        HomeCardRegistry.setEnabledKinds(enabled)
+        storage = HomeCardRegistry.storageValue(for: list)
     }
 }

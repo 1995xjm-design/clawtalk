@@ -59,10 +59,23 @@ enum HomeThemeSource: String, Codable {
 }
 
 enum VoiceAgentChannel: String, Codable, CaseIterable, Identifiable {
-    case gateway = "??"
-    case directDeepSeek = "?? DeepSeek"
+    case gateway = "gateway"
+    case directDeepSeek = "directDeepSeek"
 
     var id: String { rawValue }
+
+    /// 兼容旧数据：rawValue 曾经是「??」「?? DeepSeek」历史占位符，旧存档解码时映射回稳定标识。
+    init(from decoder: Decoder) throws {
+        let raw = try decoder.singleValueContainer().decode(String.self)
+        switch raw {
+        case "??", "网关":
+            self = .gateway
+        case "?? DeepSeek", "直连 DeepSeek":
+            self = .directDeepSeek
+        default:
+            self = VoiceAgentChannel(rawValue: raw) ?? .gateway
+        }
+    }
 }
 
 struct AppSettings: Codable {
@@ -88,6 +101,8 @@ struct AppSettings: Codable {
     var voiceInputEnabled: Bool
     var agentAPIMode: AgentAPIMode
     var voiceAgentChannel: VoiceAgentChannel
+    /// 每日播报天气城市（OpenWeatherMap 按城市名查询，默认上海；空则不播报天气）
+    var weatherCity: String
     var showTokenUsage: Bool
     var useWebSocket: Bool
     var webSocketPath: String
@@ -146,6 +161,7 @@ struct AppSettings: Codable {
         voiceInputEnabled: true,
         agentAPIMode: .openResponses,
         voiceAgentChannel: .gateway,
+        weatherCity: "上海",
         showTokenUsage: false,
         useWebSocket: false,
         webSocketPath: "/ws",
@@ -288,6 +304,7 @@ struct AppSettings: Codable {
         voiceInputEnabled = try container.decode(Bool.self, forKey: .voiceInputEnabled)
         agentAPIMode = try container.decodeIfPresent(AgentAPIMode.self, forKey: .agentAPIMode) ?? .openResponses
         voiceAgentChannel = try container.decodeIfPresent(VoiceAgentChannel.self, forKey: .voiceAgentChannel) ?? .gateway
+        weatherCity = try container.decodeIfPresent(String.self, forKey: .weatherCity) ?? "上海"
         showTokenUsage = try container.decodeIfPresent(Bool.self, forKey: .showTokenUsage) ?? false
         useWebSocket = try container.decodeIfPresent(Bool.self, forKey: .useWebSocket) ?? false
         hapticsEnabled = try container.decodeIfPresent(Bool.self, forKey: .hapticsEnabled) ?? true

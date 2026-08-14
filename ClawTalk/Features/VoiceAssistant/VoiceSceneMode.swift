@@ -266,3 +266,43 @@ enum VoiceAssistantTheme: String, CaseIterable, Identifiable, Codable {
         }
     }
 }
+
+// MARK: - 线J：5 套主题波形动画形态（语音大卡动画分发用）
+
+/// 语音大卡每套主题的波形动画形态（5 套完全不同，供 `ThemeAnimationLayer` 按主题分发）。
+enum VoiceAssistantWaveform: String, Codable {
+    /// 极光：多层流动光带（不同相位/速度的水平光带上下游走 + 沿带高光扫动）
+    case auroraBands
+    /// 深海：波浪下潜（重叠正弦波随音量整体下潜 + 上升气泡）
+    case oceanDive
+    /// 落日：暖色脉冲（落日光球呼吸 + 暖色圆环扩散波纹）
+    case sunsetPulse
+    /// 森林：条形起伏（近远两排竖条如树冠随风起伏）
+    case forestBars
+    /// 暗夜：星点呼吸（稀疏星点按各自相位呼吸 + 中央微光）
+    case stardust
+
+    /// 波形形态名（代码检索 / 调试用）。
+    var displayName: String {
+        switch self {
+        case .auroraBands: return "多层流动光带"
+        case .oceanDive: return "波浪下潜"
+        case .sunsetPulse: return "暖色脉冲"
+        case .forestBars: return "条形起伏"
+        case .stardust: return "星点呼吸"
+        }
+    }
+}
+
+extension VoiceAssistantTheme {
+    /// 每套主题对应的波形动画形态：语音大卡 `ThemeAnimationLayer` 按此分发到 5 套独立实现。
+    var waveform: VoiceAssistantWaveform {
+        switch self {
+        case .aurora: return .auroraBands
+        case .ocean: return .oceanDive
+        case .sunset: return .sunsetPulse
+        case .forest: return .forestBars
+        case .mono: return .stardust
+        }
+    }
+}

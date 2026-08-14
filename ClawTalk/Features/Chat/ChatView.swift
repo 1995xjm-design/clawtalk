@@ -609,34 +609,3 @@ private struct ChatMessageRow: View {
         .id(message.id)
     }
 }
-
-/// 单条消息渲染行：把「语音/文本气泡选择 + 附件查询」拆到独立视图，
-/// 减少列表 body 重复计算与视图重建，外观与原有渲染完全一致。
-private struct ChatMessageRow: View {
-    let message: Message
-    let voiceAttachment: VoiceMessageAttachment?
-    let showTokenUsage: Bool
-    let onRetry: (() -> Void)?
-    let onDelete: (() -> Void)?
-
-    var body: some View {
-        Group {
-            if let voiceAttachment {
-                VoiceMessageBubble(
-                    message: message,
-                    attachment: voiceAttachment,
-                    onRetry: onRetry,
-                    onDelete: onDelete
-                )
-            } else {
-                MessageBubble(
-                    message: message,
-                    showTokenUsage: showTokenUsage,
-                    onRetry: onRetry,
-                    onDelete: onDelete
-                )
-            }
-        }
-        .id(message.id)
-    }
-}

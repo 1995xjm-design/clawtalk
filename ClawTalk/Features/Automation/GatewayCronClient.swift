@@ -14,23 +14,55 @@ import Foundation
 /// 若网关侧不提供上述 REST 端点，可改用 /tools/invoke（tool: "cron_list" / "cron_create" /
 /// "cron_delete" / "cron_set_enabled"），方法体结构不变，只需替换 URL 与解析方式。
 /// 本文件的 HTTP 逻辑已完整可跑：URLRequest + Bearer token + JSON 编解码，失败抛错。
-struct GatewayCronClient {
+final class GatewayCronClient {
 
     /// 网关 baseURL（如 http://124.156.180.143:18789）
     let gatewayURL: String
     /// 网关鉴权 token（Bearer）
     let token: String
 
-    /// 端点是否已接线（网关侧确认前恒为 false；视图层据此显示「仅本机」提示）。
-    /// TODO（主智能体）：网关侧确认 /cron/tasks 端点后改为 true。
-    var isEndpointReady: Bool { false }
+    /// 探测到的端点（nil = 尚未探测 / 探测失败）
+    private(set) var resolvedEndpoint: GatewayCronEndpoint?
+
+    /// 端点是否已探测成功（视图层据此显示「仅本机」提示或可同步状态）。
+    var isEndpointReady: Bool { resolvedEndpoint != nil }
+
+    /// 候选端点自动探测：/cron/tasks → /cron/list → WS cron.list（仅提示）。
+    /// 返回诚实状态文本（视图层直接展示）。
+    func probeEndpoints() async -> String {
+        if await probe(path: "/tasks") {
+            resolvedEndpoint = .restTasks
+            return "已探测到网关 cron 接口（/cron/tasks），任务可同步"
+        }
+        if await probe(path: "/list") {
+            resolvedEndpoint = .restList
+            return "已探测到网关 cron 接口（/cron/list），任务可同步"
+        }
+        resolvedEndpoint = nil
+        return "未探测到网关 cron 接口（已尝试 /cron/tasks、/cron/list）；如网关为 OpenClaw 官方版，cron 走 WebSocket cron.list RPC，本端暂不自动同步，仅显示本机任务"
+    }
+
+    /// 探测单个候选端点：HTTP 2xx 且响应能解析为任务列表 JSON 才算接通
+    /// （避免网关 404 页返回 HTML 被误判为接口存在）。
+    private func probe(path: String) async -> Bool {
+        do {
+            var request = try makeRequest(path: path, method: "GET")
+            request.timeoutInterval = 6
+            let (data, response) = try await URLSession.shared.data(for: request)
+            guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else { return false }
+            _ = try Self.decoder.decode(CronTaskListResponse.self, from: data)
+            return true
+        } catch {
+            return false
+        }
+    }
 
     // MARK: - 列表
 
-    /// 拉取网关侧全部 cron 任务。
-    /// 待确认端点：GET {gatewayURL}/cron/tasks
+    /// 拉取网关侧全部 cron 任务（按探测到的端点拼路径）。
     func listCronTasks() async throws -> [AutomationTask] {
-        let request = try makeRequest(path: "/tasks", method: "GET")
+        let path = resolvedEndpoint == .restList ? "/list" : "/tasks"
+        let request = try makeRequest(path: path, method: "GET")
         let data = try await perform(request)
         let wrapper = try Self.decoder.decode(CronTaskListResponse.self, from: data)
         return wrapper.tasks ?? []
@@ -230,4 +262,14 @@ enum GatewayCronError: LocalizedError {
             return "网关 cron 响应解析失败。"
         }
     }
+}
+
+/// 网关 cron 候选端点（探测结果）。
+enum GatewayCronEndpoint: Equatable {
+    /// REST：GET {base}/cron/tasks
+    case restTasks
+    /// REST：GET {base}/cron/list
+    case restList
+    /// OpenClaw 官方 WebSocket RPC cron.list（本端仅标记，不实现 RPC）
+    case webSocketRPC
 }

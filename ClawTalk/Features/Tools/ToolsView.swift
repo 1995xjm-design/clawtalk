@@ -59,6 +59,19 @@ struct ToolsView: View {
                         Text("在设置中开启 WebSocket 模式后可浏览可用模型。")
                     }
                 }
+
+                Section {
+                    NavigationLink {
+                        HomeCardManagerView()
+                    } label: {
+                        Label("主页卡片管理", systemImage: "square.grid.2x2")
+                            .foregroundStyle(Color.openClawRed)
+                    }
+                } header: {
+                    Text("本地功能")
+                } footer: {
+                    Text("添加 / 移除主页常用卡片，变更即时生效，功能不丢失。")
+                }
             }
             .listStyle(.insetGrouped)
             .navigationTitle("工具")

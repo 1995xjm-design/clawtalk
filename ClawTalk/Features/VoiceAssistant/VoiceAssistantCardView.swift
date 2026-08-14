@@ -63,7 +63,7 @@ struct VoiceAssistantCardView: View, VoiceAssistantCardContent {
         ZStack {
             // 整卡流动彩带（Siri 风，四态共用一套背景，速度/亮度随状态变化）
             SiriBackgroundLayer(state: viewModel.state, theme: theme)
-            // 主题动画层：每套主题完全不同的动画效果（频谱条/呼吸光带/星尘/水波/极光流）
+            // 主题动画层：5 套主题各自独立动画（极光多层光带/深海波浪下潜/落日暖色脉冲/森林条形起伏/暗夜星点呼吸）
             ThemeAnimationLayer(
                 state: viewModel.state,
                 theme: theme,
@@ -681,22 +681,30 @@ private struct SiriBackgroundLayer: View {
     }
 }
 
-// MARK: - 主题动画层（沉浸式：中央核心 + 四周光效 + 底部弧形 + 顶部光带）
+// MARK: - 主题动画层（线J：5 套主题独立动画实现）
 
-/// 统一沉浸式动画体系（参考 GIF 效果）：中央圆形排布音量条核心 + 圆环扩散/光点漂浮 +
-/// 底部弧形渐变光带 + 顶部水平流动光带。5 套主题保留齿轮 Picker，作为配色与参数微调。
+/// 主题动画层：按 `theme.waveform` 分发到 5 套完全独立的动画实现——
+/// 极光（多层流动光带）/ 深海（波浪下潜）/ 落日（暖色脉冲）/ 森林（条形起伏）/ 暗夜（星点呼吸）。
+/// 每套都随真实麦克风音量（audioLevel）起伏，待机低幅微澜；对话/录音/设置逻辑不受影响。
 private struct ThemeAnimationLayer: View {
     let state: VoiceAssistantState
     let theme: VoiceAssistantTheme
     let micLevel: Float
     let micActive: Bool
 
+    @ViewBuilder
     var body: some View {
-        ZStack {
-            OrbCoreView(state: state, theme: theme, micLevel: micLevel, micActive: micActive)
-            HaloLayer(state: state, theme: theme)
-            BottomArcGlow(state: state, theme: theme, micLevel: micLevel, micActive: micActive)
-            TopLightBand(state: state, theme: theme)
+        switch theme.waveform {
+        case .auroraBands:
+            AuroraFlowLayer(state: state, theme: theme, micLevel: micLevel, micActive: micActive)
+        case .oceanDive:
+            OceanDiveLayer(state: state, theme: theme, micLevel: micLevel, micActive: micActive)
+        case .sunsetPulse:
+            SunsetPulseLayer(state: state, theme: theme, micLevel: micLevel, micActive: micActive)
+        case .forestBars:
+            ForestBarLayer(state: state, theme: theme, micLevel: micLevel, micActive: micActive)
+        case .stardust:
+            StardustLayer(state: state, theme: theme, micLevel: micLevel, micActive: micActive)
         }
     }
 }
@@ -717,6 +725,371 @@ private func ambientLevel(
     return theme.idleAmplitude * (0.40 + 0.60 * abs(sin(t * 1.3 + phase * 1.7)))
 }
 
+// MARK: - 线J：5 套主题独立动画实现（每套波形形态/动效/光效完全不同）
+
+/// 状态动画倍速：待机最慢，聆听/播报加速。
+private func stateSpeedMultiplier(_ state: VoiceAssistantState) -> Double {
+    switch state {
+    case .idle: return 1.0
+    case .listening: return 1.9
+    case .thinking: return 1.25
+    case .speaking: return 2.4
+    }
+}
+
+/// 状态亮度系数：待机偏暗（低打扰），聆听/播报最亮。
+private func stateBrightnessMultiplier(_ state: VoiceAssistantState) -> Double {
+    switch state {
+    case .idle: return 0.55
+    case .listening: return 1.0
+    case .thinking: return 0.75
+    case .speaking: return 1.0
+    }
+}
+
+// MARK: - 主题 1/5 极光：多层流动光带
+
+/// 极光主题动画：3 条不同相位/速度的水平光带上下游走 + 沿带白色高光扫动，像多层极光帘。
+/// 音量越大：光带越亮、起伏越高、扫动越快；待机低幅漂移微澜。
+private struct AuroraFlowLayer: View {
+    let state: VoiceAssistantState
+    let theme: VoiceAssistantTheme
+    let micLevel: Float
+    let micActive: Bool
+
+    private let bandCount = 3
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { context in
+            let t = context.date.timeIntervalSinceReferenceDate
+            GeometryReader { geo in
+                let width = geo.size.width
+                let height = geo.size.height
+                let amp = ambientLevel(state: state, theme: theme, micLevel: micLevel, micActive: micActive, t: t, phase: 0.3)
+                ZStack {
+                    ForEach(0..<bandCount, id: \.self) { index in
+                        auroraBand(index: index, width: width, height: height, t: t, amp: amp)
+                    }
+                }
+            }
+        }
+        .allowsHitTesting(false)
+    }
+
+    private func auroraBand(index: Int, width: CGFloat, height: CGFloat, t: TimeInterval, amp: Double) -> some View {
+        let speed = stateSpeedMultiplier(state) * theme.idleSpeed * (0.75 + 0.20 * Double(index))
+        let phase = Double(index) * 1.9
+        let baseY = height * (0.16 + 0.15 * CGFloat(index))
+        let waveHeight = (4.0 + amp * 13.0) * (1.0 - 0.16 * Double(index))
+        let waveFreq = 1.6 + 0.4 * Double(index)
+        let driftY = CGFloat(amp * 9.0 * sin(t * 0.8 + phase))
+        let y = baseY + driftY
+        let sweep = (t * speed * 0.10 + Double(index) * 0.37).truncatingRemainder(dividingBy: 1.0)
+        let bright = stateBrightnessMultiplier(state)
+        let colors = theme.ribbonColors.map { $0.opacity((0.45 + 0.55 * amp) * bright) }
+        return ZStack {
+            // 光带本体（正弦起伏曲线）
+            Path { path in
+                path.move(to: CGPoint(x: 0, y: y))
+                for step in 0...22 {
+                    let x = width * CGFloat(step) / 22.0
+                    let yy = y + CGFloat(waveHeight) * CGFloat(sin(t * waveFreq + Double(step) * 0.30 + phase))
+                    path.addLine(to: CGPoint(x: x, y: yy))
+                }
+            }
+            .stroke(
+                LinearGradient(colors: colors, startPoint: .leading, endPoint: .trailing),
+                style: StrokeStyle(lineWidth: 2.4 + amp * 2.2, lineCap: .round)
+            )
+            .blur(radius: 1.5)
+            .shadow(color: theme.accentColor.opacity(0.5), radius: 10)
+
+            // 沿光带流动的白色高光
+            let fx = width * CGFloat(sweep)
+            let fy = y + CGFloat(waveHeight) * CGFloat(sin(t * waveFreq + sweep * 6.8 + phase))
+            Circle()
+                .fill(.white.opacity((0.30 + 0.60 * amp) * bright))
+                .frame(width: 9 + amp * 7, height: 9 + amp * 7)
+                .blur(radius: 3.5)
+                .position(x: fx, y: fy)
+        }
+    }
+}
+
+// MARK: - 主题 2/5 深海：波浪下潜
+
+/// 深海主题动画：重叠正弦波（水面/中层/深层）随音量整体下潜 + 上升气泡。
+/// 音量越大：波浪下潜更深、波幅越大、气泡越亮；待机水面轻伏。
+private struct OceanDiveLayer: View {
+    let state: VoiceAssistantState
+    let theme: VoiceAssistantTheme
+    let micLevel: Float
+    let micActive: Bool
+
+    private let waveCount = 3
+    private let bubbleCount = 9
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { context in
+            let t = context.date.timeIntervalSinceReferenceDate
+            GeometryReader { geo in
+                let width = geo.size.width
+                let height = geo.size.height
+                let amp = ambientLevel(state: state, theme: theme, micLevel: micLevel, micActive: micActive, t: t, phase: 0.7)
+                ZStack {
+                    ForEach(0..<waveCount, id: \.self) { index in
+                        oceanWave(index: index, width: width, height: height, t: t, amp: amp)
+                    }
+                    ForEach(0..<bubbleCount, id: \.self) { index in
+                        oceanBubble(index: index, width: width, height: height, t: t, amp: amp)
+                    }
+                }
+            }
+        }
+        .allowsHitTesting(false)
+    }
+
+    private func oceanWave(index: Int, width: CGFloat, height: CGFloat, t: TimeInterval, amp: Double) -> some View {
+        let speed = stateSpeedMultiplier(state) * theme.idleSpeed
+        let phase = Double(index) * 1.3
+        // 下潜深度：音量越大越深
+        let dive = CGFloat(amp * 26.0)
+        let baseY = height * (0.30 + 0.18 * CGFloat(index)) + dive
+        let waveHeight = (3.0 + amp * 11.0) * (1.0 - 0.12 * Double(index))
+        let waveFreq = 2.0 + 0.5 * Double(index)
+        let bright = stateBrightnessMultiplier(state)
+        let colors = [
+            theme.accentColor.opacity(0.14 * bright),
+            theme.accentColor.opacity((0.50 + 0.40 * amp) * bright),
+            theme.accentColor.opacity(0.14 * bright)
+        ]
+        return Path { path in
+            path.move(to: CGPoint(x: 0, y: baseY))
+            for step in 0...26 {
+                let x = width * CGFloat(step) / 26.0
+                let yy = baseY + CGFloat(waveHeight) * CGFloat(sin(t * speed * 0.9 + Double(step) * 0.36 + phase))
+                path.addLine(to: CGPoint(x: x, y: yy))
+            }
+        }
+        .stroke(
+            LinearGradient(colors: colors, startPoint: .leading, endPoint: .trailing),
+            style: StrokeStyle(lineWidth: 2.0 + amp * 2.0, lineCap: .round)
+        )
+        .blur(radius: 1.2)
+        .shadow(color: theme.accentColor.opacity(0.4), radius: 7)
+    }
+
+    private func oceanBubble(index: Int, width: CGFloat, height: CGFloat, t: TimeInterval, amp: Double) -> some View {
+        let speed = stateSpeedMultiplier(state) * (0.9 + 0.25 * Double(index % 4))
+        let seed = Double(index) * 2.3999
+        let x = width * CGFloat(0.08 + 0.84 * (seed * 0.618).truncatingRemainder(dividingBy: 1.0))
+        let cycle = (t * speed * 0.10 + seed * 0.13).truncatingRemainder(dividingBy: 1.0)
+        let y = height * (0.78 - 0.62 * CGFloat(cycle))
+        let twinkle = 0.4 + 0.6 * abs(sin(t * 1.6 + seed))
+        let bright = stateBrightnessMultiplier(state)
+        let size = 2.0 + CGFloat(index % 3) * 1.6 + amp * 2.5
+        return Circle()
+            .fill(.white.opacity(0.16 * twinkle * (0.4 + 0.6 * amp) * bright))
+            .frame(width: size, height: size)
+            .blur(radius: 0.6)
+            .position(x: x, y: y)
+    }
+}
+
+// MARK: - 主题 3/5 落日：暖色脉冲
+
+/// 落日主题动画：底部暖色「落日」光球呼吸 + 3 圈暖色圆环向外扩散（波纹）。
+/// 音量越大：光球越亮越大、圆环扩散越快越明显；待机缓慢暖光脉动。
+private struct SunsetPulseLayer: View {
+    let state: VoiceAssistantState
+    let theme: VoiceAssistantTheme
+    let micLevel: Float
+    let micActive: Bool
+
+    private let ringCount = 3
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { context in
+            let t = context.date.timeIntervalSinceReferenceDate
+            GeometryReader { geo in
+                let width = geo.size.width
+                let height = geo.size.height
+                let amp = ambientLevel(state: state, theme: theme, micLevel: micLevel, micActive: micActive, t: t, phase: 0.2)
+                let speed = stateSpeedMultiplier(state) * theme.idleSpeed
+                let center = CGPoint(x: width * 0.5, y: height * 0.66)
+                let breathe = 0.5 + 0.5 * abs(sin(t * 1.2))
+                let bright = stateBrightnessMultiplier(state)
+                ZStack {
+                    // 落日光球（暖色呼吸 + 随音量变大）
+                    Circle()
+                        .fill(
+                            RadialGradient(
+                                colors: [
+                                    theme.accentColor.opacity((0.55 + 0.45 * amp) * bright),
+                                    theme.accentColor.opacity(0.25 * breathe * bright),
+                                    .clear
+                                ],
+                                center: .center,
+                                startRadius: 0,
+                                endRadius: width * 0.30
+                            )
+                        )
+                        .frame(width: width * 0.62, height: width * 0.62)
+                        .blur(radius: 6)
+                        .position(center)
+                        .scaleEffect(1.0 + amp * 0.10)
+
+                    // 暖色扩散圆环（3 圈错相）
+                    ForEach(0..<ringCount, id: \.self) { index in
+                        let progress = (t * speed * (0.30 + 0.35 * amp) + Double(index) / Double(ringCount))
+                            .truncatingRemainder(dividingBy: 1.0)
+                        let radius = width * 0.16 * CGFloat(progress)
+                        let opacity = (1.0 - progress) * (0.16 + 0.40 * amp) * bright
+                        Circle()
+                            .stroke(
+                                theme.accentColor.opacity(opacity),
+                                lineWidth: progress < 0.2 ? 2.2 : 1.2
+                            )
+                            .frame(width: radius * 2, height: radius * 2)
+                            .position(center)
+                            .blur(radius: 0.8)
+                    }
+                }
+            }
+        }
+        .allowsHitTesting(false)
+    }
+}
+
+// MARK: - 主题 4/5 森林：条形起伏
+
+/// 森林主题动画：底部近远两排竖直条形（近亮远暗）如树冠随风起伏。
+/// 音量越大：条高越高、摆动越快；待机树冠轻摆微澜。
+private struct ForestBarLayer: View {
+    let state: VoiceAssistantState
+    let theme: VoiceAssistantTheme
+    let micLevel: Float
+    let micActive: Bool
+
+    private let barCount = 23
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { context in
+            let t = context.date.timeIntervalSinceReferenceDate
+            GeometryReader { geo in
+                let width = geo.size.width
+                let height = geo.size.height
+                let amp = ambientLevel(state: state, theme: theme, micLevel: micLevel, micActive: micActive, t: t, phase: 0.5)
+                let speed = stateSpeedMultiplier(state) * theme.idleSpeed
+                ZStack {
+                    // 远景条（暗、矮）
+                    barRow(back: true, width: width, height: height, t: t, amp: amp, speed: speed)
+                    // 近景条（亮、高）
+                    barRow(back: false, width: width, height: height, t: t, amp: amp, speed: speed)
+                }
+            }
+        }
+        .allowsHitTesting(false)
+    }
+
+    private func barRow(back: Bool, width: CGFloat, height: CGFloat, t: TimeInterval, amp: Double, speed: Double) -> some View {
+        let spacing = width / CGFloat(barCount + 1)
+        let baseHeight = back ? height * 0.10 : height * 0.16
+        let topY = back ? height * 0.78 : height * 0.80
+        let maxRise = back ? height * 0.10 : height * 0.20
+        let phaseOffset = back ? 1.3 : 0.0
+        let bright = stateBrightnessMultiplier(state)
+        return ZStack {
+            ForEach(0..<barCount, id: \.self) { index in
+                let phase = Double(index) * 0.28 + phaseOffset
+                let sway = 0.30 + 0.70 * abs(sin(t * speed * 1.2 + phase))
+                let barHeight = baseHeight + maxRise * CGFloat(sway) * CGFloat(0.35 + 0.65 * amp)
+                let x = spacing * CGFloat(index + 1)
+                let y = topY - barHeight
+                Capsule()
+                    .fill(
+                        LinearGradient(
+                            colors: back
+                                ? [theme.accentColor.opacity(0.18), theme.accentColor.opacity(0.05)]
+                                : [
+                                    theme.accentColor.opacity((0.70 + 0.30 * amp) * bright),
+                                    theme.accentColor.opacity(0.12)
+                                ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+                    .frame(width: back ? 3.4 : 4.6, height: barHeight)
+                    .position(x: x, y: y)
+                    .shadow(color: back ? .clear : theme.accentColor.opacity(0.35), radius: 4)
+            }
+        }
+    }
+}
+
+// MARK: - 主题 5/5 暗夜：星点呼吸
+
+/// 暗夜主题动画：稀疏星点按各自相位呼吸（大小/亮度同步起伏）+ 中央微光。
+/// 音量越大：星点越亮越大、呼吸加快；待机缓慢呼吸（几乎不动）。
+private struct StardustLayer: View {
+    let state: VoiceAssistantState
+    let theme: VoiceAssistantTheme
+    let micLevel: Float
+    let micActive: Bool
+
+    private let starCount = 24
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { context in
+            let t = context.date.timeIntervalSinceReferenceDate
+            GeometryReader { geo in
+                let width = geo.size.width
+                let height = geo.size.height
+                let amp = ambientLevel(state: state, theme: theme, micLevel: micLevel, micActive: micActive, t: t, phase: 0.4)
+                let speed = stateSpeedMultiplier(state) * theme.idleSpeed
+                let breathe = 0.5 + 0.5 * abs(sin(t * 1.0))
+                let bright = stateBrightnessMultiplier(state)
+                ZStack {
+                    // 中央微光（星云感，暗夜主题低亮度）
+                    Circle()
+                        .fill(
+                            RadialGradient(
+                                colors: [.white.opacity(0.10 * breathe * (0.3 + 0.7 * amp) * bright), .clear],
+                                center: .center,
+                                startRadius: 0,
+                                endRadius: width * 0.34
+                            )
+                        )
+                        .frame(width: width * 0.68, height: width * 0.68)
+                        .blur(radius: 10)
+                        .position(x: width * 0.5, y: height * 0.46)
+
+                    ForEach(0..<starCount, id: \.self) { index in
+                        star(index: index, width: width, height: height, t: t, amp: amp, speed: speed)
+                    }
+                }
+            }
+        }
+        .allowsHitTesting(false)
+    }
+
+    private func star(index: Int, width: CGFloat, height: CGFloat, t: TimeInterval, amp: Double, speed: Double) -> some View {
+        let seed = Double(index) * 2.3999
+        let x = width * CGFloat(0.05 + 0.90 * (seed * 0.618).truncatingRemainder(dividingBy: 1.0))
+        let y = height * CGFloat(0.10 + 0.80 * (seed * 0.314).truncatingRemainder(dividingBy: 1.0))
+        let phase = seed * 2.0
+        let breathe = 0.5 + 0.5 * sin(t * speed * 0.7 + phase)
+        let brightness = (0.15 + 0.50 * breathe) * (0.30 + 0.70 * amp)
+        let size = 1.6 + CGFloat(index % 3) * 1.5 + CGFloat(breathe) * 2.0
+        return Circle()
+            .fill(.white.opacity(brightness))
+            .frame(width: size, height: size)
+            .blur(radius: index % 4 == 0 ? 1.2 : 0.4)
+            .position(x: x, y: y)
+    }
+}
+
+// MARK: - 历史动画组件（线J 起保留：功能零删除约束；主题分发已切换为上方 5 套独立实现）
 // MARK: - 中央核心：圆形排布音量条 + 中心光球
 
 /// 参考图核心视觉：16 根小竖条等角围绕圆心（波形球/声波），中心光球呼吸；

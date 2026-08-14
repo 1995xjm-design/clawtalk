@@ -38,14 +38,26 @@ public class ClawTalkDataService {
     createDirectoryIfNeeded()
   }
 
-  /// 迁移旧数据目录（GURU → ClawTalk），一次性搬移
+  /// 迁移旧数据目录（GURU → ClawTalk）兼容：老用户数据在 GURU 目录
+  /// 新目录优先；旧目录有数据则迁移到新目录；不删除旧目录，保留读取兼容
   private func migrateLegacyDirectoryIfNeeded() {
     guard let appGroupURL, let newURL = clawTalkBaseURL else { return }
     let legacyURL = appGroupURL.appendingPathComponent("GURU", isDirectory: true)
     var isDir: ObjCBool = false
     guard fileManager.fileExists(atPath: legacyURL.path, isDirectory: &isDir), isDir.boolValue else { return }
+    guard let legacyFiles = try? fileManager.contentsOfDirectory(atPath: legacyURL.path),
+          !legacyFiles.isEmpty else { return }
     if !fileManager.fileExists(atPath: newURL.path) {
+      // 新目录不存在：整体搬移，老用户数据不丢
       try? fileManager.moveItem(at: legacyURL, to: newURL)
+      return
+    }
+    // 新目录已存在：逐文件补搬（不覆盖同名文件），保留旧目录其余文件
+    for filename in legacyFiles {
+      let source = legacyURL.appendingPathComponent(filename)
+      let destination = newURL.appendingPathComponent(filename)
+      guard !fileManager.fileExists(atPath: destination.path) else { continue }
+      try? fileManager.moveItem(at: source, to: destination)
     }
   }
 

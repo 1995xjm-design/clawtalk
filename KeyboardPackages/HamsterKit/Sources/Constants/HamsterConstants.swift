@@ -43,7 +43,7 @@ public enum HamsterConstants {
   public static let appURLForMain = "hamster://app.lgm.7517/main"
 
   /// Keyboard brain-icon opens the ClawTalk page URL (point to ClawTalk deep link when integrating).
-  public static let appURLForGuru = "hamster://app.lgm.7517/clawTalk"
+  public static let appURLForClawTalk = "hamster://app.lgm.7517/clawTalk"
 
   /// Keyboard long-press AI opens the main app keyboard-settings page (ClawTalk deep link).
   public static let appURLForKeyboardSettings = "clawtalk://keyboard-settings"

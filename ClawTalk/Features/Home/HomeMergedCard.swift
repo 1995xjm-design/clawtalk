@@ -420,6 +420,38 @@ struct HomeMergedCardPage: View {
                     destination: AnyView(HeartTargetPanelHost())
                 )
             ]
+        case .automation:
+            return [
+                HomeSection(
+                    id: "automation", title: "自动化任务", icon: "clock.badge.checkmark", tint: .blue,
+                    subtitle: "定时任务 · 到点自动执行",
+                    destination: AnyView(AutomationListView(settings: settings))
+                )
+            ]
+        case .fileSafe:
+            return [
+                HomeSection(
+                    id: "file-safe", title: "文件防丢", icon: "lock.doc.fill", tint: .teal,
+                    subtitle: "重要文件登记 · 防丢副本 · 到期提醒",
+                    destination: AnyView(FileVaultView())
+                )
+            ]
+        case .emergency:
+            return [
+                HomeSection(
+                    id: "emergency", title: "紧急求助", icon: "sos.circle.fill", tint: .red,
+                    subtitle: "紧急联系 · SOS 求助 · 位置发送",
+                    destination: AnyView(EmergencyView(store: EmergencyStore.shared))
+                )
+            ]
+        case .winddown:
+            return [
+                HomeSection(
+                    id: "winddown", title: "睡前陪伴", icon: "moon.stars.fill", tint: .indigo,
+                    subtitle: "说晚安 · 白噪音 · 明日预览",
+                    destination: AnyView(WindDownView(settings: settings))
+                )
+            ]
         }
     }
 }

@@ -322,6 +322,14 @@ struct HomeTabView: View {
             CloneTalkView(settingsStore: settings)
         } else if kind == .expense {
             ExpenseListView(settingsStore: settings)
+        } else if kind == .automation {
+            AutomationListView(settings: settings)
+        } else if kind == .fileSafe {
+            FileVaultView()
+        } else if kind == .emergency {
+            EmergencyView(store: EmergencyStore.shared)
+        } else if kind == .winddown {
+            WindDownView(settings: settings)
         } else {
             HomeMergedCardPage(
                 kind: kind,
@@ -479,6 +487,9 @@ struct HomeTabView: View {
             if summary.expense > 0 { return "¥\(summary.expense.expenseAmountText)" }
             if summary.income > 0 { return "¥\(summary.income.expenseAmountText)" }
             return nil
+        case .automation:
+            let count = automationViewModel?.tasks.count ?? 0
+            return count > 0 ? "\(count) 个任务" : nil
         default:
             return nil
         }

@@ -38,7 +38,7 @@ final class AutomationViewModel {
                     gatewayURL: settings.settings.gatewayURL
                 )
             )
-            gatewayStatusText = "已配置网关；cron 接口待网关侧确认后自动同步"
+            gatewayStatusText = "已配置网关；cron 接口将自动探测后同步"
         } else {
             gatewayClient = nil
             gatewayStatusText = "网关未配置，仅显示本机任务"
@@ -97,24 +97,25 @@ final class AutomationViewModel {
 
     // MARK: - 网关同步（预留）
 
-    /// 从网关拉取 cron 任务并合并到本机（端点接线前仅更新状态提示）。
+    /// 从网关拉取 cron 任务并合并到本机（端点自动探测，探测不到诚实提示）。
     func refresh() async {
         guard let client = gatewayClient else { return }
         isLoading = true
         errorMessage = nil
-        // 网关 cron REST 端点未接线（isEndpointReady 恒 false）：不发起请求，
-        // 避免对不存在的端点发请求拿到网页 HTML 触发 JSON 解析报错（历史日志「未能读取数据，因为它的格式不正确」）。
+        // 线 I：候选端点自动探测（/cron/tasks、/cron/list；OpenClaw 官方 WS cron.list 仅提示）。
+        // 探测成功才发起请求，避免对不存在的端点发请求拿到网页 HTML 触发 JSON 解析报错。
+        let probeText = await client.probeEndpoints()
         guard client.isEndpointReady else {
-            gatewayStatusText = "网关任务同步未接线（端点待网关侧确认）"
+            gatewayStatusText = probeText
             isLoading = false
             return
         }
         do {
             let remote = try await client.listCronTasks()
             mergeRemote(remote)
-            gatewayStatusText = "已同步 \(remote.count) 个网关任务"
+            gatewayStatusText = "已同步 \(remote.count) 个网关任务（端点：\(client.resolvedEndpoint == .restList ? "/cron/list" : "/cron/tasks")）"
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = Self.errorText(error)
             gatewayStatusText = "网关同步失败，仅显示本机任务"
         }
         isLoading = false

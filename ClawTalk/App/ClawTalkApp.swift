@@ -229,7 +229,7 @@ struct ClawTalkApp: App {
             }
             .sheet(isPresented: $showKeyboardSettings) {
                 NavigationStack {
-                    KeyboardSettingsPlaceholderView()
+                    KeyboardSettingsFullView()
                 }
             }
             .tint(.openClawRed)
@@ -356,7 +356,8 @@ struct ClawTalkApp: App {
                 Task { await PushManager.shared.reportIfConfigured(settings: settingsStore) }
             }
             .onReceive(NotificationCenter.default.publisher(for: WidgetDataSync.dataDidChangeNotification)) { _ in
-                // 记账/提醒数据变化：立即刷新小组件（3 秒同步循环兜底）
+                // 记账/提醒数据变化：重载常驻提醒 store（内存数组跟随最新 UserDefaults），再刷新小组件
+                widgetReminderStore = CareReminderStore()
                 updateWidgetIfNeeded()
             }
     }
@@ -687,7 +688,7 @@ struct ClawTalkApp: App {
                 showExpenseFromWidget = true
                 return
             case "keyboard-settings", "keyboard":
-                // 键盘设置深链接：clawtalk://keyboard-settings 或 clawtalk://keyboard → 弹「键盘」设置页（键盘包搬入前为占位页）
+                // 键盘设置深链接：clawtalk://keyboard-settings 或 clawtalk://keyboard → 弹完整键盘设置页（KeyboardSettingsHostViewController，已非占位页）
                 showKeyboardSettings = true
                 return
             default:

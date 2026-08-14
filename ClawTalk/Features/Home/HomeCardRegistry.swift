@@ -15,6 +15,10 @@ enum HomeCardKind: String, CaseIterable, Identifiable, Hashable, Codable {
     case travel
     case knowledge
     case keyboard
+    case automation
+    case fileSafe
+    case emergency
+    case winddown
 
     var id: String { rawValue }
 
@@ -30,6 +34,10 @@ enum HomeCardKind: String, CaseIterable, Identifiable, Hashable, Codable {
         case .travel: return "出行"
         case .knowledge: return "知识"
         case .keyboard: return "键盘智能"
+        case .automation: return "自动化"
+        case .fileSafe: return "文件防丢"
+        case .emergency: return "紧急求助"
+        case .winddown: return "睡前陪伴"
         }
     }
 
@@ -45,6 +53,10 @@ enum HomeCardKind: String, CaseIterable, Identifiable, Hashable, Codable {
         case .travel: return "airplane"
         case .knowledge: return "books.vertical.fill"
         case .keyboard: return "keyboard.badge.ellipsis"
+        case .automation: return "clock.badge.checkmark"
+        case .fileSafe: return "lock.doc.fill"
+        case .emergency: return "sos.circle.fill"
+        case .winddown: return "moon.stars.fill"
         }
     }
 
@@ -60,6 +72,10 @@ enum HomeCardKind: String, CaseIterable, Identifiable, Hashable, Codable {
         case .travel: return .blue
         case .knowledge: return .purple
         case .keyboard: return .indigo
+        case .automation: return .blue
+        case .fileSafe: return .teal
+        case .emergency: return .red
+        case .winddown: return .indigo
         }
     }
 
@@ -75,6 +91,10 @@ enum HomeCardKind: String, CaseIterable, Identifiable, Hashable, Codable {
         case .travel: return "差旅管家 · 停车位置"
         case .knowledge: return "知识库问答 · 长文摘要"
         case .keyboard: return "Now ClawTalk · 每日洞察 · 智能调频 · 聊天档案"
+        case .automation: return "定时任务 · 到点自动执行 · 网关同步"
+        case .fileSafe: return "重要文件登记 · 防丢副本 · 到期提醒"
+        case .emergency: return "紧急联系 · SOS 求助 · 位置发送"
+        case .winddown: return "睡前说晚安 · 白噪音 · 明日预览"
         }
     }
 
@@ -220,9 +240,23 @@ enum HomeCardRegistry {
         }
     }
 
+    /// 线 I：老用户存储无「自动化 / 文件防丢 / 紧急求助 / 睡前陪伴」时，末尾追加（孤儿功能挂回主页）。
+    static func migrateLineIFeaturesIfNeeded(_ storage: inout String) {
+        let migratedKey = "home.cardsMigratedLineIFeaturesV1"
+        guard !UserDefaults.standard.bool(forKey: migratedKey) else { return }
+        UserDefaults.standard.set(true, forKey: migratedKey)
+        var kinds = enabledKinds(from: storage)
+        let lineIKinds: [HomeCardKind] = [.automation, .fileSafe, .emergency, .winddown]
+        for kind in lineIKinds where !kinds.contains(kind) {
+            kinds.append(kind)
+        }
+        storage = storageValue(for: kinds)
+    }
+
     /// 统一迁移入口：主页读取卡片存储时调用。
     static func runMigrations(_ storage: inout String) {
         migrateMemoryCardIfNeeded(&storage)
         migrateCloneTalkCardIfNeeded(&storage)
+        migrateLineIFeaturesIfNeeded(&storage)
     }
 }

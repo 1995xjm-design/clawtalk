@@ -54,7 +54,7 @@ public class SettingsViewModel: ObservableObject {
     }
   }
 
-  func navigateToGuru() { navigate(.clawTalk) }
+  func navigateToClawTalk() { navigate(.clawTalk) }
   func navigateToICloud() { navigate(.iCloud) }
   func navigateToAutoInsight() { navigate(.autoInsight) }
   func navigateToSmartFreq() { navigate(.smartFreq) }
@@ -279,7 +279,7 @@ extension SettingsViewModel {
     }
 
     // 已部署标记：上次部署成功过就直接快速启动，不再全量编译（避免主程序黑屏）
-    // 迁移旧 key（guru_rime_deployed → clawTalk_rime_deployed）
+    // 迁移旧 key（guru_rime_deployed → clawTalk_rime_deployed）：读旧值 → 写新值 → 删旧 key
     if UserDefaults.hamster.object(forKey: "guru_rime_deployed") != nil,
        UserDefaults.hamster.object(forKey: "clawTalk_rime_deployed") == nil {
       UserDefaults.hamster.set(UserDefaults.hamster.bool(forKey: "guru_rime_deployed"), forKey: "clawTalk_rime_deployed")
