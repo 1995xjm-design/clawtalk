@@ -211,7 +211,7 @@ extension KeyboardContext {
   var clawCandidateBarHeight: CGFloat {
     switch keyboardType {
     case .chineseNineGridIOS: return ClawIOSNativePalette.candidateRowHeight * 2
-    case .chineseNineGrid: return keyboardContext.heightOfToolbar
+    case .chineseNineGrid: return heightOfToolbar
     default: return ClawIOSNativePalette.candidateRowHeight
     }
   }
