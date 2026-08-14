@@ -242,7 +242,8 @@ struct AppSettings: Codable {
         homeWallpaperChosen: Bool = false,
         customWallpaperPath: String? = nil,
         globalGlassEnabled: Bool = false,
-        homeBlurStrength: Double = 0.55
+        homeBlurStrength: Double = 0.55,
+        weatherCity: String = "??"
     ) {
         self.gatewayURL = gatewayURL
         self.bootstrapToken = bootstrapToken
@@ -279,6 +280,7 @@ struct AppSettings: Codable {
         self.customWallpaperPath = customWallpaperPath
         self.globalGlassEnabled = globalGlassEnabled
         self.homeBlurStrength = homeBlurStrength
+        self.weatherCity = weatherCity
     }
 
     init(from decoder: Decoder) throws {

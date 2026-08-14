@@ -27,6 +27,11 @@ final class GatewayCronClient {
     /// 端点是否已探测成功（视图层据此显示「仅本机」提示或可同步状态）。
     var isEndpointReady: Bool { resolvedEndpoint != nil }
 
+    init(gatewayURL: String, token: String) {
+        self.gatewayURL = gatewayURL
+        self.token = token
+    }
+
     /// 候选端点自动探测：/cron/tasks → /cron/list → WS cron.list（仅提示）。
     /// 返回诚实状态文本（视图层直接展示）。
     func probeEndpoints() async -> String {
@@ -168,7 +173,7 @@ final class GatewayCronClient {
             if let text = try? container.decode(String.self) {
                 let formatters = [
                     ISO8601DateFormatter(),
-                    Self.fractionalISOFormatter
+                    GatewayCronClient.fractionalISOFormatter
                 ]
                 for formatter in formatters {
                     if let date = formatter.date(from: text) {
