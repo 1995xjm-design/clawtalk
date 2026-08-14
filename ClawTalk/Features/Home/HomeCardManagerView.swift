@@ -44,10 +44,10 @@ struct HomeCardManagerView: View {
                             }
                         }
                         .buttonStyle(.plain)
+                        .accessibilityValue(enabled.contains(kind) ? "已显示" : "已隐藏")
                     }
                 } header: {
                     Text("主页卡片")
-                        .accessibilityValue(enabled.contains(kind) ? "已显示" : "已隐藏")
                 } footer: {
                     Text("已显示 \(enabled.count) / \(HomeCardKind.allCases.count) 张。点按在主页显示 / 移除，移除后仍可从本页加回，功能不丢失。")
                 }

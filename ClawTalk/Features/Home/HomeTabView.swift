@@ -89,29 +89,7 @@ struct HomeTabView: View {
             NavigationStack {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 20) {
-                        Group {
-                            if let assistantViewModel {
-                                VoiceAssistantCardSlot(content: VoiceAssistantCardView(viewModel: assistantViewModel, settingsStore: settings))
-                            } else {
-                                VoiceAssistantCardSlot()
-                            }
-                        }
-                        .padding(.horizontal, 16)
-                        .overlay(alignment: .bottomTrailing) {
-                            if let onOpenRealtimeVoice {
-                                Button(action: onOpenRealtimeVoice) {
-                                    Image(systemName: "waveform.circle.fill")
-                                        .font(.title1)
-                                        .foregroundStyle(.white)
-                                        .frame(width: 46, height: 46)
-                                        .background(.ultraThinMaterial, in: Circle())
-                                        .overlay(Circle().stroke(.white.opacity(0.25), lineWidth: 1))
-                                        .shadow(color: .black.opacity(0.3), radius: 4, x: 0, y: 2)
-                                }
-                                .padding(14)
-                                .accessibilityLabel("实时语音")
-                            }
-                        }
+                        assistantSection
 
                         todayOverviewSection
 
@@ -144,6 +122,32 @@ struct HomeTabView: View {
             }
             // N9：NavigationStack 容器背景必须透明，否则盖住底层壁纸层。
             .background(.clear)
+        }
+    }
+
+    private var assistantSection: some View {
+        Group {
+            if let assistantViewModel {
+                VoiceAssistantCardSlot(content: VoiceAssistantCardView(viewModel: assistantViewModel, settingsStore: settings))
+            } else {
+                VoiceAssistantCardSlot()
+            }
+        }
+        .padding(.horizontal, 16)
+        .overlay(alignment: .bottomTrailing) {
+            if let onOpenRealtimeVoice {
+                Button(action: onOpenRealtimeVoice) {
+                    Image(systemName: "waveform.circle.fill")
+                        .font(.title)
+                        .foregroundStyle(.white)
+                        .frame(width: 46, height: 46)
+                        .background(.ultraThinMaterial, in: Circle())
+                        .overlay(Circle().stroke(.white.opacity(0.25), lineWidth: 1))
+                        .shadow(color: .black.opacity(0.3), radius: 4, x: 0, y: 2)
+                }
+                .padding(14)
+                .accessibilityLabel("实时语音")
+            }
         }
     }
 
@@ -209,7 +213,7 @@ struct HomeTabView: View {
             if kinds.isEmpty {
                 VStack(spacing: 10) {
                     Image(systemName: "square.grid.2x2")
-                        .font(.title1)
+                        .font(.title)
                         .foregroundStyle(.secondary)
                     Text("主页卡片已全部移除")
                         .font(.subheadline.weight(.medium))

@@ -300,7 +300,7 @@ private struct CapabilityDetailView: View {
             Section {
                 HStack(spacing: 14) {
                     Image(systemName: entry.icon)
-                        .font(.title1)
+                        .font(.title)
                         .foregroundStyle(Color.openClawRed)
                         .frame(width: 56, height: 56)
                         .background(Color.openClawRed.opacity(0.1), in: RoundedRectangle(cornerRadius: 14))
