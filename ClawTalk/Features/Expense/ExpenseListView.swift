@@ -586,24 +586,28 @@ struct ExpenseListView: View {
         let dayKeys: [Date] = grouped.keys.sorted(by: >)
 
         return List {
-            ForEach(0..<dayKeys.count, id: \.self) { index in
-                let day = dayKeys[index]
-                let dayEntries = (grouped[day] ?? []).sorted { $0.createdAt > $1.createdAt }
-                Section(header: Text(Self.dayHeader(for: day))) {
-                    ForEach(dayEntries) { entry in
-                        ExpenseEntryRow(entry: entry) { fileName in
-                            previewPhoto = ExpensePhotoPreview(fileName: fileName)
-                        }
-                    }
-                    .onDelete { offsets in
-                        for offset in offsets {
-                            store.delete(dayEntries[offset].id)
-                        }
-                    }
-                }
+            ForEach(dayKeys, id: \.self) { day in
+                daySection(day: day, grouped: grouped)
             }
         }
         .listStyle(.insetGrouped)
+
+    /// ??????????????? List ? ForEach+Section ????????
+    private func daySection(day: Date, grouped: [Date: [ExpenseEntry]]) -> some View {
+        let dayEntries = (grouped[day] ?? []).sorted { $0.createdAt > $1.createdAt }
+        return Section(header: Text(Self.dayHeader(for: day))) {
+            ForEach(dayEntries) { entry in
+                ExpenseEntryRow(entry: entry) { fileName in
+                    previewPhoto = ExpensePhotoPreview(fileName: fileName)
+                }
+            }
+            .onDelete { offsets in
+                for offset in offsets {
+                    store.delete(dayEntries[offset].id)
+                }
+            }
+        }
+    }
     }
 
     /// 日期分组标题：今天 / 昨天 / M月d日 星期X
