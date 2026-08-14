@@ -58,6 +58,14 @@ final class SettingsStore {
         }
     }
 
+    /// 安全修改 settings：顶层赋值触发 @Observable 通知（直接改嵌套字段不会刷新 UI——壁纸/毛玻璃等「选了没反应」根因）。
+    func updateSettings(_ transform: (inout AppSettings) -> Void) {
+        var updated = settings
+        transform(&updated)
+        settings = updated
+        save()
+    }
+
     func save() {
         if let data = try? JSONEncoder().encode(settings) {
             defaults.set(data, forKey: settingsKey)
