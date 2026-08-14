@@ -290,7 +290,7 @@ struct EmergencyHomeCardView: View {
     private var buttonLabel: some View {
         VStack(spacing: 6) {
             Text("SOS")
-                .font(.system(.title1, design: .rounded, weight: .heavy))
+                .font(.system(.title, design: .rounded, weight: .heavy))
             Text(subtitleText)
                 .font(.caption)
                 .opacity(0.85)
