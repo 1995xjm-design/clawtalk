@@ -29,7 +29,7 @@ struct TravelCardView: View {
             VStack(alignment: .leading, spacing: 12) {
                 HStack(alignment: .top) {
                     Image(systemName: "airplane.departure.fill")
-                        .font(.title3.weight(.semibold))
+                        .font(.system(.title3, weight: .semibold))
                         .foregroundStyle(.white)
                         .frame(width: 42, height: 42)
                         .background(Color.teal)

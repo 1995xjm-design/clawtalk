@@ -80,7 +80,7 @@ struct FloatingMicOverlay: View {
                 .shadow(color: Color.openClawRed.opacity(0.4), radius: 6, y: 2)
 
             Image(systemName: viewModel.state == .transcribing ? "waveform" : "mic.fill")
-                .font(.title3.weight(.semibold))
+                .font(.system(.title3, weight: .semibold))
                 .foregroundStyle(.white)
 
             if viewModel.state == .recording {
@@ -184,7 +184,7 @@ struct FloatingMicOverlay: View {
                 .frame(width: 72, height: 72)
                 .shadow(color: Color.openClawRed.opacity(0.35), radius: 6, y: 2)
             Image(systemName: viewModel.state == .transcribing ? "waveform" : "mic.fill")
-                .font(.title1.weight(.medium))
+                .font(.system(.title1, weight: .medium))
                 .foregroundStyle(.white)
         }
         .contentShape(Circle())

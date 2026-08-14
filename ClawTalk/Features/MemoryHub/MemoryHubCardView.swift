@@ -52,7 +52,7 @@ struct MemoryHubCardView: View {
         HStack(alignment: .top) {
             ZStack(alignment: .topTrailing) {
                 Image(systemName: "brain.head.profile")
-                    .font(.title3.weight(.semibold))
+                    .font(.system(.title3, weight: .semibold))
                     .foregroundStyle(.white)
                     .frame(width: 42, height: 42)
                     .background(Color.purple)

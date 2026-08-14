@@ -48,7 +48,7 @@ struct KBCardView: View {
         HStack(alignment: .top) {
             ZStack(alignment: .topTrailing) {
                 Image(systemName: "books.vertical.fill")
-                    .font(.title3.weight(.semibold))
+                    .font(.system(.title3, weight: .semibold))
                     .foregroundStyle(.white)
                     .frame(width: 42, height: 42)
                     .background(Color.teal)

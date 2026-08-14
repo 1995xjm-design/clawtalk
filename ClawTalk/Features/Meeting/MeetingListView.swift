@@ -164,7 +164,7 @@ struct MeetingDetailView: View {
         Section {
             VStack(alignment: .leading, spacing: 10) {
                 Text(currentNote.title)
-                    .font(.title3.weight(.semibold))
+                    .font(.system(.title3, weight: .semibold))
                     .fixedSize(horizontal: false, vertical: true)
 
                 HStack(spacing: 8) {

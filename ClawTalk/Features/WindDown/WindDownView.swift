@@ -172,7 +172,7 @@ struct WindDownView: View {
                 isSpeaking ? "停止播放" : "说晚安",
                 systemImage: isSpeaking ? "stop.circle.fill" : "moon.zzz.fill"
             )
-            .font(.title3.weight(.semibold))
+            .font(.system(.title3, weight: .semibold))
             .foregroundStyle(.white)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 16)
@@ -576,7 +576,7 @@ private struct BreathingGuideView: View {
                 VStack(spacing: 4) {
                     if isRunning {
                         Text(phase.rawValue)
-                            .font(.title2.weight(.semibold))
+                            .font(.system(.title2, weight: .semibold))
                             .foregroundStyle(.white)
                         TimelineView(.periodic(from: .now, by: 1)) { context in
                             let remaining = max(

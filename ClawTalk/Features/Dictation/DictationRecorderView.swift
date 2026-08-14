@@ -483,7 +483,7 @@ struct DictationRecorderView: View {
                 .scaleEffect(isPressed ? 0.9 : 1.0)
 
             buttonIcon
-                .font(.title1.weight(.medium))
+                .font(.system(.title1, weight: .medium))
                 .foregroundStyle(.white)
         }
         .frame(width: recordButtonSize + 60, height: recordButtonSize + 60)

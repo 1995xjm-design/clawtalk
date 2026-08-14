@@ -77,7 +77,7 @@ struct RealtimeVoiceView: View {
             }
 
             Text(session.statusText)
-                .font(.title2.weight(.semibold))
+                .font(.system(.title2, weight: .semibold))
                 .contentTransition(.opacity)
         }
         .padding(.horizontal, 32)
@@ -105,7 +105,7 @@ struct RealtimeVoiceView: View {
                 .scaleEffect(isPressed ? 0.9 : 1.0)
 
             Image(systemName: buttonIcon)
-                .font(.title1.weight(.medium))
+                .font(.system(.title1, weight: .medium))
                 .foregroundStyle(.white)
         }
         .frame(width: 140, height: 140)

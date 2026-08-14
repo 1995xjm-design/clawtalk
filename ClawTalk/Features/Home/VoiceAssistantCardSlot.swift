@@ -81,7 +81,7 @@ private struct VoiceAssistantCardPlaceholder: VoiceAssistantCardContent {
     var body: some View {
         VStack(spacing: 14) {
             Image(systemName: "waveform")
-                .font(.largeTitle.weight(.semibold))
+                .font(.system(.largeTitle, weight: .semibold))
                 .foregroundStyle(.white.opacity(0.9))
 
             VStack(spacing: 4) {

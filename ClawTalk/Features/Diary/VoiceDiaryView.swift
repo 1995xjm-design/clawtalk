@@ -241,7 +241,7 @@ struct VoiceDiaryView: View {
 
             // 图标
             buttonIcon
-                .font(.title1.weight(.medium))
+                .font(.system(.title1, weight: .medium))
                 .foregroundStyle(.white)
         }
         .frame(width: recordButtonSize + 60, height: recordButtonSize + 60)

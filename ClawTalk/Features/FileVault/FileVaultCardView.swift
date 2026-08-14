@@ -19,7 +19,7 @@ struct FileVaultCardView: View {
             VStack(alignment: .leading, spacing: 12) {
                 HStack(alignment: .top) {
                     Image(systemName: "lock.shield")
-                        .font(.title3.weight(.semibold))
+                        .font(.system(.title3, weight: .semibold))
                         .foregroundStyle(.white)
                         .frame(width: 42, height: 42)
                         .background(Color.indigo)

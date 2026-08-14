@@ -352,7 +352,7 @@ struct KBView: View {
                 .scaleEffect(isPressed ? 0.9 : 1.0)
 
             recordButtonIcon
-                .font(.title2.weight(.medium))
+                .font(.system(.title2, weight: .medium))
                 .foregroundStyle(.white)
         }
         .frame(width: recordButtonSize + 30, height: recordButtonSize + 30)

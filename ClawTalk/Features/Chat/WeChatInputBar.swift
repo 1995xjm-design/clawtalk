@@ -45,7 +45,7 @@ struct WeChatInputBar: View {
             // 左侧：麦克风/键盘切换
             Button(action: toggleVoiceMode) {
                 Image(systemName: isVoiceMode ? "keyboard" : "mic.fill")
-                    .font(.title3.weight(.semibold))
+                    .font(.system(.title3, weight: .semibold))
                     .foregroundStyle(.openClawRed)
                     .frame(width: 36, height: 36)
                     .background(Circle().fill(Color(.systemGray5)))

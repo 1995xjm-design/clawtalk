@@ -99,7 +99,7 @@ struct HomeCardPlaceholderView: View {
                         .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
 
                     Text(title)
-                        .font(.title3.weight(.bold))
+                        .font(.system(.title3, weight: .bold))
                         .foregroundStyle(.primary)
 
                     Text(subtitle)

@@ -905,7 +905,7 @@ struct WritingComposeView: View {
                 .scaleEffect(isPressed ? 0.9 : 1.0)
 
             buttonIcon
-                .font(.title1.weight(.medium))
+                .font(.system(.title1, weight: .medium))
                 .foregroundStyle(.white)
         }
         .frame(width: recordButtonSize + 60, height: recordButtonSize + 60)
@@ -1050,7 +1050,7 @@ struct WritingDetailView: View {
         Section {
             VStack(alignment: .leading, spacing: 10) {
                 TextField("文章标题", text: $currentDraft.title)
-                    .font(.title3.weight(.semibold))
+                    .font(.system(.title3, weight: .semibold))
 
                 HStack(spacing: 8) {
                     Label(

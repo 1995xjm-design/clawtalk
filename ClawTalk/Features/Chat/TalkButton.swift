@@ -46,7 +46,7 @@ struct TalkButton: View {
 
             // Icon
             buttonIcon
-                .font(.title2.weight(.medium))
+                .font(.system(.title2, weight: .medium))
                 .foregroundStyle(.white)
         }
         .frame(width: size + 50, height: size + 50) // Stable hit area
