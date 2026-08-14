@@ -184,7 +184,7 @@ struct FloatingMicOverlay: View {
                 .frame(width: 72, height: 72)
                 .shadow(color: Color.openClawRed.opacity(0.35), radius: 6, y: 2)
             Image(systemName: viewModel.state == .transcribing ? "waveform" : "mic.fill")
-                .font(.system(.title1, weight: .medium))
+                .font(.system(.title, weight: .medium))
                 .foregroundStyle(.white)
         }
         .contentShape(Circle())

@@ -104,7 +104,7 @@ struct HealthDetailView: View {
                     .foregroundStyle(.secondary)
                 Spacer()
                 Text("\(viewModel.todaySteps ?? 0)")
-                    .font(.system(.title1, weight: .bold))
+                    .font(.system(.title, weight: .bold))
                     .monospacedDigit()
                     .foregroundStyle(.primary)
                 Text("步")

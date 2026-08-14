@@ -137,7 +137,7 @@ struct VoiceAssistantCardView: View, VoiceAssistantCardContent {
             Spacer(minLength: 0)
 
             Text(statusText)
-                .font(.system(.title1, weight: .bold))
+                .font(.system(.title, weight: .bold))
                 .foregroundStyle(.white)
                 .scaleEffect(viewModel.state == .idle ? (textBreathing ? 1.03 : 1.0) : 1.0)
                 .opacity(viewModel.state == .idle ? (textBreathing ? 0.9 : 1.0) : 1.0)

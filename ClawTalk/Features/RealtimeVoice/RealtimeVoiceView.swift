@@ -105,7 +105,7 @@ struct RealtimeVoiceView: View {
                 .scaleEffect(isPressed ? 0.9 : 1.0)
 
             Image(systemName: buttonIcon)
-                .font(.system(.title1, weight: .medium))
+                .font(.system(.title, weight: .medium))
                 .foregroundStyle(.white)
         }
         .frame(width: 140, height: 140)

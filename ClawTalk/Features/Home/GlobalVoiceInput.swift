@@ -152,7 +152,7 @@ struct GlobalVoiceInput: View {
                 .scaleEffect(isPressed ? 0.9 : 1.0)
 
             buttonIcon
-                .font(.system(.title1, weight: .medium))
+                .font(.system(.title, weight: .medium))
                 .foregroundStyle(.white)
         }
         .frame(width: buttonSize + 60, height: buttonSize + 60)
@@ -403,7 +403,7 @@ struct GlobalVoiceInputEmbedded: View {
                 )
 
             buttonIcon
-                .font(.system(.title1, weight: .semibold))
+                .font(.system(.title, weight: .semibold))
                 .foregroundStyle(.white)
         }
         .frame(width: buttonSize + 80, height: buttonSize + 80)
@@ -630,7 +630,7 @@ struct GlobalVoiceInputFloating: View {
                 )
 
             buttonIcon
-                .font(.system(.title1, weight: .semibold))
+                .font(.system(.title, weight: .semibold))
                 .foregroundStyle(.white)
         }
         .frame(width: buttonSize + 80, height: buttonSize + 80)
