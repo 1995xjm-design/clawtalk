@@ -350,7 +350,7 @@ struct AppSettings: Codable {
         case ttsProvider, sttProvider, fusionBackendURL, openclawVoice, doubaoVoiceID, edgeVoiceID
         case ttsSpeed, ttsPitch
         case wechatBridgeURL, whisperLanguage, voiceOutputEnabled, voiceInputEnabled
-        case agentAPIMode, voiceAgentChannel, showTokenUsage, useWebSocket
+        case agentAPIMode, voiceAgentChannel, weatherCity, showTokenUsage, useWebSocket
         case webSocketPath, webSocketPort // webSocketPort for legacy decode only
         case hapticsEnabled
         case appearance
@@ -384,6 +384,7 @@ struct AppSettings: Codable {
         try container.encode(voiceInputEnabled, forKey: .voiceInputEnabled)
         try container.encode(agentAPIMode, forKey: .agentAPIMode)
         try container.encode(voiceAgentChannel, forKey: .voiceAgentChannel)
+        try container.encode(weatherCity, forKey: .weatherCity)
         try container.encode(showTokenUsage, forKey: .showTokenUsage)
         try container.encode(useWebSocket, forKey: .useWebSocket)
         try container.encode(webSocketPath, forKey: .webSocketPath)
