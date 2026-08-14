@@ -10,6 +10,8 @@ final class AudioCaptureManager {
     private(set) var currentLevel: Float = 0
 
     // Conversation mode VAD
+    // 重采样串行队列：AVAudioConverter 不在实时音频回调线程跑，避免 AudioToolboxCore 异常（SIGABRT）
+    private let resampleQueue = DispatchQueue(label: "clawtalk.audio-resample")
     private(set) var isContinuousMode = false
     private var onUtteranceDetected: (([Float]) -> Void)?
     private var onAudioChunk: (([Float]) -> Void)?
@@ -197,9 +199,12 @@ final class AudioCaptureManager {
 
     private func fireAudioChunk(_ bufferSamples: [Float]) {
         guard let onAudioChunk else { return }
-        let resampled = resampleTo16kHz(bufferSamples)
-        if !resampled.isEmpty {
-            onAudioChunk(resampled)
+        resampleQueue.async { [weak self] in
+            guard let self else { return }
+            let resampled = self.resampleTo16kHz(bufferSamples)
+            if !resampled.isEmpty {
+                onAudioChunk(resampled)
+            }
         }
     }
 
@@ -230,8 +235,13 @@ final class AudioCaptureManager {
                     lastSpeechTime = nil
                     isListening = false
 
-                    let resampled = resampleTo16kHz(captured)
-                    onUtteranceDetected?(resampled)
+                    resampleQueue.async { [weak self] in
+                        guard let self else { return }
+                        let resampled = self.resampleTo16kHz(captured)
+                        DispatchQueue.main.async {
+                            self.onUtteranceDetected?(resampled)
+                        }
+                    }
                 }
             }
         } else if isContinuousMode && !hasInterrupted {

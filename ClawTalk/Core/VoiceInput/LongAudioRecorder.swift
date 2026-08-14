@@ -18,7 +18,15 @@ final class LongAudioRecorder {
         let engine = AVAudioEngine()
         let inputNode = engine.inputNode
         try? inputNode.setVoiceProcessingEnabled(true)
-        let format = inputNode.outputFormat(forBus: 0)
+    var format = inputNode.outputFormat(forBus: 0)
+    // SIGABRT 防护（2026-08-15 日志 IsFormatSampleRateAndChannelCountValid false）：
+    // 采样率/声道数无效时用标准 44.1kHz 单声道兜底，避免 AVAudioFile/installTap 抛 NSException。
+    if format.sampleRate <= 0 || format.channelCount == 0 {
+        LogCollector.record(module: "长录音", "录音输入格式异常（采样率\(format.sampleRate)/声道\(format.channelCount)），已用标准格式兜底")
+        if let fallback = AVAudioFormat(standardFormatWithSampleRate: 44100, channels: 1) {
+            format = fallback
+        }
+    }
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString)
             .appendingPathExtension("wav")
