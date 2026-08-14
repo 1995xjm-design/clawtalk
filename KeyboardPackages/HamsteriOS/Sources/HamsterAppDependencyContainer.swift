@@ -5,6 +5,7 @@
 //  Created by morse on 2023/7/5.
 //
 
+import Combine
 import Foundation
 import HamsterKeyboardKit
 import HamsterKit
@@ -16,6 +17,10 @@ import UIKit
 open class HamsterAppDependencyContainer {
   /// 单例
   public static let shared = HamsterAppDependencyContainer()
+
+  /// v049 修复：主 App 嵌入键盘设置页时无 MainViewController 订阅子页跳转，
+  /// 由 makeSettingsViewController 内部订阅并 push（详见该方法的 onSubViewRequested）。
+  private var subViewSubscriptions = Set<AnyCancellable>()
 
   // MARK: Long-lived 依赖属性
 
@@ -296,7 +301,45 @@ extension HamsterAppDependencyContainer: SubViewControllerFactory {
 
   public func makeSettingsViewController() -> SettingsViewController {
     let settingViewController = SettingsViewController(settingsViewModel: settingsViewModel, rimeViewModel: rimeViewModel, backupViewModel: backupViewModel)
+    // v049 修复：原版由 MainViewController 订阅 mainViewModel.subViewPublished 完成子页跳转；
+    // 主 App 嵌入键盘设置页时没有 MainViewController，这里内部订阅并 push 到所在导航栈。
+    mainViewModel.subViewPublished
+      .receive(on: DispatchQueue.main)
+      .sink { [weak self, weak settingViewController] subView in
+        guard let self, let settingViewController, let nav = settingViewController.navigationController else { return }
+        if subView == .main {
+          nav.popToRootViewController(animated: true)
+          return
+        }
+        if let vc = self.makeSubViewController(for: subView) {
+          nav.pushViewController(vc, animated: true)
+        }
+      }
+      .store(in: &subViewSubscriptions)
     return settingViewController
+  }
+
+  /// 子页控制器映射（与 MainViewController.navigationResponse 一致）。
+  private func makeSubViewController(for subView: SettingsSubView) -> UIViewController? {
+    switch subView {
+    case .inputSchema: return makeInputSchemaViewController()
+    case .finder: return makeFinderViewController()
+    case .uploadInputSchema: return makeUploadInputSchemaViewController()
+    case .keyboardSettings: return makeKeyboardSettingsViewController()
+    case .colorSchema: return makeKeyboardColorViewController()
+    case .feedback: return makeKeyboardFeedbackViewController()
+    case .rime: return makeRimeViewController()
+    case .backup: return makeBackupViewController()
+    case .iCloud: return makeAppleCloudViewController()
+    case .clawTalk: return makeClawTalkViewController()
+    case .autoInsight: return makeAutoInsightViewController()
+    case .smartFreq: return makeSmartFreqViewController()
+    case .googleDrive: return makeGoogleDriveViewController()
+    case .debugLog: return makeLogViewController()
+    case .inputMethodSettings: return makeInputMethodSettingsViewController()
+    case .heartTargets: return makeHeartTargetSettingsViewController()
+    case .main, .about: return nil
+    }
   }
 
   func makeInputSchemaViewController() -> InputSchemaViewController {
