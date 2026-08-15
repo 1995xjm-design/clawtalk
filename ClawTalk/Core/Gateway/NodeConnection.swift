@@ -335,7 +335,8 @@ final class NodeConnection {
                 imageBase64: "(displayed in app)",
                 width: result.width,
                 height: result.height,
-                camera: result.camera
+                camera: result.camera,
+                format: result.format
             )
             return try encodeJSON(metadata)
 
