@@ -292,8 +292,10 @@ final class GatewayAutoDiscovery {
     private nonisolated static func txtGatewayPort(of service: NetService) -> Int? {
         guard let data = service.txtRecordData() else { return nil }
         let dict = NetService.dictionary(fromTXTRecord: data)
-        guard let raw = dict["gatewayPort"] else { return nil }
-        return Int(raw)
+        guard let raw = dict["gatewayPort"],
+              let text = String(data: raw, encoding: .utf8),
+              let port = Int(text.trimmingCharacters(in: .whitespaces)) else { return nil }
+        return port
     }
 
     nonisolated static func firstIPv4Address(in dataList: [Data]) -> String? {
