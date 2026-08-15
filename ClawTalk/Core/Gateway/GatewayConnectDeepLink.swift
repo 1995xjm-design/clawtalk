@@ -34,7 +34,7 @@ struct GatewayConnectEndpoint: Codable, Equatable, Sendable {
 ///
 /// 同时支持：base64url 编码的 JSON、原始 JSON、`openclaw://gateway?` 深链、
 /// 原始 ws(s):// 网关地址、以及含 `Setup code:` 行的复制文本。
-struct GatewayConnectDeepLink: Codable, Equatable, Sendable {
+struct GatewayConnectDeepLink: Decodable, Equatable, Sendable {
     let host: String
     let port: Int
     let tls: Bool

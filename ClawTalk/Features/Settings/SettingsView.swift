@@ -156,7 +156,6 @@ struct SettingsView: View {
     // MARK: - 扫码配对（换电脑/换网关一键重新配对）
 
     @discardableResult
-    @discardableResult
     private func handlePairingCode(_ raw: String) -> Bool {
         guard let link = GatewayConnectDeepLink.fromSetupInput(raw) else {
             pairingMessage = "无法识别配对码，请重新扫码"
