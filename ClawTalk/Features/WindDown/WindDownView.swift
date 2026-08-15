@@ -380,7 +380,7 @@ struct WindDownView: View {
 
     private var breathingSection: some View {
         Section {
-            BreathingGuideView()
+            BreathingGuideView(settings: settings, audioPlayback: audioPlayback)
         } header: {
             Label("助眠引导", systemImage: "wind")
         } footer: {
@@ -526,6 +526,9 @@ struct WindDownView: View {
 
 /// 「助眠引导」：4-7-8 呼吸法圆圈缩放动画（纯 SwiftUI）。
 /// 节奏：吸气 4 秒（圆圈放大）→ 屏住 7 秒（保持）→ 呼气 8 秒（圆圈缩小），循环进行。
+/// 助眠引导：语音放松引导（TTS 温柔朗读）+ 4-7-8 呼吸圆圈动画。
+/// 语音流程：开场 → 4-7-8 呼吸（吸气/屏住/缓缓呼气，每轮逐句提示）→ 从头到脚渐进放松 → 晚安收尾。
+/// 适合躺下闭眼跟随；可同时开启下方白噪音。
 private struct BreathingGuideView: View {
     private enum Phase: String {
         case inhale = "吸气"
@@ -541,11 +544,20 @@ private struct BreathingGuideView: View {
         }
     }
 
+    private let settings: SettingsStore
+    private let audioPlayback: AudioPlaybackManager
+
+    init(settings: SettingsStore, audioPlayback: AudioPlaybackManager) {
+        self.settings = settings
+        self.audioPlayback = audioPlayback
+    }
+
     @State private var phase: Phase = .inhale
     @State private var phaseStartedAt: Date = .now
     @State private var isRunning = false
     @State private var round = 0
     @State private var task: Task<Void, Never>?
+    @State private var guideError: String?
 
     private var scale: CGFloat {
         switch phase {
@@ -597,14 +609,21 @@ private struct BreathingGuideView: View {
             }
             .frame(width: 220, height: 220)
 
-            Text("4-7-8 呼吸法：吸气 4 秒 → 屏住 7 秒 → 呼气 8 秒")
+            Text("语音助眠引导：躺下闭眼跟随语音，4-7-8 呼吸 + 渐进放松")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
 
             if isRunning {
                 Text("第 \(round) 轮")
                     .font(.caption)
                     .foregroundStyle(.tertiary)
+            }
+            if let guideError {
+                Text(guideError)
+                    .font(.caption)
+                    .foregroundStyle(.red)
+                    .multilineTextAlignment(.center)
             }
 
             Button {
@@ -615,7 +634,7 @@ private struct BreathingGuideView: View {
                 }
             } label: {
                 Label(
-                    isRunning ? "停止引导" : "开始助眠引导",
+                    isRunning ? "停止引导" : "开始语音助眠引导",
                     systemImage: isRunning ? "stop.circle.fill" : "moon.zzz.fill"
                 )
                 .font(.subheadline.weight(.semibold))
@@ -628,6 +647,10 @@ private struct BreathingGuideView: View {
                 )
             }
             .buttonStyle(.plain)
+
+            Text("可同时开启下方白噪音，声音更轻柔")
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
         }
         .onDisappear { stop() }
     }
@@ -637,30 +660,93 @@ private struct BreathingGuideView: View {
         round = 1
         phase = .inhale
         phaseStartedAt = .now
+        guideError = nil
         task?.cancel()
+        let tts = makeSpeechService()
         task = Task { @MainActor in
-            while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: UInt64(phase.duration * 1_000_000_000))
+            await speak("躺好，闭上眼睛，我们来做放松呼吸。跟着我慢慢来。", tts: tts)
+            for _ in 1...4 {
                 guard !Task.isCancelled else { break }
-                switch phase {
-                case .inhale:
-                    phase = .hold
-                case .hold:
-                    phase = .exhale
-                case .exhale:
-                    phase = .inhale
-                    round += 1
-                }
-                phaseStartedAt = .now
+                await breathe(phase: .inhale, tts: tts)
+                await breathe(phase: .hold, tts: tts)
+                await breathe(phase: .exhale, tts: tts)
+                round += 1
             }
+            for line in Self.relaxationScript {
+                guard !Task.isCancelled else { break }
+                await speak(line, tts: tts)
+                try? await Task.sleep(nanoseconds: 6_000_000_000)
+            }
+            await speak("把今天的烦恼留在外面，让思绪像云一样慢慢飘走。晚安，好梦。", tts: tts)
+            audioPlayback.stop()
+            isRunning = false
+        }
+    }
+
+    private func breathe(phase newPhase: Phase, tts: any SpeechService) async {
+        phase = newPhase
+        phaseStartedAt = .now
+        let text: String
+        switch newPhase {
+        case .inhale: text = "吸气，慢慢吸气"
+        case .hold: text = "屏住呼吸"
+        case .exhale: text = "缓缓呼气"
+        }
+        await speak(text, tts: tts)
+        try? await Task.sleep(nanoseconds: UInt64(newPhase.duration * 1_000_000_000))
+    }
+
+    private func speak(_ text: String, tts: any SpeechService) async {
+        guard !text.isEmpty else { return }
+        do {
+            try audioPlayback.start()
+            for try await chunk in tts.streamSpeech(text: text) {
+                try Task.checkCancellation()
+                audioPlayback.enqueue(pcmData: chunk)
+            }
+            audioPlayback.markStreamingDone()
+            await audioPlayback.waitUntilFinished()
+            audioPlayback.stop()
+        } catch is CancellationError {
+        } catch {
+            guideError = "语音引导失败：\(AppErrorText.localized(error.localizedDescription))"
         }
     }
 
     private func stop() {
         task?.cancel()
         task = nil
+        audioPlayback.stop()
         isRunning = false
         round = 0
         phase = .inhale
     }
+
+    /// 温柔朗读：在用户设置基础上放慢语速（speed - 15）、略微抬高音调（pitch + 5）。
+    private func makeSpeechService() -> any SpeechService {
+        let s = settings.settings
+        let gentleSpeed = max(-50, s.ttsSpeed - 15)
+        let gentlePitch = s.ttsPitch + 5
+        switch s.ttsProvider {
+        case .apple:
+            return AppleTTSService(speed: gentleSpeed, pitch: gentlePitch)
+        case .doubao:
+            if let key = SecureStorage.shared.doubaoAPIKey, !key.isEmpty {
+                return DoubaoTTSService(apiKey: key, voiceID: s.doubaoVoiceID)
+            }
+            return AppleTTSService(speed: gentleSpeed, pitch: gentlePitch)
+        case .edge:
+            return EdgeTTSService(voiceID: s.edgeVoiceID, speed: gentleSpeed, pitch: gentlePitch)
+        }
+    }
+
+    private static let relaxationScript: [String] = [
+        "放松你的额头和眉心",
+        "放松眼睛、脸颊和下巴",
+        "放松肩膀，让它们自然下沉",
+        "放松手臂和手指",
+        "放松腹部，感受呼吸的起伏",
+        "放松大腿、小腿和脚趾",
+        "整个身体越来越沉，越来越放松",
+    ]
 }
