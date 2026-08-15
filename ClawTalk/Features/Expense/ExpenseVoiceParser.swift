@@ -49,6 +49,37 @@ enum ExpenseVoiceParser {
         )
     }
 
+
+    /// 多笔解析：一次语音可能说多笔收支（如“买了咖啡28，打车35，收到工资8000”）。
+    /// 按标点/连词切段后逐段解析，返回所有成功解析的草稿（保留顺序，去重）。
+    static func parseAll(_ raw: String) -> [Draft] {
+        let text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return [] }
+        let normalized = text
+            .replacingOccurrences(of: "，", with: "|")
+            .replacingOccurrences(of: ",", with: "|")
+            .replacingOccurrences(of: "。", with: "|")
+            .replacingOccurrences(of: "；", with: "|")
+            .replacingOccurrences(of: ";", with: "|")
+            .replacingOccurrences(of: "然后", with: "|")
+            .replacingOccurrences(of: "还有", with: "|")
+            .replacingOccurrences(of: "以及", with: "|")
+            .replacingOccurrences(of: "再", with: "|")
+        let segments = normalized
+            .components(separatedBy: "|")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        var drafts: [Draft] = []
+        var seen = Set<String>()
+        for segment in segments {
+            guard let draft = parse(segment) else { continue }
+            if seen.contains(draft.note) { continue }
+            seen.insert(draft.note)
+            drafts.append(draft)
+        }
+        return drafts
+    }
+
     // MARK: - 金额
 
     private static func extractAmount(from text: String) -> Double? {

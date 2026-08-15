@@ -23,7 +23,7 @@ final class ExpenseRecordingController {
     /// 一次录音的最终结果，交给页面决定 UI。
     enum Outcome: Equatable {
         /// 解析成功（尚未保存，由页面确认后写入 ExpenseStore）
-        case parsed(ExpenseVoiceParser.Draft)
+        case parsed([ExpenseVoiceParser.Draft])
         /// 没解析出金额（诚实，弹 alert 手动填），附转写原文
         case needsManual(String)
     }
@@ -94,8 +94,9 @@ final class ExpenseRecordingController {
                     state = .idle
                     return
                 }
-                if let draft = ExpenseVoiceParser.parse(trimmed) {
-                    onOutcome?(.parsed(draft))
+                let drafts = ExpenseVoiceParser.parseAll(trimmed)
+                if !drafts.isEmpty {
+                    onOutcome?(.parsed(drafts))
                 } else {
                     onOutcome?(.needsManual(trimmed))
                 }
@@ -195,6 +196,10 @@ struct ExpenseListView: View {
 
     // 手动填写 sheet
     @State private var showManualSheet = false
+    /// 多笔语音记账待确认列表（nil = 无多笔确认）
+    @State private var multiDrafts: [ExpenseVoiceParser.Draft]?
+    /// 多笔列表点行编辑时记录编辑的下标，保存后从列表移除该笔
+    @State private var editingDraftIndex: Int?
     @State private var manualAmountText = ""
     @State private var manualType: ExpenseType = .expense
     @State private var manualCategory: ExpenseCategory = .other
@@ -272,6 +277,12 @@ struct ExpenseListView: View {
             }
         }
         .onDisappear { recording.discardActiveRecording() }
+        .sheet(isPresented: Binding(
+            get: { multiDrafts != nil },
+            set: { if !$0 { multiDrafts = nil } }
+        )) {
+            multiDraftSheet
+        }
         .sheet(isPresented: $showManualSheet) {
             manualSheet
         }
@@ -634,8 +645,9 @@ struct ExpenseListView: View {
     private func handleExpenseTranscript(_ text: String) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
-        if let draft = ExpenseVoiceParser.parse(trimmed) {
-            handleOutcome(.parsed(draft))
+        let drafts = ExpenseVoiceParser.parseAll(trimmed)
+        if !drafts.isEmpty {
+            handleOutcome(.parsed(drafts))
         } else {
             handleOutcome(.needsManual(trimmed))
         }
@@ -643,8 +655,12 @@ struct ExpenseListView: View {
 
     private func handleOutcome(_ outcome: ExpenseRecordingController.Outcome) {
         switch outcome {
-        case .parsed(let draft):
-            presentManualEdit(from: draft)
+        case .parsed(let drafts):
+            if drafts.count == 1, let only = drafts.first {
+                presentManualEdit(from: only)
+            } else if drafts.count > 1 {
+                multiDrafts = drafts
+            }
         case .needsManual(let transcript):
             parseFailTranscript = transcript
             showParseFailAlert = true
@@ -819,6 +835,72 @@ struct ExpenseListView: View {
     }
 
 
+    /// 多笔语音记账确认列表：每笔一行（类型/金额/类别/备注），点行单笔编辑、滑动删除、全部保存。
+    private var multiDraftSheet: some View {
+        NavigationStack {
+            List {
+                ForEach(Array((multiDrafts ?? []).enumerated()), id: \.offset) { index, draft in
+                    HStack(spacing: 10) {
+                        Text(draft.type.rawValue)
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(draft.type == .income ? Color.green : Color.red)
+                        Text("\(draft.amount.expenseAmountText)")
+                            .font(.subheadline.weight(.semibold))
+                            .monospacedDigit()
+                        Text(draft.category.rawValue)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Text(draft.note)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        editingDraftIndex = index
+                        presentManualEdit(from: draft)
+                    }
+                    .swipeActions(edge: .trailing) {
+                        Button(role: .destructive) {
+                            multiDrafts?.remove(at: index)
+                        } label: {
+                            Label("删除", systemImage: "trash")
+                        }
+                    }
+                }
+            }
+            .overlay {
+                if (multiDrafts ?? []).isEmpty {
+                    ContentUnavailableView("已全部保存", systemImage: "checkmark.circle")
+                }
+            }
+            .navigationTitle("确认 \(multiDrafts?.count ?? 0) 笔记账")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("取消") { multiDrafts = nil }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("全部保存") { saveAllDrafts() }
+                        .fontWeight(.semibold)
+                        .disabled((multiDrafts ?? []).isEmpty)
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
+    }
+
+    /// 全部保存：逐笔入库后关闭确认列表。
+    private func saveAllDrafts() {
+        guard let drafts = multiDrafts else { return }
+        for draft in drafts {
+            store.add(amount: draft.amount, type: draft.type, category: draft.category, note: draft.note)
+        }
+        multiDrafts = nil
+        editingDraftIndex = nil
+    }
+
     private var manualSheet: some View {
         NavigationStack {
             Form {
@@ -905,6 +987,12 @@ struct ExpenseListView: View {
         manualNote = ""
         manualError = nil
         pendingPhotoData = nil
+        // 多笔列表点行编辑保存后：从待确认列表移除该笔
+        if let idx = editingDraftIndex, var drafts = multiDrafts, drafts.indices.contains(idx) {
+            drafts.remove(at: idx)
+            multiDrafts = drafts
+        }
+        editingDraftIndex = nil
     }
 }
 
