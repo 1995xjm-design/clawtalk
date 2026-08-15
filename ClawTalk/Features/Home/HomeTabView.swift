@@ -102,9 +102,15 @@ struct HomeTabView: View {
                 .background(.clear)
                 .toolbarBackground(.hidden, for: .navigationBar)
                 .navigationBarTitleDisplayMode(.inline)
-                .onLongPressGesture(minimumDuration: 0.6) {
-                    onOpenTools?()
-                }
+                .simultaneousGesture(
+                    LongPressGesture(minimumDuration: 0.6)
+                        .onEnded { _ in
+                            if settings.settings.hapticsEnabled {
+                                Haptics.impact(.medium)
+                            }
+                            onOpenTools?()
+                        }
+                )
                 .onAppear {
                     migrateCardStorageIfNeeded()
                     configureAssistantIfNeeded()

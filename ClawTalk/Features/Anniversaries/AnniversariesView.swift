@@ -30,14 +30,8 @@ struct AnniversariesView: View {
     }
 
     var body: some View {
+        VStack(spacing: 0) {
         List {
-            Section {
-                GlobalVoiceInputEmbedded(settingsStore: SettingsStore()) { text, _ in
-                    applyVoiceText(text)
-                }
-            } header: {
-                Text("语音添加纪念日")
-            }
 
             if store.anniversaries.isEmpty {
                 ContentUnavailableView {
@@ -115,6 +109,11 @@ struct AnniversariesView: View {
                     .padding(.vertical, 6)
                     .background(.bar)
             }
+        }
+        Divider().opacity(0.3)
+        GlobalVoiceInputEmbedded(settingsStore: SettingsStore()) { text, _ in
+            applyVoiceText(text)
+        }
         }
     }
 

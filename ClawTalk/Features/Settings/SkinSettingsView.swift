@@ -32,6 +32,9 @@ struct SkinSettingsView: View {
                 Text("跟随系统").tag(Appearance.system)
             }
             .pickerStyle(.segmented)
+            .onChange(of: store.settings.appearance) { _, _ in
+                store.save()
+            }
         } header: {
             Text("主题")
         } footer: {
@@ -190,6 +193,9 @@ struct SkinSettingsView: View {
                 }
             }
             .pickerStyle(.segmented)
+            .onChange(of: store.settings.appearance) { _, _ in
+                store.save()
+            }
             .onChange(of: store.settings.liveActivityStyle) { _, _ in
                 refreshLiveActivityStyle()
             }
