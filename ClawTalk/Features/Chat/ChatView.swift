@@ -401,7 +401,6 @@ struct ChatView: View {
             }
             .photosPicker(isPresented: $showProfileRecognitionPicker,
                           selection: $profilePickItem,
-                          maxSelectionCount: 1,
                           matching: .images)
             .onChange(of: profilePickItem) {
                 Task { await loadProfileRecognitionImage() }
