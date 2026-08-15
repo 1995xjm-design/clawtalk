@@ -583,8 +583,7 @@ public class KeyboardSettingsViewModel: ObservableObject, Hashable, Identifiable
   public var keyboardLayoutList: [KeyboardType] {
     let list: [KeyboardType] = [
       .chinese(.lowercased),
-      .chineseNineGrid,
-      .chineseNineGridIOS
+      .chineseNineGrid
     ]
     return list + (HamsterConfigurationStore.shared.configuration.keyboards ?? []).map { $0.type }
   }

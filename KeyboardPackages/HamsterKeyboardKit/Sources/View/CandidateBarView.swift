@@ -56,10 +56,10 @@ public class CandidateBarView: NibLessView {
   var businessButtonContainer: UIView? {
     didSet {
       guard let container = businessButtonContainer else { return }
-      if container.superview !== hanziRowView {
-        hanziRowView.addSubview(container)
+      if container.superview !== self {
+        addSubview(container)
         NSLayoutConstraint.activate([
-          container.leadingAnchor.constraint(equalTo: hanziRowView.leadingAnchor, constant: 8),
+          container.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 8),
           container.centerYAnchor.constraint(equalTo: hanziRowView.centerYAnchor),
           container.heightAnchor.constraint(equalToConstant: 36),
         ])
@@ -297,7 +297,7 @@ public class CandidateBarView: NibLessView {
       legacyConstraints = [
         candidatesArea.topAnchor.constraint(equalTo: phoneticLabel.bottomAnchor),
         candidatesArea.bottomAnchor.constraint(equalTo: bottomAnchor),
-        candidatesArea.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 8),
+        candidatesArea.leadingAnchor.constraint(equalTo: businessButtonContainer?.trailingAnchor ?? leadingAnchor, constant: businessButtonContainer != nil ? 6 : 8),
         candidatesArea.trailingAnchor.constraint(equalTo: controlColumn.leadingAnchor),
       ]
     } else if isDoubleMode {
@@ -313,7 +313,7 @@ public class CandidateBarView: NibLessView {
       singleConstraints = [
         candidatesArea.topAnchor.constraint(equalTo: topAnchor),
         candidatesArea.bottomAnchor.constraint(equalTo: bottomAnchor),
-        candidatesArea.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 8),
+        candidatesArea.leadingAnchor.constraint(equalTo: businessButtonContainer?.trailingAnchor ?? leadingAnchor, constant: businessButtonContainer != nil ? 6 : 8),
         candidatesArea.trailingAnchor.constraint(equalTo: controlColumn.leadingAnchor),
       ]
     }
@@ -322,7 +322,7 @@ public class CandidateBarView: NibLessView {
     let isExpanded = !keyboardContext.candidatesViewState.isCollapse()
     pinyinRowView.isHidden = isExpanded || !isDoubleMode
     hanziRowView.isHidden = isExpanded || !isDoubleMode
-    businessButtonContainer?.isHidden = isExpanded || !isDoubleMode
+    businessButtonContainer?.isHidden = isExpanded
     phoneticLabel.isHidden = isExpanded || !isLegacyMode
     candidatesPagingArea.isHidden = true
 

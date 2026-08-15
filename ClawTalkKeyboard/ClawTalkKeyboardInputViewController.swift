@@ -14,7 +14,7 @@ public class ClawTalkKeyboardInputViewController: KeyboardInputViewController {
   public override func viewDidLoad() {
     super.viewDidLoad()
     if keyboardContext.hamsterConfiguration?.keyboard?.useKeyboardType == nil {
-      setKeyboardType(.chineseNineGridIOS)
+      setKeyboardType(.chineseNineGrid)
     }
   }
 }
