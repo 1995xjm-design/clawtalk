@@ -164,11 +164,9 @@ struct VoiceDiaryView: View {
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 24)
             }
-
-            // TODO(线F)：VoiceDiaryViewModel 无公开文本落库接口，暂保留原录音按钮；
-            // 后续在 VM 增加 process(transcript:) 后改用 GlobalVoiceInputEmbedded 统一。
-            recordButton
-
+            GlobalVoiceInputEmbedded(settingsStore: settingsStore) { text, _ in
+                viewModel.processTranscript(text)
+            }
             statusLabel
         }
         .padding(.vertical, 14)

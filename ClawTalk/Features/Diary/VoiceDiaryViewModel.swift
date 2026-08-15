@@ -125,19 +125,27 @@ final class VoiceDiaryViewModel {
                 return
             }
 
-            let entry = DiaryEntry(
-                date: recordingDate,
-                text: trimmed,
-                category: DiaryCategory.classify(trimmed)
-            )
-            entries.insert(entry, at: 0)
-            pendingEntries.append(entry)
-            onPendingEntriesChanged?(pendingEntries)
-            persist()
+            processTranscript(trimmed, date: recordingDate)
             state = .idle
-            // 第 4 层联动：待办 → 提醒；灵感 → 记忆中心档案
+        }
+    }
+
+
+    /// 文本落库（GlobalVoiceInputEmbedded 统一语音输入）：与录音转写同一落库链路（含待办→提醒/灵感→记忆联动、自动配图）。
+    func processTranscript(_ text: String, date: Date = Date()) {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        let entry = DiaryEntry(
+            date: date,
+            text: trimmed,
+            category: DiaryCategory.classify(trimmed)
+        )
+        entries.insert(entry, at: 0)
+        pendingEntries.append(entry)
+        onPendingEntriesChanged?(pendingEntries)
+        persist()
+        Task {
             await performLinkage(for: entry)
-            // F3：条目生成后按日期相近自动从相册挑图配图（未授权时诚实提示，不阻塞）
             autoAttachPhotoIfPossible(to: entry)
         }
     }

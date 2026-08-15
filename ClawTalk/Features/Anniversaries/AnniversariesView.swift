@@ -32,9 +32,11 @@ struct AnniversariesView: View {
     var body: some View {
         List {
             Section {
-                holdToTalkRow
+                GlobalVoiceInputEmbedded(settingsStore: SettingsStore()) { text, _ in
+                    applyVoiceText(text)
+                }
             } header: {
-                Text(isVoiceRecording ? "正在录音，松手识别" : "按住说话，松手识别")
+                Text("语音添加纪念日")
             }
 
             if store.anniversaries.isEmpty {
