@@ -323,7 +323,12 @@ public class KeyboardContext: ObservableObject {
   /// 用户设置的键盘类型
   lazy var selectKeyboard: KeyboardType = {
     let defaultKeyboard: KeyboardType = .chinese(.lowercased)
-    return hamsterConfiguration?.keyboard?.useKeyboardType?.keyboardType ?? defaultKeyboard
+    var type = hamsterConfiguration?.keyboard?.useKeyboardType?.keyboardType ?? defaultKeyboard
+    // v054 迁移：IOS 原生布局已下架，老配置自动落到中文 9 键（含底部栏/布局回 v049k）
+    if type == .chineseNineGridIOS {
+      type = .chineseNineGrid
+    }
+    return type
   }()
 
   /// 是否启用分号键
