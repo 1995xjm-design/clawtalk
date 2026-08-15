@@ -12,7 +12,7 @@ import OSLog
 import UIKit
 
 /**
- 键盘根视图（ClawTalk IOS原生）
+ 键盘根视图
  */
 class KeyboardRootView: NibLessView {
   public typealias KeyboardWidth = CGFloat
@@ -50,15 +50,36 @@ class KeyboardRootView: NibLessView {
   /// 工具栏展开时约束
   private var toolbarExpandDynamicConstraints = [NSLayoutConstraint]()
 
+
   /// 工具栏高度约束
   private var toolbarHeightConstraint: NSLayoutConstraint?
 
   /// 候选文字视图状态
   private var candidateViewState: CandidateBarView.State
 
+  /// 非主键盘的临时键盘Cache
+  // private var tempKeyboardViewCache: [KeyboardType: UIView] = [:]
+
+  // MARK: - 计算属性
+
+//  private var actionCalloutStyle: KeyboardActionCalloutStyle {
+//    var style = appearance.actionCalloutStyle
+//    let insets = layoutConfig.buttonInsets
+//    style.callout.buttonInset = insets
+//    return style
+//  }
+
+//  private var inputCalloutStyle: KeyboardInputCalloutStyle {
+//    var style = appearance.inputCalloutStyle
+//    let insets = layoutConfig.buttonInsets
+//    style.callout.buttonInset = insets
+//    return style
+//  }
+
   // MARK: - subview
 
   /// 26键键盘，包含默认中文26键及英文26键
+  /// 注意：计算属性， 在 primaryKeyboardView 闭包中按需创建
   private var standerSystemKeyboard: StanderSystemKeyboard {
     let view = StanderSystemKeyboard(
       keyboardLayoutProvider: keyboardLayoutProvider,
@@ -72,22 +93,9 @@ class KeyboardRootView: NibLessView {
     return view
   }
 
-  /// 中文九宫格键盘（IOS原生，新样式）
-  private var chineseNineGridKeyboardView: ChineseNineGridIOSKeyboard {
-    let view = ChineseNineGridIOSKeyboard(
-      keyboardLayoutProvider: keyboardLayoutProvider,
-      actionHandler: actionHandler,
-      appearance: appearance,
-      keyboardContext: keyboardContext,
-      calloutContext: calloutContext,
-      rimeContext: rimeContext
-    )
-    view.translatesAutoresizingMaskIntoConstraints = false
-    return view
-  }
-
-  /// 中文九宫格键盘（Hamster 原版，旧样式）
-  private var legacyChineseNineGridKeyboardView: ChineseNineGridKeyboard {
+  /// 中文九宫格键盘
+  /// 注意：计算属性， 在 primaryKeyboardView 闭包中按需创建
+  private var chineseNineGridKeyboardView: ChineseNineGridKeyboard {
     let view = ChineseNineGridKeyboard(
       keyboardLayoutProvider: keyboardLayoutProvider,
       actionHandler: actionHandler,
@@ -100,20 +108,8 @@ class KeyboardRootView: NibLessView {
     return view
   }
 
-  /// 旧数字九宫格键盘（v049k 版，仅非 IOS 原生模式）
-  private var legacyNumericNineGridKeyboardView: UIView {
-    let view = LegacyNumericNineGridKeyboard(
-      actionHandler: actionHandler,
-      appearance: appearance,
-      keyboardContext: keyboardContext,
-      calloutContext: calloutContext,
-      rimeContext: rimeContext
-    )
-    view.translatesAutoresizingMaskIntoConstraints = false
-    return view
-  }
-
-  /// 数字九宫格键盘（数字页）
+  /// 数字九宫格键盘
+  /// 注意：计算属性
   private var numericNineGridKeyboardView: UIView {
     let view = NumericNineGridKeyboard(
       actionHandler: actionHandler,
@@ -126,9 +122,10 @@ class KeyboardRootView: NibLessView {
     return view
   }
 
-  /// 旧中文符号键盘（v049k 版，仅非 IOS 原生模式）
-  private var legacyClassifySymbolicKeyboardView: UIView {
-    let view = LegacyClassifySymbolicKeyboard(
+  /// 符号分类键盘
+  /// 注意：计算属性
+  private var classifySymbolicKeyboardView: ClassifySymbolicKeyboard {
+    let view = ClassifySymbolicKeyboard(
       actionHandler: actionHandler,
       appearance: appearance,
       layoutProvider: keyboardLayoutProvider,
@@ -138,85 +135,8 @@ class KeyboardRootView: NibLessView {
     return view
   }
 
-  /// 扩展符号键盘（符号页）
-  private var classifySymbolicKeyboardView: ClassifySymbolicKeyboard {
-    let view = ClassifySymbolicKeyboard(
-      actionHandler: actionHandler,
-      appearance: appearance,
-      layoutProvider: keyboardLayoutProvider,
-      keyboardContext: keyboardContext,
-      rimeContext: rimeContext
-    )
-    view.translatesAutoresizingMaskIntoConstraints = false
-    return view
-  }
-
-  /// 英文 QWERTY 键盘（英文大写/小写页）
-  private var clawEnglishKeyboardView: ClawEnglishKeyboard {
-    let view = ClawEnglishKeyboard(
-      actionHandler: actionHandler,
-      appearance: appearance,
-      keyboardContext: keyboardContext,
-      calloutContext: calloutContext,
-      rimeContext: rimeContext
-    )
-    view.translatesAutoresizingMaskIntoConstraints = false
-    return view
-  }
-
-  /// 数字-更多符号子面板
-  private var numericMoreSymbolsKeyboardView: NumericMoreSymbolsKeyboard {
-    let view = NumericMoreSymbolsKeyboard(
-      actionHandler: actionHandler,
-      appearance: appearance,
-      keyboardContext: keyboardContext,
-      calloutContext: calloutContext,
-      rimeContext: rimeContext
-    )
-    view.translatesAutoresizingMaskIntoConstraints = false
-    return view
-  }
-
-  /// 中文拓展符号子面板
-  private var classifySymbolicMoreKeyboardView: ClassifySymbolicMoreKeyboard {
-    let view = ClassifySymbolicMoreKeyboard(
-      actionHandler: actionHandler,
-      appearance: appearance,
-      keyboardContext: keyboardContext,
-      calloutContext: calloutContext,
-      rimeContext: rimeContext
-    )
-    view.translatesAutoresizingMaskIntoConstraints = false
-    return view
-  }
-
-  /// 英文数字页
-  private var englishNumericKeyboardView: EnglishNumericKeyboard {
-    let view = EnglishNumericKeyboard(
-      actionHandler: actionHandler,
-      appearance: appearance,
-      keyboardContext: keyboardContext,
-      calloutContext: calloutContext,
-      rimeContext: rimeContext
-    )
-    view.translatesAutoresizingMaskIntoConstraints = false
-    return view
-  }
-
-  /// 英文符号更多页
-  private var englishSymbolsMoreKeyboardView: EnglishSymbolsMoreKeyboard {
-    let view = EnglishSymbolsMoreKeyboard(
-      actionHandler: actionHandler,
-      appearance: appearance,
-      keyboardContext: keyboardContext,
-      calloutContext: calloutContext,
-      rimeContext: rimeContext
-    )
-    view.translatesAutoresizingMaskIntoConstraints = false
-    return view
-  }
-
-  /// emoji键盘（表情面板，完全原生不改内部）
+  /// emoji键盘
+  /// 注意：计算属性
   private var emojisKeyboardView: UIView {
     let view = EmojisKeyboard(
       keyboardContext: keyboardContext,
@@ -227,13 +147,13 @@ class KeyboardRootView: NibLessView {
     return view
   }
 
-
-  /// 工具栏（候选栏 + 业务面板 + 建议条）
+  /// 工具栏
   private lazy var toolbarView: UIView = {
     let view = KeyboardToolbarView(appearance: appearance, actionHandler: actionHandler, keyboardContext: keyboardContext, rimeContext: rimeContext)
     view.translatesAutoresizingMaskIntoConstraints = false
     return view
   }()
+
 
   /// 主键盘
   private lazy var primaryKeyboardView: UIView = {
@@ -245,6 +165,23 @@ class KeyboardRootView: NibLessView {
 
   // MARK: - Initializations
 
+  /**
+   Create a system keyboard with custom button views.
+
+   The provided `buttonView` builder will be used to build
+   the full button view for every layout item.
+
+   - Parameters:
+     - keyboardLayoutProvider: The keyboard layout provider to use.
+     - appearance: The keyboard appearance to use.
+     - actionHandler: The action handler to use.
+     - autocompleteContext: The autocomplete context to use.
+     - autocompleteToolbar: The autocomplete toolbar mode to use.
+     - autocompleteToolbarAction: The action to trigger when tapping an autocomplete suggestion.
+     - keyboardContext: The keyboard context to use.
+     - calloutContext: The callout context to use.
+     - width: The keyboard width.
+   */
   public init(
     keyboardLayoutProvider: KeyboardLayoutProvider,
     appearance: KeyboardAppearance,
@@ -269,6 +206,12 @@ class KeyboardRootView: NibLessView {
     self.userInterfaceStyle = keyboardContext.colorScheme
 
     super.init(frame: .zero)
+
+    // Test
+//    let view = UIView()
+//    view.frame = CGRect(origin: .zero, size: CGSize(width: 100, height: 100))
+//    view.backgroundColor = .yellow
+//    addSubview(view)
 
     constructViewHierarchy()
     activateViewConstraints()
@@ -300,6 +243,33 @@ class KeyboardRootView: NibLessView {
 
   /// 激活约束
   override func activateViewConstraints() {
+
+    if keyboardContext.enableToolbar {
+      // 工具栏高度约束，可随配置调整高度
+      toolbarHeightConstraint = toolbarView.heightAnchor.constraint(equalToConstant: keyboardContext.heightOfToolbar)
+
+      // 工具栏静态约束
+      let toolbarStaticConstraint = createToolbarStaticConstraints()
+
+      // 工具栏收缩时动态约束
+      toolbarCollapseDynamicConstraints = createToolbarCollapseDynamicConstraints()
+
+      // 工具栏展开时动态约束
+      toolbarExpandDynamicConstraints = createToolbarExpandDynamicConstraints()
+
+      NSLayoutConstraint.activate(toolbarStaticConstraint + toolbarCollapseDynamicConstraints + [toolbarHeightConstraint!])
+    } else {
+      NSLayoutConstraint.activate(createNoToolbarConstraints())
+    }
+  }
+
+  /// 工具栏静态约束（不会发生变动）
+  func createToolbarStaticConstraints() -> [NSLayoutConstraint] {
+    return [
+      toolbarView.topAnchor.constraint(equalTo: topAnchor),
+      toolbarView.leadingAnchor.constraint(equalTo: leadingAnchor),
+      toolbarView.trailingAnchor.constraint(equalTo: trailingAnchor)
+    ]
   }
 
   /// 工具栏展开时动态约束
@@ -349,7 +319,7 @@ class KeyboardRootView: NibLessView {
           guard let heightConstraint = self.toolbarHeightConstraint else { return }
           if self.keyboardContext.candidatesViewState.isCollapse() {
             let panelHeight: CGFloat = tab >= 0 ? ClawPanelOverlayView.panelHeight : 0
-            heightConstraint.constant = self.keyboardContext.clawCandidateBarHeight + panelHeight
+            heightConstraint.constant = self.keyboardContext.heightOfToolbar + panelHeight
           }
         }
         .store(in: &subscriptions)
@@ -398,7 +368,6 @@ class KeyboardRootView: NibLessView {
       .sink { [weak self] in
         guard let self = self else { return }
         guard $0 != currentKeyboardType else { return }
-        // 底部系统栏（地球/麦克风）仅 IOS 原生模式显示；旧布局不显示，恢复改 IOS 原生前的样式
         currentKeyboardType = $0
 
         Logger.statistics.debug("KeyboardRootView keyboardType combine: \($0.yamlString)")
@@ -409,10 +378,7 @@ class KeyboardRootView: NibLessView {
         }
 
         if keyboardContext.enableToolbar {
-          // 候选栏高度随键盘类型变化（中文主页双层 88pt / 其余单层 44pt）
-          let panelHeight: CGFloat = keyboardContext.clawPanelTab >= 0 ? ClawPanelOverlayView.panelHeight : 0
-          toolbarHeightConstraint?.constant = keyboardContext.clawCandidateBarHeight + panelHeight
-
+          // NSLayoutConstraint.deactivate(toolbarCollapseDynamicConstraints)
           toolbarCollapseDynamicConstraints.removeAll(keepingCapacity: true)
           toolbarExpandDynamicConstraints.removeAll(keepingCapacity: true)
 
@@ -442,6 +408,7 @@ class KeyboardRootView: NibLessView {
 
   override func layoutSubviews() {
     super.layoutSubviews()
+    // Logger.statistics.debug("KeyboardRootView: layoutSubviews()")
 
     // 检测候选栏状态是否发生变化
     guard candidateViewState != keyboardContext.candidatesViewState else { return }
@@ -451,13 +418,13 @@ class KeyboardRootView: NibLessView {
     if candidateViewState.isCollapse() {
       // 键盘显示
       let panelHeight: CGFloat = keyboardContext.clawPanelTab >= 0 ? ClawPanelOverlayView.panelHeight : 0
-      toolbarHeightConstraint?.constant = keyboardContext.clawCandidateBarHeight + panelHeight
+      toolbarHeightConstraint?.constant = keyboardContext.heightOfToolbar + panelHeight
       addSubview(primaryKeyboardView)
       NSLayoutConstraint.deactivate(toolbarExpandDynamicConstraints)
       NSLayoutConstraint.activate(toolbarCollapseDynamicConstraints)
     } else {
       // 键盘隐藏
-      let toolbarHeight = primaryKeyboardView.bounds.height + keyboardContext.clawCandidateBarHeight
+      let toolbarHeight = primaryKeyboardView.bounds.height + keyboardContext.heightOfToolbar
       primaryKeyboardView.removeFromSuperview()
 
       toolbarHeightConstraint?.constant = toolbarHeight
@@ -468,42 +435,32 @@ class KeyboardRootView: NibLessView {
 
   /// 根据键盘类型选择键盘
   func chooseKeyboard(keyboardType: KeyboardType) -> UIView? {
-    // 底部系统栏（地球/麦克风）仅 IOS 原生模式显示；启动初始也生效（v055 修）
+//    // 从 cache 中获取键盘
+//    if let tempKeyboardView = tempKeyboardViewCache[keyboardType] {
+//      return tempKeyboardView
+//    }
+
+    // 生成临时键盘
     var tempKeyboardView: UIView? = nil
     switch keyboardType {
     case .numericNineGrid:
-      // 旧布局恢复 v049k 版数字页；IOS 原生用新版
-      tempKeyboardView = keyboardContext.isClawIOSNativeMode ? numericNineGridKeyboardView : legacyNumericNineGridKeyboardView
+      tempKeyboardView = numericNineGridKeyboardView
     case .classifySymbolic:
-      // 旧布局恢复 v049k 版符号页；IOS 原生用新版
-      tempKeyboardView = keyboardContext.isClawIOSNativeMode ? classifySymbolicKeyboardView : legacyClassifySymbolicKeyboardView
+      tempKeyboardView = classifySymbolicKeyboardView
     case .emojis:
       tempKeyboardView = emojisKeyboardView
-    case .alphabetic:
-      // ClawTalk IOS原生模式：英文页 = QWERTY 全键盘；其余 = 标准 26 键
-      tempKeyboardView = keyboardContext.isClawIOSNativeMode ? clawEnglishKeyboardView : standerSystemKeyboard
-    case .numeric, .symbolic, .chinese, .chineseNumeric, .chineseSymbolic, .custom:
+    case .alphabetic, .numeric, .symbolic, .chinese, .chineseNumeric, .chineseSymbolic, .custom:
       tempKeyboardView = standerSystemKeyboard
     case .chineseNineGrid:
-      // 旧中文九宫格：Hamster 原版（左侧符号列表 + 原版按键排布 + 原版候选栏）
-      tempKeyboardView = legacyChineseNineGridKeyboardView
-    case .chineseNineGridIOS:
-      // 新中文九宫格：IOS原生（文档布局）
       tempKeyboardView = chineseNineGridKeyboardView
-    case .englishT9:
-      tempKeyboardView = clawEnglishKeyboardView
-    case .numericMoreSymbols:
-      tempKeyboardView = numericMoreSymbolsKeyboardView
-    case .classifySymbolicMore:
-      tempKeyboardView = classifySymbolicMoreKeyboardView
-    case .englishNumeric:
-      tempKeyboardView = englishNumericKeyboardView
-    case .englishSymbolsMore:
-      tempKeyboardView = englishSymbolsMoreKeyboardView
     default:
+      // 注意：非临时键盘类型外的类型直接 return
       Logger.statistics.error("keyboardType: \(keyboardType.yamlString) not match tempKeyboardType")
       return nil
     }
+
+    // 保存 cache
+//    tempKeyboardViewCache[keyboardType] = tempKeyboardView
     return tempKeyboardView
   }
 }

@@ -1,10 +1,9 @@
 //
 //  KeyboardToolbarView.swift
 //
-//  ClawTalk：候选栏（单层/双层）+ 业务面板 + 实时建议条。
+//  ClawTalk：候选栏 + 功能行（AI / 帮你回 / 超会说 + 眼睛 + 表情 + 下拉）+ 业务面板 + 实时建议条
 //
-//  中文主页汉字候选行内嵌 3 个业务按钮（AI / 超会说 / 眼睛）；
-//  数字页、符号页、英文 T9 页均为单层候选栏，无任何自定义控件。
+//  功能行按钮：AI(点击=AI面板，长按=deep link 跳键盘设置页) / 帮你回 / 超会说 / 眼睛(隐私) / 表情 / 下拉
 //
 
 import Combine
@@ -16,8 +15,8 @@ import UIKit
  键盘工具栏
 
  用于显示：
- 1. 候选文字（中文主页双层：拼音行 + 汉字行；其余页面单层）
- 2. 业务面板（AI 语音助手 / 超会说）
+ 1. 候选文字，包含横向部分文字显示及下拉显示全部文字
+ 2. 常用功能视图（ClawTalk 三入口 + 眼睛 + 表情 + 下拉）
  3. 实时 AI 建议条（右侧空余区域）
  */
 class KeyboardToolbarView: NibLessView {
@@ -27,21 +26,23 @@ class KeyboardToolbarView: NibLessView {
   private var rimeContext: RimeContext
   private var style: CandidateBarStyle
   private var userInterfaceStyle: UIUserInterfaceStyle
+  private var oldBounds: CGRect = .zero
   private var subscriptions = Set<AnyCancellable>()
 
-  /// 最近一次输入状态（空 / 非空）
+  /// 最近一次输入状态（空/非空），用于面板收起后恢复候选栏显隐
   private var lastInputEmpty = true
 
-  // MARK: - 业务按钮（仅中文主页汉字候选行内嵌）
+  // MARK: - ClawTalk 入口按钮
 
-  /// AI 入口：点击 = AI 面板；长按 = deep link 跳键盘设置页
+  /// AI 语音助手入口：点击展开 AI 面板；长按 deep link 跳主程序键盘设置页
+  /// ClawTalk 风格：红系 / 圆角 / 毛玻璃质感
   lazy var aiButton: ClawGlassButton = {
     let button = ClawGlassButton(type: .custom)
     button.translatesAutoresizingMaskIntoConstraints = false
     button.setTitle("AI", for: .normal)
     button.titleLabel?.font = .systemFont(ofSize: 14, weight: .bold)
     button.setTitleColor(.white, for: .normal)
-    button.layer.cornerRadius = 15
+    button.layer.cornerRadius = 17
     button.clipsToBounds = true
     button.glassTintColor = ClawPanelPalette.brandBlue
     button.addTarget(self, action: #selector(aiButtonTouchDownAction), for: .touchDown)
@@ -54,12 +55,29 @@ class KeyboardToolbarView: NibLessView {
     return button
   }()
 
+  /// 帮你回入口（胶囊）
+  lazy var helpReplyButton: UIButton = {
+    let button = UIButton(type: .custom)
+    button.translatesAutoresizingMaskIntoConstraints = false
+    button.setTitle("帮你回", for: .normal)
+    button.titleLabel?.font = .systemFont(ofSize: 15, weight: .semibold)
+    button.setTitleColor(ClawPanelPalette.currentColors.accentForeground, for: .normal)
+    button.backgroundColor = ClawPanelPalette.capsuleSelected
+    button.layer.cornerRadius = 15
+    button.clipsToBounds = true
+    button.addTarget(self, action: #selector(helpReplyTouchDownAction), for: .touchDown)
+    button.addTarget(self, action: #selector(helpReplyTouchUpAction), for: .touchUpInside)
+    button.addTarget(self, action: #selector(touchCancel), for: .touchCancel)
+    button.addTarget(self, action: #selector(touchCancel), for: .touchUpOutside)
+    return button
+  }()
+
   /// 超会说入口（胶囊）
   lazy var superTalkButton: UIButton = {
     let button = UIButton(type: .custom)
     button.translatesAutoresizingMaskIntoConstraints = false
     button.setTitle("超会说", for: .normal)
-    button.titleLabel?.font = .systemFont(ofSize: 14, weight: .semibold)
+    button.titleLabel?.font = .systemFont(ofSize: 15, weight: .semibold)
     button.setTitleColor(ClawPanelPalette.keyLabel, for: .normal)
     button.backgroundColor = ClawPanelPalette.capsuleNormal
     button.layer.cornerRadius = 15
@@ -71,12 +89,12 @@ class KeyboardToolbarView: NibLessView {
     return button
   }()
 
-  /// 眼睛按钮：隐私采集开关
+  /// 眼睛按钮：隐私采集开关（原长按 AI 更多页，现移到功能行、表情按钮之前）
   lazy var eyeButton: UIButton = {
     let button = UIButton(type: .custom)
     button.translatesAutoresizingMaskIntoConstraints = false
     button.setImage(UIImage(systemName: "eye"), for: .normal)
-    button.setPreferredSymbolConfiguration(.init(font: .systemFont(ofSize: 17), scale: .default), forImageIn: .normal)
+    button.setPreferredSymbolConfiguration(.init(font: .systemFont(ofSize: 18), scale: .default), forImageIn: .normal)
     button.tintColor = ClawPanelPalette.deepBlue
     button.backgroundColor = .clear
     button.addTarget(self, action: #selector(eyeButtonTouchDownAction), for: .touchDown)
@@ -86,37 +104,44 @@ class KeyboardToolbarView: NibLessView {
     return button
   }()
 
-  /// 业务按钮容器：注入中文主页汉字候选行
-  lazy var businessButtonContainer: UIView = {
+  /// 表情按钮：打开表情键盘（表情按钮之前为眼睛按钮）
+  lazy var emojiButton: UIButton = {
+    let button = UIButton(type: .custom)
+    button.translatesAutoresizingMaskIntoConstraints = false
+    button.setImage(UIImage(systemName: "face.smiling"), for: .normal)
+    button.setPreferredSymbolConfiguration(.init(font: .systemFont(ofSize: 18), scale: .default), forImageIn: .normal)
+    button.tintColor = ClawPanelPalette.deepBlue
+    button.backgroundColor = .clear
+    button.addTarget(self, action: #selector(emojiButtonTouchDownAction), for: .touchDown)
+    button.addTarget(self, action: #selector(emojiButtonTouchUpAction), for: .touchUpInside)
+    button.addTarget(self, action: #selector(touchCancel), for: .touchCancel)
+    button.addTarget(self, action: #selector(touchCancel), for: .touchUpOutside)
+    return button
+  }()
+
+  /// 下拉按钮：收起键盘（功能行最右）
+  lazy var dismissKeyboardButton: UIButton = {
+    let button = UIButton(type: .custom)
+    button.translatesAutoresizingMaskIntoConstraints = false
+    button.setImage(UIImage(systemName: "chevron.down.circle"), for: .normal)
+    button.setPreferredSymbolConfiguration(.init(font: .systemFont(ofSize: 18), scale: .default), forImageIn: .normal)
+    button.tintColor = ClawPanelPalette.deepBlue
+    button.backgroundColor = .clear
+    button.addTarget(self, action: #selector(dismissKeyboardTouchDownAction), for: .touchDown)
+    button.addTarget(self, action: #selector(dismissKeyboardTouchUpAction), for: .touchUpInside)
+    button.addTarget(self, action: #selector(touchCancel), for: .touchCancel)
+    button.addTarget(self, action: #selector(touchCancel), for: .touchUpOutside)
+    return button
+  }()
+
+  /// 功能行容器
+  lazy var commonFunctionBar: UIView = {
     let view = UIView(frame: .zero)
     view.translatesAutoresizingMaskIntoConstraints = false
-
-    view.addSubview(aiButton)
-    view.addSubview(superTalkButton)
-    view.addSubview(eyeButton)
-
-    NSLayoutConstraint.activate([
-      aiButton.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-      aiButton.centerYAnchor.constraint(equalTo: view.centerYAnchor),
-      aiButton.widthAnchor.constraint(equalToConstant: 42),
-      aiButton.heightAnchor.constraint(equalToConstant: 30),
-
-      superTalkButton.leadingAnchor.constraint(equalTo: aiButton.trailingAnchor, constant: 8),
-      superTalkButton.centerYAnchor.constraint(equalTo: view.centerYAnchor),
-      superTalkButton.widthAnchor.constraint(equalToConstant: 76),
-      superTalkButton.heightAnchor.constraint(equalToConstant: 30),
-
-      eyeButton.leadingAnchor.constraint(equalTo: superTalkButton.trailingAnchor, constant: 8),
-      eyeButton.centerYAnchor.constraint(equalTo: view.centerYAnchor),
-      eyeButton.widthAnchor.constraint(equalToConstant: 34),
-      eyeButton.heightAnchor.constraint(equalToConstant: 30),
-
-      view.trailingAnchor.constraint(equalTo: eyeButton.trailingAnchor),
-    ])
     return view
   }()
 
-  /// 业务面板覆盖层（AI 语音助手 / 超会说）
+  /// 业务面板覆盖层（AI语音助手 / 帮你回 / 超会说）
   lazy var panelOverlayView: ClawPanelOverlayView = {
     let view = ClawPanelOverlayView(
       appearance: appearance,
@@ -143,7 +168,7 @@ class KeyboardToolbarView: NibLessView {
     return view
   }()
 
-  /// 候选文字视图（单层/双层）
+  /// 候选文字视图
   lazy var candidateBarView: CandidateBarView = {
     let view = CandidateBarView(
       style: style,
@@ -151,7 +176,6 @@ class KeyboardToolbarView: NibLessView {
       keyboardContext: keyboardContext,
       rimeContext: rimeContext
     )
-    view.translatesAutoresizingMaskIntoConstraints = false
     return view
   }()
 
@@ -160,7 +184,7 @@ class KeyboardToolbarView: NibLessView {
     self.actionHandler = actionHandler
     self.keyboardContext = keyboardContext
     self.rimeContext = rimeContext
-    // KeyboardToolbarView 中 candidateBarStyle 样式根节点，这里生成一次，减少计算次数
+    // KeyboardToolbarView 为 candidateBarStyle 样式根节点, 这里生成一次，减少计算次数
     self.style = appearance.candidateBarStyle
     self.userInterfaceStyle = keyboardContext.colorScheme
 
@@ -175,9 +199,6 @@ class KeyboardToolbarView: NibLessView {
     constructViewHierarchy()
     activateViewConstraints()
     setupAppearance()
-
-    // 注入业务按钮（仅中文主页双层模式显示）
-    candidateBarView.businessButtonContainer = businessButtonContainer
   }
 
   override func layoutSubviews() {
@@ -196,17 +217,28 @@ class KeyboardToolbarView: NibLessView {
 
   override func constructViewHierarchy() {
     addSubview(panelOverlayView)
-    addSubview(candidateBarView)
     addSubview(suggestionBarView)
+    addSubview(commonFunctionBar)
+    commonFunctionBar.addSubview(aiButton)
+    commonFunctionBar.addSubview(helpReplyButton)
+    commonFunctionBar.addSubview(superTalkButton)
+    commonFunctionBar.addSubview(eyeButton)
+    commonFunctionBar.addSubview(emojiButton)
+    if keyboardContext.displayKeyboardDismissButton {
+      commonFunctionBar.addSubview(dismissKeyboardButton)
+    }
   }
 
   private var panelHeightConstraint: NSLayoutConstraint!
+  private var commonBarTopConstraint: NSLayoutConstraint!
   private var suggestionBarHeightConstraint: NSLayoutConstraint!
 
   override func activateViewConstraints() {
     // 面板覆盖层：固定在工具栏顶部，高度随展开/收起变化
     panelHeightConstraint = panelOverlayView.heightAnchor.constraint(equalToConstant: 0)
     panelHeightConstraint.priority = .defaultHigh
+
+    commonBarTopConstraint = commonFunctionBar.topAnchor.constraint(equalTo: panelOverlayView.bottomAnchor)
 
     suggestionBarHeightConstraint = suggestionBarView.heightAnchor.constraint(equalToConstant: 0)
 
@@ -216,16 +248,51 @@ class KeyboardToolbarView: NibLessView {
       panelOverlayView.trailingAnchor.constraint(equalTo: trailingAnchor),
       panelHeightConstraint,
 
-      candidateBarView.topAnchor.constraint(equalTo: panelOverlayView.bottomAnchor),
-      candidateBarView.bottomAnchor.constraint(equalTo: bottomAnchor),
-      candidateBarView.leadingAnchor.constraint(equalTo: leadingAnchor),
-      candidateBarView.trailingAnchor.constraint(equalTo: trailingAnchor),
+      commonBarTopConstraint,
+      commonFunctionBar.bottomAnchor.constraint(equalTo: bottomAnchor),
+      commonFunctionBar.leadingAnchor.constraint(equalTo: leadingAnchor),
+      commonFunctionBar.trailingAnchor.constraint(equalTo: trailingAnchor),
+      commonFunctionBar.heightAnchor.constraint(equalToConstant: keyboardContext.heightOfToolbar),
 
       suggestionBarView.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -6),
       suggestionBarView.topAnchor.constraint(equalTo: panelOverlayView.bottomAnchor, constant: 6),
       suggestionBarHeightConstraint,
       suggestionBarView.widthAnchor.constraint(equalToConstant: 150),
+
+      aiButton.leadingAnchor.constraint(equalTo: commonFunctionBar.leadingAnchor, constant: 8),
+      aiButton.centerYAnchor.constraint(equalTo: commonFunctionBar.centerYAnchor),
+      aiButton.widthAnchor.constraint(equalToConstant: 34),
+      aiButton.heightAnchor.constraint(equalToConstant: 34),
+
+      helpReplyButton.leadingAnchor.constraint(equalTo: aiButton.trailingAnchor, constant: 10),
+      helpReplyButton.centerYAnchor.constraint(equalTo: commonFunctionBar.centerYAnchor),
+      helpReplyButton.widthAnchor.constraint(equalToConstant: 76),
+      helpReplyButton.heightAnchor.constraint(equalToConstant: 30),
+
+      superTalkButton.leadingAnchor.constraint(equalTo: helpReplyButton.trailingAnchor, constant: 10),
+      superTalkButton.centerYAnchor.constraint(equalTo: commonFunctionBar.centerYAnchor),
+      superTalkButton.widthAnchor.constraint(equalToConstant: 76),
+      superTalkButton.heightAnchor.constraint(equalToConstant: 30),
+
+      eyeButton.leadingAnchor.constraint(equalTo: superTalkButton.trailingAnchor, constant: 8),
+      eyeButton.centerYAnchor.constraint(equalTo: commonFunctionBar.centerYAnchor),
+      eyeButton.widthAnchor.constraint(equalToConstant: 34),
+      eyeButton.heightAnchor.constraint(equalToConstant: 34),
+
+      emojiButton.leadingAnchor.constraint(equalTo: eyeButton.trailingAnchor, constant: 8),
+      emojiButton.centerYAnchor.constraint(equalTo: commonFunctionBar.centerYAnchor),
+      emojiButton.widthAnchor.constraint(equalToConstant: 34),
+      emojiButton.heightAnchor.constraint(equalToConstant: 34),
     ])
+
+    if keyboardContext.displayKeyboardDismissButton {
+      NSLayoutConstraint.activate([
+        dismissKeyboardButton.leadingAnchor.constraint(equalTo: emojiButton.trailingAnchor, constant: 4),
+        dismissKeyboardButton.centerYAnchor.constraint(equalTo: commonFunctionBar.centerYAnchor),
+        dismissKeyboardButton.widthAnchor.constraint(equalToConstant: 34),
+        dismissKeyboardButton.heightAnchor.constraint(equalToConstant: 34),
+      ])
+    }
   }
 
   // MARK: - 外观
@@ -234,10 +301,8 @@ class KeyboardToolbarView: NibLessView {
     // 面板配色跟随当前键盘主题
     ClawPanelPalette.sync(with: keyboardContext)
     self.style = appearance.candidateBarStyle
-    // 候选栏背景：旧中文九宫格跟随主题；其余按深浅套写死（浅 #E8E8E8 / 深 #2C2C2E）
-    backgroundColor = keyboardContext.keyboardType == .chineseNineGrid
-      ? ClawPanelPalette.toolbarBackground
-      : ClawIOSNativePalette.candidateBarBackground(for: keyboardContext.colorScheme)
+    // 工具栏/功能行背景跟随主题
+    backgroundColor = ClawPanelPalette.toolbarBackground
 
     updateEntryButtonStates()
     updateEyeButtonState()
@@ -249,6 +314,10 @@ class KeyboardToolbarView: NibLessView {
     let aiSelected = tab == 0
     aiButton.glassTintColor = aiSelected ? ClawPanelPalette.brandBlue : ClawPanelPalette.aiCircle
     aiButton.setTitleColor(aiSelected ? .white : ClawPanelPalette.deepBlue, for: .normal)
+
+    let helpSelected = tab == 1
+    helpReplyButton.backgroundColor = helpSelected ? ClawPanelPalette.capsuleSelected : ClawPanelPalette.capsuleNormal
+    helpReplyButton.setTitleColor(helpSelected ? ClawPanelPalette.currentColors.accentForeground : ClawPanelPalette.keyLabel, for: .normal)
 
     let superSelected = tab == 2
     superTalkButton.backgroundColor = superSelected ? ClawPanelPalette.capsuleSelected : ClawPanelPalette.capsuleNormal
@@ -274,7 +343,7 @@ class KeyboardToolbarView: NibLessView {
   /// 建议条高度：候选栏右侧空余区域，最高 120pt
   private func updateSuggestionBarHeight() {
     let panelHeight: CGFloat = keyboardContext.clawPanelTab >= 0 ? ClawPanelOverlayView.panelHeight : 0
-    let available = max(0, bounds.height - keyboardContext.clawCandidateBarHeight - panelHeight - 12)
+    let available = max(0, bounds.height - keyboardContext.heightOfToolbar - panelHeight - 12)
     let show = !ClawSuggestionEngine.shared.suggestions.isEmpty && keyboardContext.clawPanelTab < 0 && !lastInputEmpty
     suggestionBarHeightConstraint.constant = show ? min(max(available, 0), 120) : 0
   }
@@ -286,12 +355,26 @@ class KeyboardToolbarView: NibLessView {
       .receive(on: DispatchQueue.main)
       .sink { [weak self] in
         guard let self = self else { return }
-        self.lastInputEmpty = $0.isEmpty
+        let isEmpty = $0.isEmpty
+        self.lastInputEmpty = isEmpty
+        self.commonFunctionBar.isHidden = !isEmpty
+        self.candidateBarView.isHidden = isEmpty
         self.updateSuggestionBarVisibility()
 
-        // 旧中文九宫格：候选栏顶部显示 T9 拼音（Hamster 原版组字区）
-        if self.keyboardContext.keyboardType == .chineseNineGrid {
-          self.candidateBarView.phoneticLabel.text = self.rimeContext.t9UserInputKey
+        if self.candidateBarView.superview == nil {
+          candidateBarView.setStyle(self.style)
+          addSubview(candidateBarView)
+          candidateBarView.fillSuperview()
+          // 建议条覆盖在候选栏之上
+          bringSubviewToFront(suggestionBarView)
+        }
+
+        // 检测是否启用内嵌编码
+        guard !keyboardContext.enableEmbeddedInputMode else { return }
+        if self.keyboardContext.keyboardType.isChineseNineGrid {
+          candidateBarView.phoneticLabel.text = self.rimeContext.t9UserInputKey
+        } else {
+          candidateBarView.phoneticLabel.text = $0
         }
       }
       .store(in: &subscriptions)
@@ -303,7 +386,14 @@ class KeyboardToolbarView: NibLessView {
         guard let self else { return }
         let expanded = tab >= 0
         self.panelOverlayView.isHidden = !expanded
-        self.candidateBarView.isHidden = expanded
+        // 面板展开时功能行保持显示，候选栏不遮挡面板
+        if expanded {
+          self.commonFunctionBar.isHidden = false
+          self.candidateBarView.isHidden = true
+        } else {
+          self.commonFunctionBar.isHidden = !self.lastInputEmpty
+          self.candidateBarView.isHidden = self.lastInputEmpty
+        }
         self.updateEntryButtonStates()
         self.updateSuggestionBarVisibility()
         let target: CGFloat = expanded ? ClawPanelOverlayView.panelHeight : 0
@@ -339,6 +429,15 @@ class KeyboardToolbarView: NibLessView {
 
   // MARK: - 按钮动作
 
+  @objc func dismissKeyboardTouchDownAction() {
+    pressButton(dismissKeyboardButton)
+  }
+
+  @objc func dismissKeyboardTouchUpAction() {
+    unpressButton(dismissKeyboardButton)
+    actionHandler.handle(.release, on: .dismissKeyboard)
+  }
+
   @objc func aiButtonTouchDownAction() {
     pressButton(aiButton)
   }
@@ -355,6 +454,15 @@ class KeyboardToolbarView: NibLessView {
       .release,
       on: .url(URL(string: HamsterConstants.appURLForKeyboardSettings), id: "openKeyboardSettings")
     )
+  }
+
+  @objc func helpReplyTouchDownAction() {
+    pressButton(helpReplyButton)
+  }
+
+  @objc func helpReplyTouchUpAction() {
+    unpressButton(helpReplyButton)
+    keyboardContext.clawPanelTab = 1
   }
 
   @objc func superTalkTouchDownAction() {
@@ -376,21 +484,34 @@ class KeyboardToolbarView: NibLessView {
     updateEyeButtonState()
   }
 
+  @objc func emojiButtonTouchDownAction() {
+    pressButton(emojiButton)
+  }
+
+  @objc func emojiButtonTouchUpAction() {
+    unpressButton(emojiButton)
+    if keyboardContext.keyboardType == .emojis {
+      keyboardContext.setKeyboardType(keyboardContext.selectKeyboard)
+    } else {
+      keyboardContext.setKeyboardType(.emojis)
+    }
+  }
+
   private func pressButton(_ button: UIButton) {
     UIView.animate(withDuration: 0.12, delay: 0, options: [.beginFromCurrentState, .allowUserInteraction]) {
-      button.alpha = 0.55
+      button.transform = CGAffineTransform(scaleX: 0.9, y: 0.9)
     }
   }
 
   private func unpressButton(_ button: UIButton) {
     UIView.animate(withDuration: 0.12, delay: 0, options: [.beginFromCurrentState, .allowUserInteraction]) {
-      button.alpha = 1.0
+      button.transform = .identity
     }
   }
 
   @objc func touchCancel() {
-    [aiButton, superTalkButton, eyeButton].forEach { button in
-      button.alpha = 1.0
+    [aiButton, helpReplyButton, superTalkButton, eyeButton, emojiButton, dismissKeyboardButton].forEach { button in
+      button.transform = .identity
     }
   }
 }
