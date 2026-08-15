@@ -510,6 +510,8 @@ class KeyboardRootView: NibLessView {
 
   /// 根据键盘类型选择键盘
   func chooseKeyboard(keyboardType: KeyboardType) -> UIView? {
+    // 底部系统栏（地球/麦克风）仅 IOS 原生模式显示；启动初始也生效（v055 修）
+    bottomSystemBarView.isHidden = !keyboardContext.isClawIOSNativeMode
     var tempKeyboardView: UIView? = nil
     switch keyboardType {
     case .numericNineGrid:
