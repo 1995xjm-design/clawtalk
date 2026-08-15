@@ -227,12 +227,6 @@ class KeyboardRootView: NibLessView {
     return view
   }
 
-  /// 底部系统栏（🌐 地球 + 🎤 麦克风，高 50pt）
-  private lazy var bottomSystemBarView: ClawBottomSystemBarView = {
-    let view = ClawBottomSystemBarView(keyboardContext: keyboardContext)
-    view.translatesAutoresizingMaskIntoConstraints = false
-    return view
-  }()
 
   /// 工具栏（候选栏 + 业务面板 + 建议条）
   private lazy var toolbarView: UIView = {
@@ -296,7 +290,6 @@ class KeyboardRootView: NibLessView {
 
   /// 构建视图层次
   override func constructViewHierarchy() {
-    addSubview(bottomSystemBarView)
     if keyboardContext.enableToolbar {
       addSubview(toolbarView)
       addSubview(primaryKeyboardView)
@@ -307,46 +300,12 @@ class KeyboardRootView: NibLessView {
 
   /// 激活约束
   override func activateViewConstraints() {
-    // 底部系统栏固定
-    NSLayoutConstraint.activate([
-      bottomSystemBarView.bottomAnchor.constraint(equalTo: bottomAnchor),
-      bottomSystemBarView.leadingAnchor.constraint(equalTo: leadingAnchor),
-      bottomSystemBarView.trailingAnchor.constraint(equalTo: trailingAnchor),
-      bottomSystemBarView.heightAnchor.constraint(equalToConstant: ClawIOSNativePalette.bottomBarHeight),
-    ])
-
-    if keyboardContext.enableToolbar {
-      // 工具栏高度约束，可随配置调整高度
-      toolbarHeightConstraint = toolbarView.heightAnchor.constraint(equalToConstant: keyboardContext.clawCandidateBarHeight)
-
-      // 工具栏静态约束
-      let toolbarStaticConstraint = createToolbarStaticConstraints()
-
-      // 工具栏收缩时动态约束
-      toolbarCollapseDynamicConstraints = createToolbarCollapseDynamicConstraints()
-
-      // 工具栏展开时动态约束
-      toolbarExpandDynamicConstraints = createToolbarExpandDynamicConstraints()
-
-      NSLayoutConstraint.activate(toolbarStaticConstraint + toolbarCollapseDynamicConstraints + [toolbarHeightConstraint!])
-    } else {
-      NSLayoutConstraint.activate(createNoToolbarConstraints())
-    }
-  }
-
-  /// 工具栏静态约束（不会发生变动）
-  func createToolbarStaticConstraints() -> [NSLayoutConstraint] {
-    return [
-      toolbarView.topAnchor.constraint(equalTo: topAnchor),
-      toolbarView.leadingAnchor.constraint(equalTo: leadingAnchor),
-      toolbarView.trailingAnchor.constraint(equalTo: trailingAnchor)
-    ]
   }
 
   /// 工具栏展开时动态约束
   func createToolbarExpandDynamicConstraints() -> [NSLayoutConstraint] {
     return [
-      toolbarView.bottomAnchor.constraint(equalTo: bottomSystemBarView.topAnchor)
+      toolbarView.bottomAnchor.constraint(equalTo: bottomAnchor)
     ]
   }
 
@@ -354,7 +313,7 @@ class KeyboardRootView: NibLessView {
   func createToolbarCollapseDynamicConstraints() -> [NSLayoutConstraint] {
     return [
       primaryKeyboardView.topAnchor.constraint(equalTo: toolbarView.bottomAnchor),
-      primaryKeyboardView.bottomAnchor.constraint(equalTo: bottomSystemBarView.topAnchor),
+      primaryKeyboardView.bottomAnchor.constraint(equalTo: bottomAnchor),
       primaryKeyboardView.leadingAnchor.constraint(equalTo: leadingAnchor),
       primaryKeyboardView.trailingAnchor.constraint(equalTo: trailingAnchor)
     ]
@@ -364,7 +323,7 @@ class KeyboardRootView: NibLessView {
   func createNoToolbarConstraints() -> [NSLayoutConstraint] {
     return [
       primaryKeyboardView.topAnchor.constraint(equalTo: topAnchor),
-      primaryKeyboardView.bottomAnchor.constraint(equalTo: bottomSystemBarView.topAnchor),
+      primaryKeyboardView.bottomAnchor.constraint(equalTo: bottomAnchor),
       primaryKeyboardView.leadingAnchor.constraint(equalTo: leadingAnchor),
       primaryKeyboardView.trailingAnchor.constraint(equalTo: trailingAnchor)
     ]
@@ -440,7 +399,6 @@ class KeyboardRootView: NibLessView {
         guard let self = self else { return }
         guard $0 != currentKeyboardType else { return }
         // 底部系统栏（地球/麦克风）仅 IOS 原生模式显示；旧布局不显示，恢复改 IOS 原生前的样式
-        bottomSystemBarView.isHidden = !keyboardContext.isClawIOSNativeMode
         currentKeyboardType = $0
 
         Logger.statistics.debug("KeyboardRootView keyboardType combine: \($0.yamlString)")
@@ -511,7 +469,6 @@ class KeyboardRootView: NibLessView {
   /// 根据键盘类型选择键盘
   func chooseKeyboard(keyboardType: KeyboardType) -> UIView? {
     // 底部系统栏（地球/麦克风）仅 IOS 原生模式显示；启动初始也生效（v055 修）
-    bottomSystemBarView.isHidden = !keyboardContext.isClawIOSNativeMode
     var tempKeyboardView: UIView? = nil
     switch keyboardType {
     case .numericNineGrid:
