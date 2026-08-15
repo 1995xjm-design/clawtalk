@@ -414,6 +414,8 @@ class KeyboardRootView: NibLessView {
       .sink { [weak self] in
         guard let self = self else { return }
         guard $0 != currentKeyboardType else { return }
+        // 底部系统栏（地球/麦克风）仅 IOS 原生模式显示；旧布局不显示，恢复改 IOS 原生前的样式
+        bottomSystemBarView.isHidden = !keyboardContext.isClawIOSNativeMode
         currentKeyboardType = $0
 
         Logger.statistics.debug("KeyboardRootView keyboardType combine: \($0.yamlString)")
