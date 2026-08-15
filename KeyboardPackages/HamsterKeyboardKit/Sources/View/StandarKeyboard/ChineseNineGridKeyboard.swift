@@ -101,7 +101,7 @@ public class ChineseNineGridKeyboard: KeyboardTouchView, UICollectionViewDelegat
   ) {
     // 旧 .chineseNineGrid 固定使用 Hamster 原版九宫格布局（de90be2 按键排布），
     // 与新 .chineseNineGridIOS（ClawNineGridLayoutEngine / 文档布局）互不影响。
-    self.keyboardLayoutProvider = LegacyChineseNineGridLayoutProvider()
+    self.keyboardLayoutProvider = ChineseNineGridLayoutProvider()
     self.actionHandler = actionHandler
     self.appearance = appearance
     self.keyboardContext = keyboardContext
