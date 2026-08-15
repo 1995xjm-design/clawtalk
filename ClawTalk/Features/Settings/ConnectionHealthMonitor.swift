@@ -31,9 +31,37 @@ struct HealthBucket: Identifiable, Equatable {
     var successRate: Double { totalCount == 0 ? 0 : Double(successCount) / Double(totalCount) }
 }
 
+/// 网关健康状态机：综合 TCP 端口探测与 HTTP /health 结果。
+/// - healthy：端口可达且 /health 正常；degraded：端口可达但 /health 异常；
+/// - unreachable：TCP 端口不通（网关未启动 / 不在同一网络 / 防火墙拦截）。
+enum GatewayMonitorState: String, Equatable, Sendable {
+    case unknown = "未检测"
+    case healthy = "正常"
+    case degraded = "网关可达但 /health 异常"
+    case unreachable = "不可达"
+
+    var symbol: String {
+        switch self {
+        case .unknown: return "questionmark.circle"
+        case .healthy: return "checkmark.circle.fill"
+        case .degraded: return "exclamationmark.triangle.fill"
+        case .unreachable: return "xmark.octagon.fill"
+        }
+    }
+
+    var color: Color {
+        switch self {
+        case .unknown: return .gray
+        case .healthy: return .green
+        case .degraded: return .orange
+        case .unreachable: return .red
+        }
+    }
+}
+
 /// 连接健康监控（「连接与状态」功能组）。
 ///
-/// 每 30 秒 GET 网关 /health：记录成功率/延迟/断连次数；
+/// 每 30 秒做一次 TCP 端口探测 + GET 网关 /health：记录成功率/延迟/断连次数；
 /// 连接状态变化（正常→异常 / 异常→恢复）时发本地通知（复用 NotificationCapability）。
 @MainActor
 @Observable
@@ -47,6 +75,10 @@ final class ConnectionHealthMonitor {
     private(set) var isMonitoring = false
     private(set) var lastPingError: String?
     private(set) var lastPingDate: Date?
+    private(set) var lastPortOpen: Bool?
+    private(set) var lastPortError: String?
+    private(set) var state: GatewayMonitorState = .unknown
+    private(set) var consecutiveFailures = 0
 
     nonisolated(unsafe) private var pingTask: Task<Void, Never>?
     private var lastHealthy: Bool?
@@ -85,7 +117,7 @@ final class ConnectionHealthMonitor {
 
     // MARK: - 探测
 
-    /// 立即检测一次网关 /health。
+    /// 立即检测一次网关：TCP 端口探测 + HTTP /health，并推进状态机。
     func pingOnce(gatewayURL: String) async {
         let base = gatewayURL
             .trimmingCharacters(in: .whitespacesAndNewlines)
@@ -93,25 +125,49 @@ final class ConnectionHealthMonitor {
         guard !base.isEmpty, let url = URL(string: "\(base)/health") else {
             lastPingError = "未配置网关地址"
             lastPingDate = Date()
+            state = .unknown
             return
         }
 
+        // 1) TCP 端口探测（到网关 host:port，Network.framework 短超时）
+        let host = url.host ?? base
+        let port = url.port ?? (url.scheme == "https" ? 443 : 80)
+        let portOpen = await TCPProbe.probe(host: host, port: port, timeoutSeconds: 5, queueLabel: "clawtalk.health.tcp")
+        lastPortOpen = portOpen
+        lastPortError = portOpen ? nil : "\(host):\(port) TCP 无法连通（超时或拒绝）"
+
+        // 2) HTTP GET /health
         var request = URLRequest(url: url)
         request.timeoutInterval = 5
         request.cachePolicy = .reloadIgnoringLocalCacheData
         let start = Date()
+        var httpSuccess = false
         do {
             let (_, response) = try await URLSession.shared.data(for: request)
             let status = (response as? HTTPURLResponse)?.statusCode ?? 0
             let latencyMs = Date().timeIntervalSince(start) * 1000
             lastPingError = nil
+            httpSuccess = true
             record(gatewayURL: base, success: true, latencyMs: latencyMs, statusCode: status)
         } catch {
             let latencyMs = Date().timeIntervalSince(start) * 1000
             lastPingError = "请求失败：\(AppErrorText.localized(error.localizedDescription))"
+            httpSuccess = false
             record(gatewayURL: base, success: false, latencyMs: latencyMs, statusCode: nil)
         }
         lastPingDate = Date()
+
+        // 3) 状态机：端口与 /health 综合判定（连续失败计数供展示与通知判定）
+        if portOpen && httpSuccess {
+            consecutiveFailures = 0
+            state = .healthy
+        } else if portOpen {
+            consecutiveFailures += 1
+            state = .degraded
+        } else {
+            consecutiveFailures += 1
+            state = .unreachable
+        }
     }
 
     private func record(gatewayURL: String, success: Bool, latencyMs: Double, statusCode: Int?) {
@@ -233,6 +289,22 @@ struct ConnectionHealthMonitorView: View {
                 if let lastPingDate = monitor.lastPingDate {
                     LabeledContent("最近检测", value: lastPingDate.formatted(date: .omitted, time: .standard))
                 }
+                if monitor.state != .unknown {
+                    HStack(spacing: 8) {
+                        Image(systemName: monitor.state.symbol)
+                            .foregroundStyle(monitor.state.color)
+                        Text(monitor.state.rawValue)
+                            .font(.subheadline.weight(.semibold))
+                    }
+                }
+                if let portOpen = monitor.lastPortOpen {
+                    LabeledContent("TCP 端口连通", value: portOpen ? "是" : "否")
+                }
+                if let lastPortError = monitor.lastPortError {
+                    Text(lastPortError)
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                }
                 if let lastPingError = monitor.lastPingError {
                     Text(lastPingError)
                         .font(.caption)
@@ -241,7 +313,7 @@ struct ConnectionHealthMonitorView: View {
             } header: {
                 Text("监控")
             } footer: {
-                Text("每 30 秒请求一次网关 /health。连接状态变化时会发送本地通知（需通知权限）。离开本页自动停止监控。")
+                Text("每 30 秒做一次 TCP 端口探测 + 网关 /health 请求。连接状态变化时会发送本地通知（需通知权限）。离开本页自动停止监控。")
             }
 
             let stats = monitor.stats()

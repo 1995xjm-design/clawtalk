@@ -70,6 +70,8 @@ final class MemorySyncService {
             cachedSnapshot = snapshot
             lastFetchedAt = Date()
             saveCache()
+            // C10：电脑快照摘要同步到 App Group（电脑关机后键盘/本地仍可用最后快照）
+            MemoryAppGroupSync.pushComputerSummary(snapshot.mergedSummary)
             return snapshot
         } catch {
             lastError = "拉取电脑记忆失败：\(error.localizedDescription)"

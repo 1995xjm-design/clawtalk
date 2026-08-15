@@ -156,19 +156,16 @@ struct SettingsView: View {
     // MARK: - 扫码配对（换电脑/换网关一键重新配对）
 
     @discardableResult
+    @discardableResult
     private func handlePairingCode(_ raw: String) -> Bool {
-        guard let code = GatewaySetupCode.parse(raw) else {
+        guard let link = GatewayConnectDeepLink.fromSetupInput(raw) else {
             pairingMessage = "无法识别配对码，请重新扫码"
             showPairingResult = true
             return false
         }
-        let httpURL = GatewaySetupCode.httpForm(of: code.url)
-        store.settings.gatewayURL = httpURL
-        store.settings.bootstrapToken = code.bootstrapToken
-        store.settings.useWebSocket = true
-        store.save()
+        store.applyGatewayDeepLink(link)
         Task { @MainActor in
-            await testPairing(bootstrapToken: code.bootstrapToken)
+            await testPairing(bootstrapToken: link.bootstrapToken ?? link.token ?? "")
         }
         return true
     }
@@ -208,20 +205,16 @@ struct SettingsView: View {
     /// 用输入的配对码开始配对：写入网关地址 + bootstrapToken，走 bootstrap 握手。
     private func startPairingWithSetupCode() {
         let raw = setupCodeInput.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let code = GatewaySetupCode.parse(raw) else {
-            pairingMessage = "无法识别配对码：请粘贴 openclaw qr 输出的完整配对码（base64 或 JSON 均可）。"
+        guard let link = GatewayConnectDeepLink.fromSetupInput(raw) else {
+            pairingMessage = "无法识别配对码：请粘贴 openclaw qr 输出的完整配对码（base64、JSON 或 ws 地址均可）。"
             showPairingResult = true
             return
         }
         isPairing = true
-        let httpURL = GatewaySetupCode.httpForm(of: code.url)
-        store.settings.gatewayURL = httpURL
-        store.settings.bootstrapToken = code.bootstrapToken
-        store.settings.useWebSocket = true
-        store.save()
+        store.applyGatewayDeepLink(link)
         Task { @MainActor in
             defer { isPairing = false }
-            await testPairing(bootstrapToken: code.bootstrapToken)
+            await testPairing(bootstrapToken: link.bootstrapToken ?? link.token ?? "")
         }
     }
 
@@ -257,7 +250,7 @@ struct SettingsView: View {
                 )
                 pairingMessage = reply
                 // 若回复本身就是配对码，直接填入输入框方便一键配对
-                if GatewaySetupCode.parse(reply) != nil {
+                if GatewayConnectDeepLink.fromSetupInput(reply) != nil {
                     setupCodeInput = reply
                 }
             } catch {
@@ -1001,12 +994,24 @@ private struct KeyboardSettingsHost: UIViewControllerRepresentable {
 private final class KeyboardSettingsHostViewController: UIViewController {
     private var child: UIViewController?
     private var isLoadingOverlay: UIView?
+    /// B8：直达 KeyboardSettingsViewController（跳过设置列表页的「框中框」），只触发一次。
+    private var didAutoNavigateToKeyboard = false
 
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = .systemGroupedBackground
         showLoading()
         loadSettingsAsync()
+    }
+
+    /// 页面出现（导航栈已就绪）后自动 push 键盘设置页。
+    /// 容器已订阅 subViewPublished 并把 .keyboardSettings 推入所在导航栈；
+    /// 时机选在 viewDidAppear，保证 navigationController 已可用。
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        guard !didAutoNavigateToKeyboard, child != nil else { return }
+        didAutoNavigateToKeyboard = true
+        HamsterAppDependencyContainer.shared.mainViewModel.navigation(.keyboardSettings)
     }
 
     /// 容器初始化（RimeContext/解压/配置加载）放后台，避免点进键盘设置卡主线程；

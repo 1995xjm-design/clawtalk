@@ -24,6 +24,11 @@ struct HomeMergedCard: View {
     var size: HomeCardSize = .medium
     var badge: String?
 
+    /// C9：卡面实时摘要（来自宿主 Store 的真实数据；nil = 回落静态简介）。
+    var liveSummary: String? = nil
+    /// C9：红点角标数量（真实未处理计数；<= 0 不显示）。
+    var redDotCount: Int? = nil
+
     var body: some View {
         Group {
             switch size {
@@ -55,6 +60,7 @@ struct HomeMergedCard: View {
                 .frame(width: 40, height: 40)
                 .background(kind.tint)
                 .clipShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
+                .overlay(alignment: .topTrailing) { redDotBadge }
 
             Spacer(minLength: 0)
 
@@ -76,6 +82,7 @@ struct HomeMergedCard: View {
                     .frame(width: 42, height: 42)
                     .background(kind.tint)
                     .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .overlay(alignment: .topTrailing) { redDotBadge }
 
                 Spacer(minLength: 0)
 
@@ -99,12 +106,27 @@ struct HomeMergedCard: View {
                 Text(kind.title)
                     .font(.headline)
                     .foregroundStyle(.primary)
-                Text(kind.summary)
+                Text(liveSummary ?? kind.summary)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
                     .multilineTextAlignment(.leading)
             }
+        }
+    }
+
+    /// 红点角标：真实未处理计数（如 reminders 今日未完成提醒数）。
+    @ViewBuilder
+    private var redDotBadge: some View {
+        if let redDotCount, redDotCount > 0 {
+            Text(redDotCount > 99 ? "99+" : "\(redDotCount)")
+                .font(.system(size: 10, weight: .bold))
+                .foregroundStyle(.white)
+                .padding(.horizontal, 4)
+                .padding(.vertical, 1)
+                .background(Color.red, in: Capsule())
+                .overlay(Capsule().strokeBorder(.white.opacity(0.7), lineWidth: 1))
+                .offset(x: 7, y: -7)
         }
     }
 

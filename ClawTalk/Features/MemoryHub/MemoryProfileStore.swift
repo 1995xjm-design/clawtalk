@@ -82,6 +82,44 @@ final class MemoryProfileStore {
         entries = capped
         save()
         profiles = Self.ordered(capped)
+        // C10：分层记忆同步到 App Group（键盘 AI 面板可读）
+        MemoryAppGroupSync.pushLayers(entries: capped)
+    }
+
+    // MARK: - L1/L2/L3 分层记忆（C10：电脑关机思维一致，本机即可分层检索）
+
+    /// L1：近 7 天沉淀的近期事实（工作记忆）。
+    var l1RecentFacts: [MemoryProfile] {
+        let cutoff = Calendar.current.date(byAdding: .day, value: -7, to: Date()) ?? Date()
+        return entries.filter { $0.lastUpdated >= cutoff }
+    }
+
+    /// L2：按周聚合的汇总（每周一条）。
+    var l2WeeklySummaries: [String] {
+        let calendar = Calendar.current
+        let grouped = Dictionary(grouping: entries) { entry -> DateComponents in
+            calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: entry.lastUpdated)
+        }
+        let weeks = grouped.keys.sorted { a, b in
+            guard let da = calendar.date(from: a), let db = calendar.date(from: b) else { return false }
+            return da < db
+        }
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        return weeks.compactMap { key -> String? in
+            guard let start = calendar.date(from: key) else { return nil }
+            let items = grouped[key] ?? []
+            let titles = items.prefix(6).map(\.title).joined(separator: "、")
+            return "\(formatter.string(from: start)) 周：\(items.count) 条（\(titles)）"
+        }
+    }
+
+    /// L3：长期档案（全部条目）。
+    var l3Archive: [MemoryProfile] { entries }
+
+    /// L1/L2/L3 分层摘要（无数据返回 nil，调用方诚实降级）。
+    func layeredMemorySummary() -> String? {
+        MemoryAppGroupSync.layeredSummary(entries: entries)
     }
 
     // MARK: - 分类规则
@@ -195,6 +233,8 @@ final class MemoryProfileStore {
         entries.append(entry)
         save()
         profiles = Self.ordered(entries)
+        // C10：分层记忆同步到 App Group（键盘 AI 面板可读）
+        MemoryAppGroupSync.pushLayers(entries: entries)
         // 外部写入也尝试沉淀到网关（未配置网关时静默跳过；失败本地保留）
         Task { await syncToGateway() }
         return entry
@@ -263,6 +303,8 @@ final class MemoryProfileStore {
             entries = Self.capped(entries, perCategory: 30, total: 120)
             save()
             profiles = Self.ordered(entries)
+            // C10：分层记忆同步到 App Group（键盘 AI 面板可读）
+            MemoryAppGroupSync.pushLayers(entries: entries)
             // 网关记忆沉淀（未配置/失败静默）
             Task { await syncToGateway() }
         }

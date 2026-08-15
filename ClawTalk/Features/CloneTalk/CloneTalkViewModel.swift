@@ -71,29 +71,22 @@ final class CloneTalkViewModel {
 
         let prompt = Self.buildPrompt(input: input, style: style, profiles: memoryStore.profiles)
 
-        if settingsStore.settings.voiceAgentChannel == .directDeepSeek {
-            await generateViaDeepSeek(prompt: prompt)
-        } else {
-            await generateViaGateway(prompt: prompt)
-        }
+        // C10：全局统一 AI 接入层（AIService 自动选直连/网关 + 注入 L1/L2/L3 记忆与电脑快照）
+        await generateUnified(prompt: prompt)
         isGenerating = false
     }
 
-    // MARK: - 直连 / 网关生成（T4）
+    // MARK: - 统一生成（C10 AIService）
 
-    /// 直连 DeepSeek 通道：本地档案 + 电脑快照注入，不依赖网关。
-    private func generateViaDeepSeek(prompt: String) async {
-        let system = MemoryPromptBuilder.build(
-            profiles: memoryStore.profiles,
-            computerSummary: MemorySyncService.shared.computerSummary,
-            dialogueSnippet: MemorySyncService.shared.recentDialogueSnippet,
-            recentDialogue: [],
-            purpose: "模仿用户口吻改写一句话"
-        )
+    /// 统一流式生成：网关/直连自动切换，保留流式打字效果与失败冷却。
+    private func generateUnified(prompt: String) async {
         do {
-            for try await delta in DeepSeekDirectClient.shared.stream(
-                messages: [DeepSeekChatMessage(role: "user", content: prompt)],
-                system: system
+            for try await delta in AIService.shared.stream(
+                prompt: prompt,
+                purpose: "模仿用户口吻改写一句话",
+                memoryStore: memoryStore,
+                settingsStore: settingsStore,
+                messageChannel: "clone-talk"
             ) {
                 generatedText += delta
             }
@@ -105,50 +98,11 @@ final class CloneTalkViewModel {
             }
         } catch {
             errorMessage = friendlyErrorText(for: error)
-            LogCollector.record(module: "AI 分身", "直连生成失败：\(error.localizedDescription)")
+            LogCollector.record(module: "AI 分身", "统一生成失败：\(error.localizedDescription)")
             registerFailure()
         }
     }
 
-    /// 网关通道（原实现）：OpenClawClient 流式生成。
-    private func generateViaGateway(prompt: String) async {
-        guard settingsStore.isConfigured else {
-            errorMessage = "尚未连接网关：请先配对或填写网关地址与令牌"
-            return
-        }
-        do {
-            let stream = client.stream(
-                messages: [Message(role: .user, content: prompt)],
-                gatewayURL: settingsStore.settings.gatewayURL,
-                token: OpenClawClient.resolveHTTPToken(
-                    settingsToken: settingsStore.gatewayToken,
-                    gatewayURL: settingsStore.settings.gatewayURL
-                ),
-                model: "openclaw:main",
-                apiMode: settingsStore.settings.agentAPIMode,
-                sessionKey: nil,
-                messageChannel: "clone-talk"
-            )
-            for try await event in stream {
-                switch event {
-                case .textDelta(let delta):
-                    generatedText += delta
-                case .modelIdentified, .completed:
-                    break
-                }
-            }
-            let trimmed = generatedText.trimmingCharacters(in: .whitespacesAndNewlines)
-            if trimmed.isEmpty {
-                errorMessage = "没有生成内容，请重试或换个说法"
-            } else {
-                consecutiveFailures = 0
-            }
-        } catch {
-            errorMessage = friendlyErrorText(for: error)
-            LogCollector.record(module: "AI 分身", "生成失败：\(error.localizedDescription)")
-            registerFailure()
-        }
-    }
 
     /// 生成失败文案：区分 401（DeepSeek Key 无效/未配置）与 429（限流）。
     /// 网关路径的 401 按网关令牌错误提示（更诚实）。

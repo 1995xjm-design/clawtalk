@@ -14,7 +14,7 @@ struct TalkButton: View {
 
     private let size: CGFloat = 76
     /// Duration (in seconds) a press must be held to count as push-to-talk
-    private let holdThreshold: UInt64 = 300_000_000 // 0.3s
+    private let holdThreshold: UInt64 = 150_000_000 // 0.15s（轻触灵敏度）
 
     var body: some View {
         ZStack {

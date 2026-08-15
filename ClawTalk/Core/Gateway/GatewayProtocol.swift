@@ -1,9 +1,19 @@
 import Foundation
 
 /// Lowest gateway WebSocket protocol version this client can talk.
-/// Kept at 3 so the App Store build (and any existing users on older
-/// gateways) keep working when this code ships in a future update.
-let GATEWAY_MIN_PROTOCOL_VERSION = 3
+/// Aligned with official OpenClawKit: operator/UI sessions require protocol 4.
+let GATEWAY_MIN_PROTOCOL_VERSION = 4
+
+/// Node sessions (`role=node` + `clientMode=node`) may use protocol 3.
+let GATEWAY_MIN_NODE_PROTOCOL_VERSION = 3
+
+/// Mirror of OpenClawKit GatewayChannel.minimumProtocolVersion(role:clientMode:).
+func gatewayMinimumProtocolVersion(role: String, clientMode: String) -> Int {
+    if role == "node", clientMode == "node" {
+        return GATEWAY_MIN_NODE_PROTOCOL_VERSION
+    }
+    return GATEWAY_MIN_PROTOCOL_VERSION
+}
 
 /// Highest gateway WebSocket protocol version this client supports.
 /// Bumped to 4 alongside OpenClaw upstream commit `330ba1fa31`

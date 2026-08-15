@@ -23,6 +23,11 @@ struct ChatView: View {
     @State private var showFileImporter = false
     @State private var attachedFile: ChatFileAttachment?
     @State private var fileAttachmentError: String?
+    // C11：档案截图 AI 识别入口
+    @State private var showProfileRecognitionPicker = false
+    @State private var profilePickItem: PhotosPickerItem?
+    @State private var profileRecognizeImage: UIImage?
+    @State private var showProfileRecognizeSheet = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -371,6 +376,7 @@ struct ChatView: View {
             .confirmationDialog("添加附件", isPresented: $showAttachmentMenu, titleVisibility: .visible) {
                 Button("照片") { showPhotosPicker = true }
                 Button("文件") { showFileImporter = true }
+                Button("识别档案截图") { showProfileRecognitionPicker = true }
                 Button("取消", role: .cancel) {}
             }
             .fileImporter(isPresented: $showFileImporter, allowedContentTypes: Self.allowedFileTypes) { result in
@@ -392,6 +398,20 @@ struct ChatView: View {
                           matching: .images)
             .onChange(of: selectedPhotos) {
                 Task { await loadSelectedPhotos() }
+            }
+            .photosPicker(isPresented: $showProfileRecognitionPicker,
+                          selection: $profilePickItem,
+                          maxSelectionCount: 1,
+                          matching: .images)
+            .onChange(of: profilePickItem) {
+                Task { await loadProfileRecognitionImage() }
+            }
+            .sheet(isPresented: $showProfileRecognizeSheet) {
+                if let image = profileRecognizeImage {
+                    ProfileRecognizeSheet(image: image, settings: settingsStore) {
+                        profileRecognizeImage = nil
+                    }
+                }
             }
         }
         .background(Color(.secondarySystemBackground))
@@ -528,6 +548,25 @@ struct ChatView: View {
             }
         }
         attachedImages = newImages
+    }
+
+    // MARK: - 档案截图识别（C11）
+
+    /// 读取相册选中的档案截图（保持原图，供 Vision OCR 识别名字与头像）。
+    private func loadProfileRecognitionImage() async {
+        guard let item = profilePickItem else { return }
+        defer { profilePickItem = nil }
+        do {
+            guard let data = try await item.loadTransferable(type: Data.self),
+                  let uiImage = UIImage(data: data) else {
+                LogCollector.record(module: "档案识别", "读取所选截图失败")
+                return
+            }
+            profileRecognizeImage = uiImage
+            showProfileRecognizeSheet = true
+        } catch {
+            LogCollector.record(module: "档案识别", "图片加载失败：\(AppErrorText.localized(error.localizedDescription))")
+        }
     }
 
     /// A3 附件文件类型白名单：文本类 + PDF（网关 /v1/responses input_file 支持范围，≤5MB）。

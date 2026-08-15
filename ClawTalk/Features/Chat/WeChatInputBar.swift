@@ -34,8 +34,8 @@ struct WeChatInputBar: View {
     @State private var longPressTask: Task<Void, Never>?
     @FocusState private var isInputFocused: Bool
 
-    /// 长按录音触发时长（秒）
-    private let holdToRecordDuration: TimeInterval = 0.3
+    /// 长按录音触发时长（秒）：0.15s 轻触即响（原 0.3s 偏钝）
+    private let holdToRecordDuration: TimeInterval = 0.15
 
     /// 弧形选择手势动作（统一手势判定：ClawTalk/Core/VoiceInput/VoiceInputGesture）
     private typealias HoldAction = VoiceInputGestureAction

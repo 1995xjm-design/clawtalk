@@ -67,6 +67,17 @@ final class NodeConnection {
         lastError = nil
         logger.info("node connecting to \(wsURL.absoluteString, privacy: .public)")
 
+        // TLS first-trust gate (TOFU): prompt before trusting an untrusted wss host.
+        if wsURL.scheme?.lowercased() == "wss",
+           let host = wsURL.host,
+           !(await TLSFingerprintGate.shared.ensureTrust(host: host, port: wsURL.port ?? 443))
+        {
+            connectionState = .disconnected
+            lastError = "未信任网关证书，已取消连接"
+            LogCollector.record(module: "节点连接", lastError ?? "")
+            return
+        }
+
         let gw = GatewayWebSocket(
             url: wsURL,
             token: token,
@@ -254,7 +265,7 @@ final class NodeConnection {
             return try encodeJSON(result)
 
         // Health
-        case "health.steps":
+        case "health.steps", "health.summary":
             let params = request.decodedParams(as: HealthStepsParams.self)
             let result = try await HealthCapability.steps(days: params?.days ?? 7)
             return try encodeJSON(result)
@@ -308,8 +319,12 @@ final class NodeConnection {
             let params = request.decodedParams(as: CameraSnapParams.self)
             let result = try await CameraCapability.snap(
                 camera: params?.camera,
+                facing: params?.facing,
                 quality: params?.quality ?? 0.8,
-                maxWidth: params?.maxWidth ?? 1920
+                maxWidth: params?.maxWidth ?? 1920,
+                format: CameraCapability.CameraImageFormat(rawValue: params?.format ?? "") ?? .jpeg,
+                deviceId: params?.deviceId,
+                delayMs: params?.delayMs ?? 0
             )
             // Inject image directly into chat
             if let imageData = Data(base64Encoded: result.imageBase64) {
@@ -324,12 +339,37 @@ final class NodeConnection {
             )
             return try encodeJSON(metadata)
 
+        // Camera Clip
+        case "camera.clip":
+            let params = request.decodedParams(as: CameraClipParams.self)
+            let result = try await CameraCapability.clip(
+                camera: params?.camera,
+                facing: params?.facing,
+                durationMs: params?.durationMs,
+                includeAudio: params?.includeAudio,
+                format: CameraCapability.CameraVideoFormat(rawValue: params?.format ?? "") ?? .mp4,
+                deviceId: params?.deviceId
+            )
+            return try encodeJSON(result)
+
         // Screen
         case "screen.snapshot":
             let params = request.decodedParams(as: ScreenSnapshotParams.self)
             let result = try await ScreenCapability.snapshot(
                 maxWidth: params?.maxWidth ?? 1024,
-                quality: params?.quality ?? 0.8
+                quality: params?.quality ?? 0.8,
+                format: ScreenCapability.ScreenSnapshotFormat(rawValue: params?.format ?? "") ?? .jpeg
+            )
+            return try encodeJSON(result)
+
+        // Screen Record
+        case "screen.record":
+            let params = request.decodedParams(as: ScreenRecordParams.self)
+            let result = try await ScreenCapability.record(
+                screenIndex: params?.screenIndex,
+                durationMs: params?.durationMs,
+                fps: params?.fps,
+                includeAudio: params?.includeAudio
             )
             return try encodeJSON(result)
 
@@ -346,12 +386,15 @@ final class NodeConnection {
             }
             let result = try await CanvasCapability.shared.navigate(url: params.url)
             return try encodeJSON(result)
-        case "canvas.evalJS":
+        case "canvas.eval", "canvas.evalJS":
             guard let params = request.decodedParams(as: CanvasEvalParams.self) else {
                 throw NodeError.unavailable("Missing JavaScript")
             }
             let result = try await CanvasCapability.shared.evalJS(script: params.script)
             return try encodeJSON(result)
+        case "canvas.hide":
+            CanvasCapability.shared.hide()
+            return "{\"ok\":true}"
         case "canvas.snapshot":
             let params = request.decodedParams(as: CanvasSnapshotParams.self)
             let result = try await CanvasCapability.shared.snapshot(

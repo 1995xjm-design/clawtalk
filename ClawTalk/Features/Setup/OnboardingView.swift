@@ -359,7 +359,7 @@ struct OnboardingView: View {
     }
 
     private func handleScannedCode(_ raw: String) {
-        guard let code = GatewaySetupCode.parse(raw) else {
+        guard let link = GatewayConnectDeepLink.fromSetupInput(raw) else {
             // 无效配对码：不退出扫码页，显示提示并复位继续扫码
             rescanToken += 1
             scanNotice = "无法识别配对码，请重新扫描"
@@ -368,7 +368,7 @@ struct OnboardingView: View {
         }
         scanNotice = nil
         showScanner = false
-        applySetupCode(code)
+        applySetupCode(link)
     }
 
     private func pasteSetupCode() {
@@ -376,26 +376,21 @@ struct OnboardingView: View {
             connectionState = .failed("剪贴板为空，请先复制配对码")
             return
         }
-        guard let code = GatewaySetupCode.parse(raw) else {
+        guard let link = GatewayConnectDeepLink.fromSetupInput(raw) else {
             connectionState = .failed("无法识别剪贴板中的配对码")
             return
         }
-        applySetupCode(code)
+        applySetupCode(link)
     }
 
-    /// 应用配对码：自动填网关地址、保存 bootstrapToken，并走 WebSocket 配对测试。
-    private func applySetupCode(_ code: GatewaySetupCode) {
-        let httpURL = GatewaySetupCode.httpForm(of: code.url)
-        gatewayURL = httpURL
-        settingsStore.settings.gatewayURL = httpURL
-        settingsStore.settings.bootstrapToken = code.bootstrapToken
-        // 配对只走 WebSocket 通道，标记启用（应用启动时的自动连接由接线层处理）
-        settingsStore.settings.useWebSocket = true
-        settingsStore.save()
+    /// 应用配对码：自动填网关地址、保存令牌/bootstrapToken/stableID，并走 WebSocket 配对测试。
+    private func applySetupCode(_ link: GatewayConnectDeepLink) {
+        gatewayURL = link.httpGatewayURL
+        settingsStore.applyGatewayDeepLink(link)
         connectionState = .testing
 
         Task { @MainActor in
-            await testWebSocketConnection(bootstrapToken: code.bootstrapToken)
+            await testWebSocketConnection(bootstrapToken: link.bootstrapToken ?? link.token ?? "")
         }
     }
 

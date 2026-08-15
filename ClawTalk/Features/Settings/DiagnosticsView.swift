@@ -1,5 +1,4 @@
 import Darwin
-import Network
 import SwiftUI
 
 /// 日志与诊断：查看本地错误日志，复制，并同步到电脑端 OpenClaw 分析原因和解决方法。
@@ -255,7 +254,7 @@ struct DiagnosticsView: View {
             } header: {
                 Text("健康监控")
             } footer: {
-                Text("每 30 秒检测一次网关 /health，记录成功率/延迟/断连次数，并展示最近 24 小时趋势；状态变化会发本地通知。")
+                Text("每 30 秒做一次 TCP 端口探测 + 网关 /health，记录成功率/延迟/断连次数，并展示最近 24 小时趋势；状态变化会发本地通知。")
             }
         }
         .navigationTitle("日志与诊断")
@@ -867,39 +866,7 @@ struct ConnectionDiagnostics {
     }
 
     static func tcpConnect(host: String, port: Int, timeout: TimeInterval) async -> Bool {
-        guard let nwPort = NWEndpoint.Port(rawValue: UInt16(port)) else { return false }
-        let connection = NWConnection(host: NWEndpoint.Host(host), port: nwPort, using: .tcp)
-        return await withCheckedContinuation { continuation in
-            var didResume = false
-            let lock = NSLock()
-            func resumeOnce(_ value: Bool) {
-                lock.lock()
-                defer { lock.unlock() }
-                guard !didResume else { return }
-                didResume = true
-                continuation.resume(returning: value)
-            }
-            connection.stateUpdateHandler = { state in
-                switch state {
-                case .ready:
-                    resumeOnce(true)
-                    connection.cancel()
-                case .failed:
-                    resumeOnce(false)
-                    connection.cancel()
-                case .cancelled:
-                    resumeOnce(false)
-                default:
-                    break
-                }
-            }
-            let queue = DispatchQueue(label: "clawtalk.diagnostics.tcp")
-            connection.start(queue: queue)
-            queue.asyncAfter(deadline: .now() + timeout) {
-                resumeOnce(false)
-                connection.cancel()
-            }
-        }
+        await TCPProbe.probe(host: host, port: port, timeoutSeconds: timeout, queueLabel: "clawtalk.diagnostics.tcp")
     }
 
     static func friendlyTLSMessage(_ error: Error) -> String {
@@ -966,4 +933,3 @@ private enum StepError: LocalizedError {
         }
     }
 }
-

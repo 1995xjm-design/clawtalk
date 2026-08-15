@@ -78,6 +78,13 @@ final class CanvasCapability {
         return try await present(url: url)
     }
 
+    /// canvas.hide：收起画布（与 present 的 isPresented 状态对应）。
+    func hide() {
+        currentURL = nil
+        pendingURL = nil
+        isPresented = false
+    }
+
     func evalJS(script: String) async throws -> EvalResult {
         guard let webView else { throw CanvasError.noWebView }
 

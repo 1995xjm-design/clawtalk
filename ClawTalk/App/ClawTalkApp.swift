@@ -20,6 +20,7 @@ struct ClawTalkApp: App {
     @State private var voiceWakeWatchdogTask: Task<Void, Never>?
     @State private var gatewayConnection = GatewayConnection()
     @State private var nodeConnection = NodeConnection()
+    @State private var tlsFingerprintGate = TLSFingerprintGate.shared
     @State private var ackSynthesizer: AVSpeechSynthesizer?
     @State private var showGatewaySessions = false
     @State private var showHomeTools = false
@@ -201,6 +202,18 @@ struct ClawTalkApp: App {
         }
         .onOpenURL { url in
             handleIncomingURL(url)
+        }
+        .alert(item: $tlsFingerprintGate.pendingPrompt) { prompt in
+            Alert(
+                title: Text("信任此网关？"),
+                message: Text("网关 \(prompt.host):\(prompt.port) 的 TLS 证书不在信任名单。\n指纹：\(prompt.fingerprint ?? "未知")"),
+                primaryButton: .default(Text("信任并连接")) {
+                    tlsFingerprintGate.resolve(host: prompt.host, trusted: true)
+                },
+                secondaryButton: .cancel(Text("取消")) {
+                    tlsFingerprintGate.resolve(host: prompt.host, trusted: false)
+                }
+            )
         }
     }
 

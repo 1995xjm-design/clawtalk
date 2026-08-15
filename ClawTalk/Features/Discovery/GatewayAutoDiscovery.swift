@@ -1,13 +1,12 @@
 import Darwin
 import Foundation
-import Network
 import Observation
 import SwiftUI
 
 /// 网关自动发现（「连接与状态」功能组）。
 ///
 /// 方案（OpenClaw 无 mDNS 时的简化版）：
-/// 1. Bonjour 尽力尝试 `_openclaw._tcp`（网关/电脑端广播了 mDNS 时直接命中）；
+/// 1. Bonjour 尽力尝试官方 `_openclaw-gw._tcp`（兼容旧版 `_openclaw._tcp`）（网关/电脑端广播了 mDNS 时直接命中）；
 /// 2. 对本机所在 /24 网段做常见端口（默认 18789）逐主机探测：
 ///    - TCP 可连通 → 标记「端口开放」；
 ///    - TCP 连通且 HTTP GET /health 有响应 → 标记「疑似网关」；
@@ -169,41 +168,9 @@ final class GatewayAutoDiscovery {
         }
     }
 
-    /// TCP 连通性探测（Network.framework，短超时）。
+    /// TCP 连通性探测（统一走 TCPProbe，Network.framework 短超时）。
     nonisolated static func tcpConnect(host: String, port: Int, timeout: TimeInterval) async -> Bool {
-        guard let nwPort = NWEndpoint.Port(rawValue: UInt16(port)) else { return false }
-        let connection = NWConnection(host: NWEndpoint.Host(host), port: nwPort, using: .tcp)
-        return await withCheckedContinuation { continuation in
-            var didResume = false
-            let lock = NSLock()
-            func resumeOnce(_ value: Bool) {
-                lock.lock()
-                defer { lock.unlock() }
-                guard !didResume else { return }
-                didResume = true
-                continuation.resume(returning: value)
-            }
-            connection.stateUpdateHandler = { state in
-                switch state {
-                case .ready:
-                    resumeOnce(true)
-                    connection.cancel()
-                case .failed:
-                    resumeOnce(false)
-                    connection.cancel()
-                case .cancelled:
-                    resumeOnce(false)
-                default:
-                    break
-                }
-            }
-            let queue = DispatchQueue(label: "clawtalk.discovery.tcp")
-            connection.start(queue: queue)
-            queue.asyncAfter(deadline: .now() + timeout) {
-                resumeOnce(false)
-                connection.cancel()
-            }
-        }
+        await TCPProbe.probe(host: host, port: port, timeoutSeconds: timeout, queueLabel: "clawtalk.discovery.tcp")
     }
 
     // MARK: - 汇总
@@ -278,14 +245,33 @@ final class GatewayAutoDiscovery {
 
     // MARK: - Bonjour（mDNS）
 
-    /// 尽力尝试发现 `_openclaw._tcp` 服务；无 mDNS 时返回空数组（不影响 /24 扫描）。
+    /// mDNS 服务类型：官方为 `_openclaw-gw._tcp`（OpenClawKit BonjourTypes.gatewayServiceType），
+    /// 兼容旧版 `_openclaw._tcp`；两个类型并发尽力尝试，无 mDNS 时返回空数组（不影响 /24 扫描）。
+    static let mdnsServiceTypes = ["_openclaw-gw._tcp", "_openclaw._tcp"]
+
     nonisolated static func browseOpenClawServices(timeout: TimeInterval) async -> [GatewayCandidate] {
+        await withTaskGroup(of: [GatewayCandidate].self, returning: [GatewayCandidate].self) { group in
+            for serviceType in mdnsServiceTypes {
+                group.addTask {
+                    await browseServiceType(serviceType, timeout: timeout)
+                }
+            }
+            var collected: [GatewayCandidate] = []
+            for await batch in group {
+                collected.append(contentsOf: batch)
+            }
+            return collected
+        }
+    }
+
+    private nonisolated static func browseServiceType(_ serviceType: String, timeout: TimeInterval) async -> [GatewayCandidate] {
         await withCheckedContinuation { continuation in
-            let browser = OpenClawBonjourBrowser()
+            let browser = OpenClawBonjourBrowser(serviceType: serviceType)
             browser.onFinish = { services in
                 let candidates = services.compactMap { service -> GatewayCandidate? in
                     guard let ip = firstIPv4Address(in: service.addresses ?? []) else { return nil }
-                    let port = service.port > 0 ? Int(service.port) : defaultPorts[0]
+                    // 端口优先取 TXT 记录 gatewayPort（官方网关广播该键），其次取解析端口，最后默认 18789。
+                    let port = txtGatewayPort(of: service) ?? (service.port > 0 ? Int(service.port) : defaultPorts[0])
                     return GatewayCandidate(
                         id: UUID(),
                         host: ip,
@@ -300,6 +286,14 @@ final class GatewayAutoDiscovery {
             }
             browser.startSearching(timeout: timeout)
         }
+    }
+
+    /// 读取 Bonjour TXT 记录中的 `gatewayPort`（与官方 GatewayDiscoveryModel.txtIntValue(txt, key: "gatewayPort") 同键）。
+    private nonisolated static func txtGatewayPort(of service: NetService) -> Int? {
+        guard let data = service.txtRecordData() else { return nil }
+        let dict = NetService.dictionary(fromTXTRecord: data)
+        guard let raw = dict["gatewayPort"] else { return nil }
+        return Int(raw)
     }
 
     nonisolated static func firstIPv4Address(in dataList: [Data]) -> String? {
@@ -345,19 +339,25 @@ private actor ScanProgress {
     }
 }
 
-/// Bonjour 浏览器：搜索 `_openclaw._tcp`，超时后回调已解析的服务。
+/// Bonjour 浏览器：搜索指定服务类型（官方 `_openclaw-gw._tcp` / 旧版 `_openclaw._tcp`），超时后回调已解析的服务。
 private final class OpenClawBonjourBrowser: NSObject, NetServiceBrowserDelegate, NetServiceDelegate {
     var onFinish: (([NetService]) -> Void)?
 
+    private let serviceType: String
     private var browser: NetServiceBrowser?
     private var services: [NetService] = []
     private var didFinish = false
+
+    init(serviceType: String) {
+        self.serviceType = serviceType
+        super.init()
+    }
 
     func startSearching(timeout: TimeInterval) {
         let browser = NetServiceBrowser()
         browser.delegate = self
         browser.schedule(in: .main, forMode: .default)
-        browser.searchForServices(ofType: "_openclaw._tcp", inDomain: "")
+        browser.searchForServices(ofType: serviceType, inDomain: "")
         self.browser = browser
 
         DispatchQueue.main.asyncAfter(deadline: .now() + timeout) { [weak self] in
@@ -441,7 +441,7 @@ struct GatewayAutoDiscoveryView: View {
             } header: {
                 Text("自动发现")
             } footer: {
-                Text("手机与网关需在同一局域网。扫描方式：Bonjour mDNS（_openclaw._tcp）+ 同网段 /24 逐主机探测 18789 端口。")
+                Text("手机与网关需在同一局域网。扫描方式：Bonjour mDNS（_openclaw-gw._tcp / _openclaw._tcp）+ 同网段 /24 逐主机探测 18789 端口。")
             }
 
             Section("发现结果") {

@@ -5,6 +5,7 @@ import SwiftUI
 final class SettingsStore {
     private let defaults = UserDefaults.standard
     private let settingsKey = "app_settings"
+    private let stableIDKey = "gateway_stable_id"
     private let secure = SecureStorage.shared
 
     var settings: AppSettings = .defaults
@@ -14,6 +15,11 @@ final class SettingsStore {
             secure.gatewayToken = gatewayToken.isEmpty ? nil : gatewayToken
             syncGatewayToAppGroup()
         }
+    }
+
+    /// 网关 stableID（manual|host|port）：把设备令牌与具体网关绑定，换网关不串号。
+    var gatewayStableID: String? {
+        didSet { defaults.set(gatewayStableID, forKey: stableIDKey) }
     }
 
     var elevenLabsAPIKey: String = "" {
@@ -63,6 +69,7 @@ final class SettingsStore {
             }
         }
         self.gatewayToken = secure.gatewayToken ?? ""
+        self.gatewayStableID = defaults.string(forKey: stableIDKey)
         self.elevenLabsAPIKey = secure.elevenLabsAPIKey ?? ""
         self.openAIAPIKey = secure.openAIAPIKey ?? ""
         self.doubaoAPIKey = secure.doubaoAPIKey ?? ""
@@ -96,6 +103,21 @@ final class SettingsStore {
         }
         syncGatewayToAppGroup()
     }
+
+    /// 应用扫码/粘贴/深链解析出的官方配对信息：写网关地址、令牌、bootstrapToken 与 stableID。
+    func applyGatewayDeepLink(_ link: GatewayConnectDeepLink) {
+        settings.gatewayURL = link.httpGatewayURL
+        if let token = link.token, !token.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            gatewayToken = token
+        }
+        if let bootstrap = link.bootstrapToken, !bootstrap.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            settings.bootstrapToken = bootstrap
+        }
+        gatewayStableID = link.stableID
+        settings.useWebSocket = true
+        save()
+    }
+
     /// 同步网关配置到 App Group（供键盘扩展读取）
     private func syncGatewayToAppGroup() {
         guard let groupDefaults = UserDefaults(suiteName: "group.7518554") else { return }

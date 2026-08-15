@@ -15,7 +15,7 @@ struct InlineMicButton: View {
     @State private var isHolding = false
 
     private let size: CGFloat = 40
-    private let holdThreshold: UInt64 = 300_000_000  // 0.3s
+    private let holdThreshold: UInt64 = 150_000_000  // 0.15s（轻触灵敏度）
 
     var body: some View {
         ZStack {

@@ -47,6 +47,17 @@ final class GatewayConnection {
         lastError = nil
         logger.info("gateway connecting to \(wsURL.absoluteString, privacy: .public)")
 
+        // TLS first-trust gate (TOFU): prompt before trusting an untrusted wss host.
+        if wsURL.scheme?.lowercased() == "wss",
+           let host = wsURL.host,
+           !(await TLSFingerprintGate.shared.ensureTrust(host: host, port: wsURL.port ?? 443))
+        {
+            connectionState = .disconnected
+            lastError = "未信任网关证书，已取消连接"
+            LogCollector.record(module: "网关连接", lastError ?? "")
+            return
+        }
+
         let gw = GatewayWebSocket(
             url: wsURL,
             token: token,

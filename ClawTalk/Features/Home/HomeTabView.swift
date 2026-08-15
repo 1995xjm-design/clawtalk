@@ -35,6 +35,16 @@ struct HomeTabView: View {
     @State private var geofenceStore: GeofenceStore
     /// 记账卡摘要数据源（本月收支）
     @State private var expenseStore: ExpenseStore
+    /// C9：记忆/分身卡数据源（档案数；与 MemoryHub / CloneTalk 同一存储）。
+    @State private var memoryStore: MemoryProfileStore
+    /// C9：出行卡数据源（下一行程；与 TravelListView 同一存储）。
+    @State private var travelStore: TravelStore
+    /// C9：知识卡数据源（问答数；与 KBView 同一存储）。
+    @State private var kbStore: KBStore
+    /// C9：文件防丢卡数据源（文件数；与 FileVaultView 共用 shared 实例）。
+    @State private var fileVaultStore: FileVaultStore
+    /// C9：健康卡数据源（今日步数；异步加载，未授权/失败走诚实空态）。
+    @State private var healthViewModel: HealthViewModel?
 
     /// D3：主页卡片自定义（长按移除 / 工具页添加），AppStorage 持久化（顺序即排布）。
     @AppStorage(HomeCardRegistry.storageKey) private var enabledCardKindsStorage = HomeCardRegistry.defaultStorageValue
@@ -81,6 +91,10 @@ struct HomeTabView: View {
         _habitStore = State(initialValue: HabitStore())
         _geofenceStore = State(initialValue: GeofenceStore())
         _expenseStore = State(initialValue: ExpenseStore())
+        _memoryStore = State(initialValue: MemoryProfileStore(settings: settings))
+        _travelStore = State(initialValue: TravelStore())
+        _kbStore = State(initialValue: KBStore(settings: settings))
+        _fileVaultStore = State(initialValue: FileVaultStore.shared)
     }
 
     var body: some View {
@@ -115,6 +129,9 @@ struct HomeTabView: View {
                     migrateCardStorageIfNeeded()
                     configureAssistantIfNeeded()
                     configureOverviewIfNeeded()
+                }
+                .task {
+                    await configureHealthIfNeeded()
                 }
                 .onChange(of: isEditingCards) { _, editing in
                     if editing {
@@ -167,7 +184,7 @@ struct HomeTabView: View {
                     Text("常用卡片")
                         .font(.headline)
                         .foregroundStyle(.primary)
-                    Text(isEditingCards ? "拖动排序 · 点角标调大小 · 点空白完成" : "长按卡片进入编辑 · 可移动可调整大小")
+                    Text(isEditingCards ? "拖动排序 · 点角标调大小 · 点空白完成" : "长按卡片快捷操作 · 点右上角编辑")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -306,12 +323,15 @@ struct HomeTabView: View {
             }
             .buttonStyle(.plain)
             .accessibilityHint("打开\(kind.title)功能页")
-            .highPriorityGesture(
-                LongPressGesture(minimumDuration: 0.45)
-                    .onEnded { _ in
-                        withAnimation(.easeIn(duration: 0.15)) { isEditingCards = true }
+            .contextMenu {
+                ForEach(quickActions(for: kind)) { action in
+                    if let destination = action.destination {
+                        NavigationLink(destination: destination) {
+                            Label(action.title, systemImage: action.icon)
+                        }
                     }
-            )
+                }
+            }
             .gridCellColumns(gridSpan(for: size))
         }
     }
@@ -327,7 +347,9 @@ struct HomeTabView: View {
             expenseStore: expenseStore,
             gatewayConnection: gatewayConnection,
             size: size,
-            badge: badgeText(for: kind)
+            badge: badgeText(for: kind),
+            liveSummary: liveSummary(for: kind),
+            redDotCount: redDotCount(for: kind)
         )
     }
 
@@ -497,9 +519,6 @@ struct HomeTabView: View {
     /// 卡片实时徽标（与各 Store 共用同一数据源；无数据时返回 nil 显示纯卡片）。
     private func badgeText(for kind: HomeCardKind) -> String? {
         switch kind {
-        case .reminders:
-            let count = careStore.todayReminderCount
-            return count > 0 ? "今日 \(count)" : nil
         case .expense:
             let summary = expenseStore.monthSummary()
             if summary.expense > 0 { return "¥\(summary.expense.expenseAmountText)" }
@@ -510,6 +529,191 @@ struct HomeTabView: View {
             return count > 0 ? "\(count) 个任务" : nil
         default:
             return nil
+        }
+    }
+
+    /// C9：卡面实时摘要——全部来自宿主现有 Store 的真实数据；数据拿不到时显示诚实空态，绝不编造。
+    private func liveSummary(for kind: HomeCardKind) -> String? {
+        switch kind {
+        case .memory:
+            let count = memoryStore.profiles.count
+            return count > 0 ? "\(count) 条档案" : "暂无档案"
+        case .cloneTalk:
+            let count = memoryStore.profiles.count
+            return count > 0 ? "\(count) 份档案可仿写" : "暂无档案"
+        case .record:
+            let count = diaryViewModel?.entries.count ?? 0
+            return count > 0 ? "共 \(count) 条记录" : "暂无记录"
+        case .reminders:
+            let count = careStore.todayReminderCount
+            return count > 0 ? "今日 \(count) 条待处理" : "今日无提醒"
+        case .health:
+            if let steps = healthViewModel?.todaySteps {
+                return "今日 \(steps) 步"
+            }
+            return "暂无健康数据"
+        case .report:
+            // 报告按需生成、无持久化存档 → 诚实空态
+            return "按需生成 · 暂无存档"
+        case .expense:
+            let summary = expenseStore.monthSummary()
+            if summary.expense > 0 { return "本月支出 ¥\(summary.expense.expenseAmountText)" }
+            if summary.income > 0 { return "本月收入 ¥\(summary.income.expenseAmountText)" }
+            return "暂无账目"
+        case .travel:
+            let upcoming = travelStore.trips
+                .filter { $0.periodEndDate >= Date() }
+                .sorted { $0.departureDate < $1.departureDate }
+            if let next = upcoming.first {
+                return "下一程 \(next.destination)"
+            }
+            return travelStore.trips.isEmpty ? "暂无行程" : "近期无行程"
+        case .knowledge:
+            let count = kbStore.totalCount
+            return count > 0 ? "\(count) 次问答" : "暂无问答"
+        case .keyboard:
+            // 主 App 无法可靠检测键盘扩展启用状态 → 诚实引导文案
+            return "请在系统键盘设置中启用"
+        case .automation:
+            let enabled = automationViewModel?.tasks.filter(\.enabled).count ?? 0
+            if enabled > 0 { return "\(enabled) 个已启用" }
+            return (automationViewModel?.tasks.isEmpty ?? true) ? "暂无任务" : "未启用任务"
+        case .fileSafe:
+            let count = fileVaultStore.files.count
+            return count > 0 ? "\(count) 个文件" : "暂无文件"
+        case .emergency:
+            let config = EmergencyStore.shared.config
+            if config.enabled {
+                return "已配置 · \(config.emergencyContacts.count) 位联系人"
+            }
+            return "未配置"
+        case .winddown:
+            // 与 WindDownView 同一持久化键：已设置睡前提醒 = 已配置
+            let configured = UserDefaults.standard.string(forKey: "clawtalk_winddown_reminder_id") != nil
+            return configured ? "已设睡前提醒" : "未设置"
+        }
+    }
+
+    /// C9：红点角标——有未处理数量的卡显示真实计数（如 reminders 今日未完成提醒数）。
+    private func redDotCount(for kind: HomeCardKind) -> Int? {
+        switch kind {
+        case .reminders:
+            let count = careStore.todayReminderCount
+            return count > 0 ? count : nil
+        default:
+            return nil
+        }
+    }
+
+    /// C9：长按快捷动作（2-3 个/卡）——全部跳转宿主现有功能页；无独立子页的动作复用同页导航。
+    private func quickActions(for kind: HomeCardKind) -> [HomeCardQuickAction] {
+        switch kind {
+        case .memory:
+            return [
+                HomeCardQuickAction(id: "memory.add", title: "添加档案", icon: "plus",
+                                    destination: AnyView(MemoryHubView(settings: settings, gatewayConnection: gatewayConnection))),
+                HomeCardQuickAction(id: "memory.search", title: "搜索记忆", icon: "magnifyingglass",
+                                    destination: AnyView(MemoryHubView(settings: settings, gatewayConnection: gatewayConnection))),
+            ]
+        case .cloneTalk:
+            return [
+                HomeCardQuickAction(id: "clone.generate", title: "生成回复", icon: "wand.and.stars",
+                                    destination: AnyView(CloneTalkView(settingsStore: settings))),
+                HomeCardQuickAction(id: "clone.drafts", title: "查看草稿", icon: "doc.text",
+                                    destination: AnyView(CloneTalkView(settingsStore: settings))),
+            ]
+        case .record:
+            return [
+                HomeCardQuickAction(id: "record.diary", title: "语音日记", icon: "waveform",
+                                    destination: AnyView(VoiceDiaryView(settingsStore: settings))),
+                HomeCardQuickAction(id: "record.dictation", title: "文档口述", icon: "doc.plaintext.fill",
+                                    destination: AnyView(DictationListView(settingsStore: settings))),
+                HomeCardQuickAction(id: "record.meeting", title: "会议纪要", icon: "person.2.fill",
+                                    destination: AnyView(MeetingListView(settingsStore: settings))),
+            ]
+        case .reminders:
+            return [
+                HomeCardQuickAction(id: "reminders.add", title: "新建提醒", icon: "plus.circle.fill",
+                                    destination: AnyView(ReminderListView(store: careStore, autoOpenAdd: true))),
+                HomeCardQuickAction(id: "reminders.list", title: "提醒列表", icon: "bell.badge.fill",
+                                    destination: AnyView(ReminderListView(store: careStore))),
+                HomeCardQuickAction(id: "reminders.anniversary", title: "纪念日", icon: "gift.fill",
+                                    destination: AnyView(AnniversariesView())),
+            ]
+        case .health:
+            return [
+                HomeCardQuickAction(id: "health.today", title: "今日概览", icon: "heart.fill",
+                                    destination: AnyView(HealthDetailView(viewModel: HealthViewModel()))),
+                HomeCardQuickAction(id: "health.habit", title: "习惯打卡", icon: "checkmark.circle.fill",
+                                    destination: AnyView(HabitsView(store: habitStore))),
+                HomeCardQuickAction(id: "health.report", title: "健康周报", icon: "heart.text.square.fill",
+                                    destination: AnyView(HealthReportView(healthViewModel: HealthViewModel(), careReminderStore: careStore))),
+            ]
+        case .report:
+            return [
+                HomeCardQuickAction(id: "report.briefing", title: "每日播报", icon: "sun.max.fill",
+                                    destination: AnyView(DailyBriefingView(settings: settings, careStore: careStore))),
+                HomeCardQuickAction(id: "report.period", title: "周报月报", icon: "chart.bar.fill",
+                                    destination: AnyView(ReportView(settings: settings))),
+            ]
+        case .expense:
+            return [
+                HomeCardQuickAction(id: "expense.quick", title: "快速记账", icon: "yensign.circle.fill",
+                                    destination: AnyView(ExpenseListView(settingsStore: settings))),
+                HomeCardQuickAction(id: "expense.month", title: "本月统计", icon: "chart.pie.fill",
+                                    destination: AnyView(ExpenseListView(settingsStore: settings))),
+            ]
+        case .travel:
+            return [
+                HomeCardQuickAction(id: "travel.add", title: "新建行程", icon: "plus",
+                                    destination: AnyView(TravelListView(settings: settings))),
+                HomeCardQuickAction(id: "travel.parking", title: "停车位置", icon: "parkingsign.circle.fill",
+                                    destination: AnyView(ParkingView())),
+            ]
+        case .knowledge:
+            return [
+                HomeCardQuickAction(id: "knowledge.ask", title: "知识库问答", icon: "books.vertical.fill",
+                                    destination: AnyView(KBView(settings: settings, gatewayConnection: gatewayConnection))),
+                HomeCardQuickAction(id: "knowledge.summary", title: "长文摘要", icon: "text.badge.checkmark",
+                                    destination: AnyView(SummarizeView(settingsStore: settings))),
+            ]
+        case .keyboard:
+            return [
+                HomeCardQuickAction(id: "keyboard.now", title: "Now ClawTalk", icon: "brain.head.profile",
+                                    destination: AnyView(ClawTalkPanelHost())),
+                HomeCardQuickAction(id: "keyboard.insight", title: "每日洞察", icon: "sparkles",
+                                    destination: AnyView(AutoInsightPanelHost())),
+                HomeCardQuickAction(id: "keyboard.freq", title: "智能调频", icon: "bolt.fill",
+                                    destination: AnyView(SmartFreqPanelHost())),
+            ]
+        case .automation:
+            return [
+                HomeCardQuickAction(id: "automation.add", title: "新建自动化", icon: "plus",
+                                    destination: AnyView(AutomationListView(settings: settings))),
+                HomeCardQuickAction(id: "automation.list", title: "任务列表", icon: "clock.badge.checkmark",
+                                    destination: AnyView(AutomationListView(settings: settings))),
+            ]
+        case .fileSafe:
+            return [
+                HomeCardQuickAction(id: "fileSafe.add", title: "添加文件", icon: "plus",
+                                    destination: AnyView(FileVaultView())),
+                HomeCardQuickAction(id: "fileSafe.list", title: "防丢登记", icon: "lock.doc.fill",
+                                    destination: AnyView(FileVaultView())),
+            ]
+        case .emergency:
+            return [
+                HomeCardQuickAction(id: "emergency.contacts", title: "配置紧急联系人", icon: "person.crop.circle.badge.plus",
+                                    destination: AnyView(EmergencyView(store: EmergencyStore.shared))),
+                HomeCardQuickAction(id: "emergency.sos", title: "SOS 设置", icon: "sos.circle.fill",
+                                    destination: AnyView(EmergencyView(store: EmergencyStore.shared))),
+            ]
+        case .winddown:
+            return [
+                HomeCardQuickAction(id: "winddown.start", title: "开始助眠", icon: "moon.stars.fill",
+                                    destination: AnyView(WindDownView(settings: settings))),
+                HomeCardQuickAction(id: "winddown.noise", title: "白噪音", icon: "waveform",
+                                    destination: AnyView(WindDownView(settings: settings))),
+            ]
         }
     }
 
@@ -554,10 +758,23 @@ struct HomeTabView: View {
         }
     }
 
-    private static func timeText(_ date: Date) -> String {
+    /// C9：健康数据源接线（异步加载；未授权/失败时保持 nil，卡片显示诚实空态）。
+    private func configureHealthIfNeeded() async {
+        guard healthViewModel == nil else { return }
+        let vm = HealthViewModel()
+        await vm.loadIfNeeded()
+        healthViewModel = vm
+    }
+
+    /// D12：静态缓存 DateFormatter，避免每次渲染新建（卡顿优化）。
+    private static let timeFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateFormat = "HH:mm"
-        return formatter.string(from: date)
+        return formatter
+    }()
+
+    private static func timeText(_ date: Date) -> String {
+        timeFormatter.string(from: date)
     }
 }
 
@@ -598,4 +815,12 @@ private struct OverviewStatCard: View {
                 .fill(HomeWallpaper.glassCardBackground(enabled: glassEnabled))
         )
     }
+}
+
+/// C9：长按快捷动作模型（全部指向宿主现有功能页）。
+private struct HomeCardQuickAction: Identifiable {
+    let id: String
+    let title: String
+    let icon: String
+    let destination: AnyView?
 }

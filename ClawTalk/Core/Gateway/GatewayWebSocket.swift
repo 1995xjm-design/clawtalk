@@ -93,7 +93,7 @@ actor GatewayWebSocket {
     private let encoder = JSONEncoder()
 
     // Timeouts
-    private let connectTimeoutSeconds: Double = 12
+    private let connectTimeoutSeconds: Double = 30
     private let challengeTimeoutSeconds: Double = 6
     private let keepaliveIntervalSeconds: Double = 15
     private let defaultRequestTimeoutMs: Double = 15000
@@ -320,7 +320,8 @@ actor GatewayWebSocket {
 
     private func performHandshake() async throws {
         // Step 1: Wait for connect.challenge
-        let nonce = try await waitForChallenge()
+        let challenge = try await waitForChallenge()
+        let nonce = challenge.nonce
 
         // Step 2: Build and send connect request
         let identity = DeviceIdentityManager.loadOrCreate()
@@ -340,7 +341,10 @@ actor GatewayWebSocket {
         }
         let signingToken = pairingBootstrapToken ?? authToken
 
-        let signedAtMs = Int(Date().timeIntervalSince1970 * 1000)
+        // Prefer the gateway-issued challenge timestamp for device-auth signing
+        // (matches official OpenClawKit). Local-clock fallback only for gateways
+        // that omit ts; avoids clock-skew rejections ("配对码无效或已过期"/401).
+        let signedAtMs = challenge.issuedAtMs.map { Int($0) } ?? Int(Date().timeIntervalSince1970 * 1000)
         let platform = "ios"
         let deviceFamily = await UIDevice.current.model.lowercased()
 
@@ -360,7 +364,7 @@ actor GatewayWebSocket {
         logger.debug("handshake: v2 payload built, deviceId=\(identity.deviceId.prefix(8), privacy: .public)…")
 
         var params: [String: AnyCodable] = [
-            "minProtocol": AnyCodable(GATEWAY_MIN_PROTOCOL_VERSION),
+            "minProtocol": AnyCodable(gatewayMinimumProtocolVersion(role: role, clientMode: clientMode)),
             "maxProtocol": AnyCodable(GATEWAY_MAX_PROTOCOL_VERSION),
             "client": AnyCodable([
                 "id": AnyCodable("openclaw-ios"),
@@ -405,8 +409,8 @@ actor GatewayWebSocket {
         try await handleConnectResponse(response, identity: identity)
     }
 
-    private func waitForChallenge() async throws -> String {
-        try await withThrowingTaskGroup(of: String.self) { group in
+    private func waitForChallenge() async throws -> (nonce: String, issuedAtMs: Int64?) {
+        try await withThrowingTaskGroup(of: (nonce: String, issuedAtMs: Int64?).self) { group in
             group.addTask { [weak self] in
                 guard let self else { throw GatewayError.connectFailed("连接已释放") }
                 while true {
@@ -420,7 +424,17 @@ actor GatewayWebSocket {
                           let nonce = payload["nonce"]?.stringValue,
                           !nonce.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                     else { continue }
-                    return nonce
+                    // Gateway-issued timestamp (ts) used as the signing timestamp so
+                    // device-auth survives clock skew between phone and gateway.
+                    let issuedAtMs: Int64?
+                    if let ts = payload["ts"]?.intValue {
+                        issuedAtMs = Int64(ts)
+                    } else if let ts = payload["ts"]?.doubleValue {
+                        issuedAtMs = Int64(ts)
+                    } else {
+                        issuedAtMs = nil
+                    }
+                    return (nonce, issuedAtMs)
                 }
             }
             group.addTask {
