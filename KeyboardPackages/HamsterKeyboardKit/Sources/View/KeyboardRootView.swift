@@ -100,6 +100,19 @@ class KeyboardRootView: NibLessView {
     return view
   }
 
+  /// 旧数字九宫格键盘（v049k 版，仅非 IOS 原生模式）
+  private var legacyNumericNineGridKeyboardView: UIView {
+    let view = LegacyNumericNineGridKeyboard(
+      actionHandler: actionHandler,
+      appearance: appearance,
+      keyboardContext: keyboardContext,
+      calloutContext: calloutContext,
+      rimeContext: rimeContext
+    )
+    view.translatesAutoresizingMaskIntoConstraints = false
+    return view
+  }
+
   /// 数字九宫格键盘（数字页）
   private var numericNineGridKeyboardView: UIView {
     let view = NumericNineGridKeyboard(
@@ -108,6 +121,18 @@ class KeyboardRootView: NibLessView {
       keyboardContext: keyboardContext,
       calloutContext: calloutContext,
       rimeContext: rimeContext
+    )
+    view.translatesAutoresizingMaskIntoConstraints = false
+    return view
+  }
+
+  /// 旧中文符号键盘（v049k 版，仅非 IOS 原生模式）
+  private var legacyClassifySymbolicKeyboardView: UIView {
+    let view = LegacyClassifySymbolicKeyboard(
+      actionHandler: actionHandler,
+      appearance: appearance,
+      layoutProvider: keyboardLayoutProvider,
+      keyboardContext: keyboardContext
     )
     view.translatesAutoresizingMaskIntoConstraints = false
     return view
@@ -488,9 +513,11 @@ class KeyboardRootView: NibLessView {
     var tempKeyboardView: UIView? = nil
     switch keyboardType {
     case .numericNineGrid:
-      tempKeyboardView = numericNineGridKeyboardView
+      // 旧布局恢复 v049k 版数字页；IOS 原生用新版
+      tempKeyboardView = keyboardContext.isClawIOSNativeMode ? numericNineGridKeyboardView : legacyNumericNineGridKeyboardView
     case .classifySymbolic:
-      tempKeyboardView = classifySymbolicKeyboardView
+      // 旧布局恢复 v049k 版符号页；IOS 原生用新版
+      tempKeyboardView = keyboardContext.isClawIOSNativeMode ? classifySymbolicKeyboardView : legacyClassifySymbolicKeyboardView
     case .emojis:
       tempKeyboardView = emojisKeyboardView
     case .alphabetic:
