@@ -8,25 +8,54 @@
 import HamsterUIKit
 import UIKit
 
-/// 中文符号页（ClawTalk IOS原生，按文档）
-/// 行1：[|]|{|}|删除
-/// 行2：#|%|^|*|+
-/// 行3：=|\||~|<
-/// 行4：>|€|£|¥|#+=
-/// 行5：ABC|,|.|空格|发送/换行
-class ClassifySymbolicKeyboard: KeyboardTouchView {
+/// 分类符号键盘
+class ClassifySymbolicKeyboard: NibLessView {
   private let keyboardContext: KeyboardContext
   private let actionHandler: KeyboardActionHandler
   private let appearance: KeyboardAppearance
-  private let rimeContext: RimeContext
+  private let layoutProvider: KeyboardLayoutProvider
+  private var classifyViewHeightConstraint: NSLayoutConstraint?
+  private var bottomRowViewHeightConstraint: NSLayoutConstraint?
+  private var classifyViewWidthConstraint: NSLayoutConstraint?
 
+  // 屏幕方向
   private var interfaceOrientation: InterfaceOrientation
   private var userInterfaceStyle: UIUserInterfaceStyle
+
+  private var style: NonStandardKeyboardStyle
+
+  // 键盘是否浮动
   private var isKeyboardFloating: Bool
 
-  private var keyboardRows: [[KeyboardButton]] = []
-  private var staticConstraints: [NSLayoutConstraint] = []
-  private var dynamicConstraints: [NSLayoutConstraint] = []
+  private lazy var viewModel: ClassifySymbolicViewModel = {
+    let vm = ClassifySymbolicViewModel()
+    return vm
+  }()
+
+  /// 左侧分类列表
+  private lazy var classifyView: ClassifyView = {
+    let view = ClassifyView(style: style, keyboardContext: keyboardContext, viewModel: viewModel)
+    view.translatesAutoresizingMaskIntoConstraints = false
+    return view
+  }()
+
+  /// 右侧符号视图
+  private lazy var symbolsView: SymbolsView = {
+    let view = SymbolsView(style: style, keyboardContext: keyboardContext, actionHandler: actionHandler, viewModel: viewModel)
+    view.translatesAutoresizingMaskIntoConstraints = false
+    return view
+  }()
+
+  /// 底部按钮
+  private lazy var bottomRow: BottomRowView = {
+    let view = BottomRowView(
+      style: style,
+      actionHandler: actionHandler,
+      layoutProvider: layoutProvider,
+      keyboardContext: keyboardContext)
+    view.translatesAutoresizingMaskIntoConstraints = false
+    return view
+  }()
 
   // MARK: - 计算属性
 
@@ -34,113 +63,60 @@ class ClassifySymbolicKeyboard: KeyboardTouchView {
     .standard(for: keyboardContext)
   }
 
-  private var actionRows: KeyboardActionRows {
-    [
-      [.symbol(Symbol(char: "[")), .symbol(Symbol(char: "]")), .symbol(Symbol(char: "{")), .symbol(Symbol(char: "}")), .backspace],
-      [.symbol(Symbol(char: "#")), .symbol(Symbol(char: "%")), .symbol(Symbol(char: "^")), .symbol(Symbol(char: "*")), .symbol(Symbol(char: "+"))],
-      [.symbol(Symbol(char: "=")), .symbol(Symbol(char: "|")), .symbol(Symbol(char: "~")), .symbol(Symbol(char: "<"))],
-      [.symbol(Symbol(char: ">")), .symbol(Symbol(char: "€")), .symbol(Symbol(char: "£")), .symbol(Symbol(char: "¥")), .keyboardType(.classifySymbolicMore)],
-      [.keyboardType(.alphabetic(.lowercased)), .symbol(Symbol(char: ",")), .symbol(Symbol(char: ".")), .space, primaryAction],
-    ]
-  }
-
-  /// 发送/换行键（跟随外部输入框 returnKeyType，键盘不自行判断）
-  private var primaryAction: KeyboardAction {
-    let proxy = keyboardContext.textDocumentProxy
-    let returnType = proxy.returnKeyType?.keyboardReturnKeyType
-    if let returnType { return .primary(returnType) }
-    return .primary(.return)
-  }
-
-  private var layout: KeyboardLayout {
-    let items = actionRows.enumerated().map { row -> KeyboardLayoutItemRow in
-      row.element.enumerated().map { action -> KeyboardLayoutItem in
-        KeyboardLayoutItem(
-          action: action.element,
-          size: KeyboardLayoutItemSize(width: .available, height: layoutConfig.rowHeight),
-          insets: UIEdgeInsets(top: 3, left: 3, bottom: 3, right: 3),
-          swipes: []
-        )
-      }
-    }
-    return KeyboardLayout(itemRows: items)
-  }
-
   // MARK: - Initailization
 
-  init(
-    actionHandler: KeyboardActionHandler,
-    appearance: KeyboardAppearance,
-    layoutProvider: KeyboardLayoutProvider,
-    keyboardContext: KeyboardContext,
-    rimeContext: RimeContext
-  ) {
+  init(actionHandler: KeyboardActionHandler, appearance: KeyboardAppearance, layoutProvider: KeyboardLayoutProvider, keyboardContext: KeyboardContext) {
     self.actionHandler = actionHandler
     self.appearance = appearance
+    self.layoutProvider = layoutProvider
     self.keyboardContext = keyboardContext
-    self.rimeContext = rimeContext
     self.interfaceOrientation = keyboardContext.interfaceOrientation
     self.isKeyboardFloating = keyboardContext.isKeyboardFloating
     self.userInterfaceStyle = keyboardContext.colorScheme
+    self.style = appearance.nonStandardKeyboardStyle
 
     super.init(frame: .zero)
-
-    setupKeyboardView()
-  }
-
-  @available(*, unavailable)
-  required init?(coder: NSCoder) {
-    fatalError("init(coder:) has not been implemented")
-  }
-
-  // MARK: - Layout
-
-  func setupKeyboardView() {
-    backgroundColor = ClawIOSNativePalette.colors(for: keyboardContext.colorScheme).keyboardBackground
 
     constructViewHierarchy()
     activateViewConstraints()
   }
 
+  // MARK: - Layout
+
+  /// 构建视图层次
   override func constructViewHierarchy() {
-    for (rowIndex, row) in layout.itemRows.enumerated() {
-      var tempRow = [KeyboardButton]()
-      for (itemIndex, item) in row.enumerated() {
-        let buttonItem = KeyboardButton(
-          row: rowIndex,
-          column: itemIndex,
-          item: item,
-          actionHandler: actionHandler,
-          keyboardContext: keyboardContext,
-          rimeContext: rimeContext,
-          calloutContext: .disabled,
-          appearance: appearance
-        )
-        buttonItem.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(buttonItem)
-        tempRow.append(buttonItem)
-      }
-      keyboardRows.append(tempRow)
-    }
+    addSubview(classifyView)
+    addSubview(symbolsView)
+    addSubview(bottomRow)
   }
 
+  /// 激活视图约束
   override func activateViewConstraints() {
-    let rowHeight = layoutConfig.rowHeight
+    let layoutConfig = layoutConfig
+    let symbolViewHeight = layoutConfig.rowHeight * 3
 
-    let engine = ClawNineGridLayoutEngine(
-      rowHeight: rowHeight,
-      specs: [
-        .fixed([4: 0.165], equal: [0: 1, 1: 1, 2: 1, 3: 1]),
-        .equal([0: 1, 1: 1, 2: 1, 3: 1, 4: 1]),
-        .equal([0: 1, 1: 1, 2: 1, 3: 1]),
-        .fixed([4: 0.165], equal: [0: 1, 1: 1, 2: 1, 3: 1]),
-        .fixed([4: 0.165], equal: [0: 1, 1: 1, 2: 1, 3: 2]),
-      ]
-    )
-    engine.build(on: self, rows: keyboardRows)
+    classifyViewWidthConstraint = createClassifyViewWidthConstraint()
+    bottomRowViewHeightConstraint = bottomRow.heightAnchor.constraint(equalToConstant: layoutConfig.rowHeight)
+    bottomRowViewHeightConstraint?.priority = .defaultHigh
+    classifyViewHeightConstraint = classifyView.heightAnchor.constraint(equalToConstant: symbolViewHeight)
+    classifyViewHeightConstraint?.priority = .defaultHigh
 
-    staticConstraints = engine.staticConstraints
-    dynamicConstraints = engine.dynamicHeightConstraints
+    NSLayoutConstraint.activate([
+      classifyView.topAnchor.constraint(equalTo: topAnchor),
+      classifyView.leadingAnchor.constraint(equalTo: leadingAnchor),
+      symbolsView.topAnchor.constraint(equalTo: topAnchor),
+      symbolsView.leadingAnchor.constraint(equalTo: classifyView.trailingAnchor, constant: 1),
+      symbolsView.trailingAnchor.constraint(equalTo: trailingAnchor),
+      bottomRow.leadingAnchor.constraint(equalTo: leadingAnchor),
+      bottomRow.trailingAnchor.constraint(equalTo: trailingAnchor),
+      bottomRow.topAnchor.constraint(equalTo: classifyView.bottomAnchor),
+      bottomRow.topAnchor.constraint(equalTo: symbolsView.bottomAnchor),
+      bottomRow.bottomAnchor.constraint(equalTo: bottomAnchor),
+      symbolsView.heightAnchor.constraint(equalTo: classifyView.heightAnchor),
+      classifyViewWidthConstraint!,
+      bottomRowViewHeightConstraint!,
+      classifyViewHeightConstraint!
+    ])
   }
 
   override func layoutSubviews() {
@@ -148,17 +124,27 @@ class ClassifySymbolicKeyboard: KeyboardTouchView {
 
     if userInterfaceStyle != keyboardContext.colorScheme {
       userInterfaceStyle = keyboardContext.colorScheme
-      backgroundColor = ClawIOSNativePalette.colors(for: userInterfaceStyle).keyboardBackground
-      keyboardRows.forEach { $0.forEach { $0.setNeedsLayout() } }
+      style = appearance.nonStandardKeyboardStyle
+      classifyView.setStyle(style)
+      symbolsView.setStyle(style)
+      bottomRow.setStyle(style)
     }
 
     guard interfaceOrientation != keyboardContext.interfaceOrientation || isKeyboardFloating != keyboardContext.isKeyboardFloating else { return }
     interfaceOrientation = keyboardContext.interfaceOrientation
     isKeyboardFloating = keyboardContext.isKeyboardFloating
 
-    let rowHeight = layoutConfig.rowHeight
-    dynamicConstraints.forEach {
-      $0.constant = rowHeight
-    }
+    classifyViewWidthConstraint?.isActive = false
+    classifyViewWidthConstraint = createClassifyViewWidthConstraint()
+    classifyViewWidthConstraint?.isActive = true
+
+    let layoutConfig = layoutConfig
+    let symbolViewHeight = layoutConfig.rowHeight * 3
+    classifyViewHeightConstraint?.constant = symbolViewHeight
+    bottomRowViewHeightConstraint?.constant = layoutConfig.rowHeight
+  }
+
+  func createClassifyViewWidthConstraint() -> NSLayoutConstraint {
+    classifyView.widthAnchor.constraint(equalTo: widthAnchor, multiplier: keyboardContext.interfaceOrientation.isPortrait ? 0.2 : 0.15)
   }
 }
