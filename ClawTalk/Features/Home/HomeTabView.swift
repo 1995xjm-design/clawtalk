@@ -325,10 +325,8 @@ struct HomeTabView: View {
             .accessibilityHint("打开\(kind.title)功能页")
             .contextMenu {
                 ForEach(quickActions(for: kind)) { action in
-                    if let destination = action.destination {
-                        NavigationLink(destination: destination) {
-                            Label(action.title, systemImage: action.icon)
-                        }
+                    NavigationLink(destination: action.destination()) {
+                        Label(action.title, systemImage: action.icon)
                     }
                 }
             }
@@ -611,108 +609,108 @@ struct HomeTabView: View {
         case .memory:
             return [
                 HomeCardQuickAction(id: "memory.add", title: "添加档案", icon: "plus",
-                                    destination: AnyView(MemoryHubView(settings: settings, gatewayConnection: gatewayConnection))),
+                                    destination: { AnyView(MemoryHubView(settings: settings, gatewayConnection: gatewayConnection)) }),
                 HomeCardQuickAction(id: "memory.search", title: "搜索记忆", icon: "magnifyingglass",
-                                    destination: AnyView(MemoryHubView(settings: settings, gatewayConnection: gatewayConnection))),
+                                    destination: { AnyView(MemoryHubView(settings: settings, gatewayConnection: gatewayConnection)) }),
             ]
         case .cloneTalk:
             return [
                 HomeCardQuickAction(id: "clone.generate", title: "生成回复", icon: "wand.and.stars",
-                                    destination: AnyView(CloneTalkView(settingsStore: settings))),
+                                    destination: { AnyView(CloneTalkView(settingsStore: settings)) }),
                 HomeCardQuickAction(id: "clone.drafts", title: "查看草稿", icon: "doc.text",
-                                    destination: AnyView(CloneTalkView(settingsStore: settings))),
+                                    destination: { AnyView(CloneTalkView(settingsStore: settings)) }),
             ]
         case .record:
             return [
                 HomeCardQuickAction(id: "record.diary", title: "语音日记", icon: "waveform",
-                                    destination: AnyView(VoiceDiaryView(settingsStore: settings))),
+                                    destination: { AnyView(VoiceDiaryView(settingsStore: settings)) }),
                 HomeCardQuickAction(id: "record.dictation", title: "文档口述", icon: "doc.plaintext.fill",
-                                    destination: AnyView(DictationListView(settingsStore: settings))),
+                                    destination: { AnyView(DictationListView(settingsStore: settings)) }),
                 HomeCardQuickAction(id: "record.meeting", title: "会议纪要", icon: "person.2.fill",
-                                    destination: AnyView(MeetingListView(settingsStore: settings))),
+                                    destination: { AnyView(MeetingListView(settingsStore: settings)) }),
             ]
         case .reminders:
             return [
                 HomeCardQuickAction(id: "reminders.add", title: "新建提醒", icon: "plus.circle.fill",
-                                    destination: AnyView(ReminderListView(store: careStore, autoOpenAdd: true))),
+                                    destination: { AnyView(ReminderListView(store: careStore, autoOpenAdd: true)) }),
                 HomeCardQuickAction(id: "reminders.list", title: "提醒列表", icon: "bell.badge.fill",
-                                    destination: AnyView(ReminderListView(store: careStore))),
+                                    destination: { AnyView(ReminderListView(store: careStore)) }),
                 HomeCardQuickAction(id: "reminders.anniversary", title: "纪念日", icon: "gift.fill",
-                                    destination: AnyView(AnniversariesView())),
+                                    destination: { AnyView(AnniversariesView()) }),
             ]
         case .health:
             return [
                 HomeCardQuickAction(id: "health.today", title: "今日概览", icon: "heart.fill",
-                                    destination: AnyView(HealthDetailView(viewModel: HealthViewModel()))),
+                                    destination: { AnyView(HealthDetailView(viewModel: HealthViewModel())) }),
                 HomeCardQuickAction(id: "health.habit", title: "习惯打卡", icon: "checkmark.circle.fill",
-                                    destination: AnyView(HabitsView(store: habitStore))),
+                                    destination: { AnyView(HabitsView(store: habitStore)) }),
                 HomeCardQuickAction(id: "health.report", title: "健康周报", icon: "heart.text.square.fill",
-                                    destination: AnyView(HealthReportView(healthViewModel: HealthViewModel(), careReminderStore: careStore))),
+                                    destination: { AnyView(HealthReportView(healthViewModel: HealthViewModel(), careReminderStore: careStore)) }),
             ]
         case .report:
             return [
                 HomeCardQuickAction(id: "report.briefing", title: "每日播报", icon: "sun.max.fill",
-                                    destination: AnyView(DailyBriefingView(settings: settings, careStore: careStore))),
+                                    destination: { AnyView(DailyBriefingView(settings: settings, careStore: careStore)) }),
                 HomeCardQuickAction(id: "report.period", title: "周报月报", icon: "chart.bar.fill",
-                                    destination: AnyView(ReportView(settings: settings))),
+                                    destination: { AnyView(ReportView(settings: settings)) }),
             ]
         case .expense:
             return [
                 HomeCardQuickAction(id: "expense.quick", title: "快速记账", icon: "yensign.circle.fill",
-                                    destination: AnyView(ExpenseListView(settingsStore: settings))),
+                                    destination: { AnyView(ExpenseListView(settingsStore: settings)) }),
                 HomeCardQuickAction(id: "expense.month", title: "本月统计", icon: "chart.pie.fill",
-                                    destination: AnyView(ExpenseListView(settingsStore: settings))),
+                                    destination: { AnyView(ExpenseListView(settingsStore: settings)) }),
             ]
         case .travel:
             return [
                 HomeCardQuickAction(id: "travel.add", title: "新建行程", icon: "plus",
-                                    destination: AnyView(TravelListView(settings: settings))),
+                                    destination: { AnyView(TravelListView(settings: settings)) }),
                 HomeCardQuickAction(id: "travel.parking", title: "停车位置", icon: "parkingsign.circle.fill",
-                                    destination: AnyView(ParkingView())),
+                                    destination: { AnyView(ParkingView()) }),
             ]
         case .knowledge:
             return [
                 HomeCardQuickAction(id: "knowledge.ask", title: "知识库问答", icon: "books.vertical.fill",
-                                    destination: AnyView(KBView(settings: settings, gatewayConnection: gatewayConnection))),
+                                    destination: { AnyView(KBView(settings: settings, gatewayConnection: gatewayConnection)) }),
                 HomeCardQuickAction(id: "knowledge.summary", title: "长文摘要", icon: "text.badge.checkmark",
-                                    destination: AnyView(SummarizeView(settingsStore: settings))),
+                                    destination: { AnyView(SummarizeView(settingsStore: settings)) }),
             ]
         case .keyboard:
             return [
                 HomeCardQuickAction(id: "keyboard.now", title: "Now ClawTalk", icon: "brain.head.profile",
-                                    destination: AnyView(ClawTalkPanelHost())),
+                                    destination: { AnyView(ClawTalkPanelHost()) }),
                 HomeCardQuickAction(id: "keyboard.insight", title: "每日洞察", icon: "sparkles",
-                                    destination: AnyView(AutoInsightPanelHost())),
+                                    destination: { AnyView(AutoInsightPanelHost()) }),
                 HomeCardQuickAction(id: "keyboard.freq", title: "智能调频", icon: "bolt.fill",
-                                    destination: AnyView(SmartFreqPanelHost())),
+                                    destination: { AnyView(SmartFreqPanelHost()) }),
             ]
         case .automation:
             return [
                 HomeCardQuickAction(id: "automation.add", title: "新建自动化", icon: "plus",
-                                    destination: AnyView(AutomationListView(settings: settings))),
+                                    destination: { AnyView(AutomationListView(settings: settings)) }),
                 HomeCardQuickAction(id: "automation.list", title: "任务列表", icon: "clock.badge.checkmark",
-                                    destination: AnyView(AutomationListView(settings: settings))),
+                                    destination: { AnyView(AutomationListView(settings: settings)) }),
             ]
         case .fileSafe:
             return [
                 HomeCardQuickAction(id: "fileSafe.add", title: "添加文件", icon: "plus",
-                                    destination: AnyView(FileVaultView())),
+                                    destination: { AnyView(FileVaultView()) }),
                 HomeCardQuickAction(id: "fileSafe.list", title: "防丢登记", icon: "lock.doc.fill",
-                                    destination: AnyView(FileVaultView())),
+                                    destination: { AnyView(FileVaultView()) }),
             ]
         case .emergency:
             return [
                 HomeCardQuickAction(id: "emergency.contacts", title: "配置紧急联系人", icon: "person.crop.circle.badge.plus",
-                                    destination: AnyView(EmergencyView(store: EmergencyStore.shared))),
+                                    destination: { AnyView(EmergencyView(store: EmergencyStore.shared)) }),
                 HomeCardQuickAction(id: "emergency.sos", title: "SOS 设置", icon: "sos.circle.fill",
-                                    destination: AnyView(EmergencyView(store: EmergencyStore.shared))),
+                                    destination: { AnyView(EmergencyView(store: EmergencyStore.shared)) }),
             ]
         case .winddown:
             return [
                 HomeCardQuickAction(id: "winddown.start", title: "开始助眠", icon: "moon.stars.fill",
-                                    destination: AnyView(WindDownView(settings: settings))),
+                                    destination: { AnyView(WindDownView(settings: settings)) }),
                 HomeCardQuickAction(id: "winddown.noise", title: "白噪音", icon: "waveform",
-                                    destination: AnyView(WindDownView(settings: settings))),
+                                    destination: { AnyView(WindDownView(settings: settings)) }),
             ]
         }
     }
@@ -822,5 +820,6 @@ private struct HomeCardQuickAction: Identifiable {
     let id: String
     let title: String
     let icon: String
-    let destination: AnyView?
+    /// 懒构建的目标页：仅在长按菜单展示时才构造视图（避免 body 求值预构建 → 主线程阻塞黑屏）。
+    let destination: () -> AnyView
 }

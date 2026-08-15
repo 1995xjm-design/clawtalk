@@ -15,6 +15,9 @@ final class TLSFingerprintGate {
     private var waiters: [String: [CheckedContinuation<Bool, Never>]] = [:]
     private var promptingHosts: Set<String> = []
 
+    /// 信任弹窗无响应超时：超过该时长自动取消连接（防 ensureTrust 永久挂起）。
+    private static let promptTimeoutSeconds: UInt64 = 60
+
     private init() {}
 
     /// 返回 true 表示可继续连接（主机已信任或用户已确认）。
@@ -35,6 +38,24 @@ final class TLSFingerprintGate {
 
         return await withCheckedContinuation { continuation in
             waiters[normalized, default: []].append(continuation)
+            // 超时兜底：弹窗无法呈现/用户长时间未操作时取消连接，避免永久挂起。
+            Task { @MainActor [weak self] in
+                try? await Task.sleep(nanoseconds: Self.promptTimeoutSeconds * 1_000_000_000)
+                self?.resolveTimeout(host: normalized)
+            }
+        }
+    }
+
+    /// 超时回调：取消该主机的所有等待连接（幂等，用户已确认时为无操作）。
+    func resolveTimeout(host: String) {
+        let normalized = normalizeHost(host)
+        promptingHosts.remove(normalized)
+        if pendingPrompt?.host == normalized {
+            pendingPrompt = nil
+        }
+        let continuations = waiters.removeValue(forKey: normalized) ?? []
+        for continuation in continuations {
+            continuation.resume(returning: false)
         }
     }
 

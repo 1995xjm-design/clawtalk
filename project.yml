@@ -69,7 +69,7 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: app.lgm.7517
         PROVISIONING_PROFILE_SPECIFIER: 7517
         MARKETING_VERSION: "1.2.2"
-        CURRENT_PROJECT_VERSION: 7
+        CURRENT_PROJECT_VERSION: 8
         TARGETED_DEVICE_FAMILY: "1,2"
         KNOWN_REGIONS:
           - Base
@@ -120,6 +120,7 @@ targets:
             CFBundleURLSchemes:
               - clawtalk
               - hamster
+              - openclaw
 
   ClawTalkTests:
     type: bundle.unit-test
@@ -233,7 +234,7 @@ targets:
         CODE_SIGN_ENTITLEMENTS: ClawTalkWatchApp/ClawTalkWatch.entitlements
         TARGETED_DEVICE_FAMILY: "4"
         MARKETING_VERSION: "1.2.2"
-        CURRENT_PROJECT_VERSION: 7
+        CURRENT_PROJECT_VERSION: 8
     info:
       path: ClawTalkWatchApp/Resources/Info.plist
       properties:
