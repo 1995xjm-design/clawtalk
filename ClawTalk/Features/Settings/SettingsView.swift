@@ -1,5 +1,7 @@
 import PhotosUI
 import SwiftUI
+import UIKit
+import UserNotifications
 import HamsteriOS
 
 struct SettingsView: View {
@@ -26,6 +28,7 @@ struct SettingsView: View {
     @State private var isRequestingPairingCode = false
     @State private var deepSeekTestState: DeepSeekTestState = .idle
     @State private var gatewayChannelTestState: VoiceAgentGatewayTestState = .idle
+    @State private var notificationSystemStatus: UNAuthorizationStatus = .notDetermined
 
 
     // MARK: - 唤醒词编辑（本地 UUID 列表，避免 ForEach(id: \.offset) 删除/编辑越界崩溃）
@@ -98,6 +101,9 @@ struct SettingsView: View {
             .navigationBarTitleDisplayMode(.inline)
             .onChange(of: deepSeekKey) { _, newValue in
                 SecureStorage.shared.setString(newValue.isEmpty ? nil : newValue, forKey: "deepseek_api_key")
+            }
+            .task {
+                await refreshNotificationStatus()
             }
 
             .toolbar {
@@ -989,15 +995,57 @@ private var connectionSection: some View {
                 Label("TLS 指纹", systemImage: "lock.doc")
             }
             NavigationLink {
+                ApprovalsInSettingsView(gatewayConnection: gatewayConnection)
+            } label: {
+                HStack {
+                    Label("执行审批", systemImage: "checkmark.shield.fill")
+                    Spacer()
+                    if !gatewayConnection.pendingApprovals.isEmpty {
+                        Text("\(gatewayConnection.pendingApprovals.count)")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 3)
+                            .background(Capsule().fill(Color.orange))
+                    }
+                }
+            }
+            NavigationLink {
                 NotificationPreferencesView()
             } label: {
-                Label("通知细分", systemImage: "bell.badge")
+                HStack {
+                    Label("通知细分", systemImage: "bell.badge")
+                    Spacer()
+                    Text(notificationStatusValue)
+                        .font(.caption)
+                        .foregroundStyle(notificationStatusIsOn ? .green : .orange)
+                }
             }
         } header: {
             Text("系统集成")
         } footer: {
             Text("网关多档案切换、自签证书信任、自动发现、连接诊断与远程命令终端/屏幕。")
         }
+    }
+
+    // MARK: - 通知状态（对齐官方设置页状态值）
+
+    private var notificationStatusIsOn: Bool {
+        ExecApprovalNotificationGuidance.isNotificationAuthorizationAllowed(notificationSystemStatus)
+    }
+
+    private var notificationStatusValue: String {
+        if notificationStatusIsOn {
+            return "已开启"
+        }
+        return notificationSystemStatus == .notDetermined ? "未开启" : "通知未开启"
+    }
+
+    @MainActor
+    private func refreshNotificationStatus() async {
+        let center = UNUserNotificationCenter.current()
+        let settings = await center.notificationSettings()
+        notificationSystemStatus = settings.authorizationStatus
     }
 }
 /// 灵动岛模拟预览卡：按当前风格渲染黑底胶囊卡片（简约/标准/详细）。

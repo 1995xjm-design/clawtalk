@@ -224,6 +224,15 @@ struct ClawTalkApp: App {
             .overlay {
                 ApprovalOverlayView(gatewayConnection: gatewayConnection)
             }
+            .notificationGuidanceDialog(
+                guidance: gatewayConnection.pendingNotificationGuidance,
+                onDismiss: { suppressFuture in
+                    gatewayConnection.dismissNotificationGuidance(suppressFuture: suppressFuture)
+                },
+                onOpenNotifications: {
+                    guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
+                    UIApplication.shared.open(url)
+                })
             .sheet(isPresented: Binding(
                 get: { CanvasCapability.shared.isPresented },
                 set: { CanvasCapability.shared.isPresented = $0 }

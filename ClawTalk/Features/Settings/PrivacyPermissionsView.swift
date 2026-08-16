@@ -32,22 +32,22 @@ struct PrivacyPermissionsView: View {
     var body: some View {
         List {
             Section {
-                permissionRow("照片", icon: "photo", status: photoStatus, kind: .photos)
-                permissionRow("相机", icon: "camera", status: cameraStatus, kind: .camera)
-                permissionRow("麦克风", icon: "mic", status: micStatus, kind: .microphone)
-                permissionRow("联系人", icon: "person.crop.circle", status: contactsStatus, kind: .contacts)
-                permissionRow("日历", icon: "calendar", status: calendarStatus, kind: .calendar)
-                permissionRow("提醒", icon: "bell", status: remindersStatus, kind: .reminders)
-                permissionRow("通知", icon: "bell.badge", status: notificationStatus, kind: .notifications)
-                permissionRow("定位（始终允许）", icon: "location.fill", status: locationStatus, kind: .location)
-                permissionRow("运动与健身", icon: "figure.walk", status: motionStatus, kind: .motion)
-                permissionRow("健康读取", icon: "heart.text.square", status: healthStatus, kind: .health)
-                permissionRow("本地网络", icon: "network", status: localNetworkStatus, kind: .localNetwork)
-                permissionRow("键盘采集", icon: "keyboard", status: keyboardStatus, kind: .keyboard)
+                permissionRow("照片", icon: "photo", detail: "读取最近的照片供智能体使用，也可仅授权你选择的照片。", status: photoStatus, kind: .photos)
+                permissionRow("相机", icon: "camera", detail: "拍照与录像供智能体使用。", status: cameraStatus, kind: .camera)
+                permissionRow("麦克风", icon: "mic", detail: "语音输入与语音唤醒需要使用麦克风。", status: micStatus, kind: .microphone)
+                permissionRow("联系人", icon: "person.crop.circle", detail: "搜索并从通讯录添加联系人。", status: contactsStatus, kind: .contacts)
+                permissionRow("日历", icon: "calendar", detail: "列出并读取日历事件，或仅添加日程（最小权限）。", status: calendarStatus, kind: .calendar)
+                permissionRow("提醒", icon: "bell", detail: "列出、添加并完成提醒事项。", status: remindersStatus, kind: .reminders)
+                permissionRow("通知", icon: "bell.badge", detail: "App 不在前台时也能收到审批与消息提醒。", status: notificationStatus, kind: .notifications)
+                permissionRow("定位（始终允许）", icon: "location.fill", detail: "后台持续定位，用于健康监测与地理围栏提醒。", status: locationStatus, kind: .location)
+                permissionRow("运动与健身", icon: "figure.walk", detail: "读取步数等运动数据，用于健康统计。", status: motionStatus, kind: .motion)
+                permissionRow("健康读取", icon: "heart.text.square", detail: "读取心率、步数等健康数据，用于健康告警与统计。", status: healthStatus, kind: .health)
+                permissionRow("本地网络", icon: "network", detail: "访问同一网络内的网关与设备（自动发现）。", status: localNetworkStatus, kind: .localNetwork)
+                permissionRow("键盘采集", icon: "keyboard", detail: "键盘扩展需在系统设置中授权后才能使用。", status: keyboardStatus, kind: .keyboard)
             } header: {
                 Text("权限状态")
             } footer: {
-                Text("未请求的权限可直接点击右侧开关原地授权；已拒绝的权限需前往系统设置开启。权限被拒绝时，对应功能（如照片、麦克风）将不可用。")
+                Text("每项权限均标注用途说明。未请求的权限可直接点击右侧开关原地授权；已拒绝的权限需前往系统设置开启。权限被拒绝时，对应功能（如照片、麦克风）将不可用。")
             }
 
             Section {
@@ -69,10 +69,21 @@ struct PrivacyPermissionsView: View {
         case photos, camera, microphone, contacts, calendar, reminders, notifications, location, motion, health, localNetwork, keyboard
     }
 
-    private func permissionRow(_ title: String, icon: String, status: String, kind: PermissionKind) -> some View {
-        HStack {
-            Label(title, systemImage: icon)
-            Spacer()
+    private func permissionRow(_ title: String, icon: String, detail: String, status: String, kind: PermissionKind) -> some View {
+        HStack(alignment: .center) {
+            Label {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                    Text(detail)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            } icon: {
+                Image(systemName: icon)
+                    .foregroundStyle(Color.openClawRed)
+            }
+            Spacer(minLength: 8)
             Text(status.isEmpty ? "—" : status)
                 .font(.caption)
                 .foregroundStyle(statusColor(status))

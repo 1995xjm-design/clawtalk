@@ -68,6 +68,10 @@ struct NotificationPreferencesView: View {
 
     var body: some View {
         List {
+            if systemStatus == .notDetermined || systemStatus == .denied {
+                notificationWarningSection
+            }
+
             Section {
                 ForEach(NotificationCategory.allCases) { category in
                     Toggle(isOn: Binding(
@@ -136,6 +140,45 @@ struct NotificationPreferencesView: View {
             return "打开任意分类后，ClawTalk 首次发送通知时会请求系统权限。"
         default:
             return ""
+        }
+    }
+
+    /// 通知未开启时的引导卡（对齐官方 approvalNotificationsWarningCard）。
+    private var notificationWarningSection: some View {
+        Section {
+            VStack(alignment: .leading, spacing: 6) {
+                Label("通知未开启", systemImage: "bell.badge")
+                    .font(.subheadline.weight(.semibold))
+                Text("开启通知后，App 不在前台时也能收到审批与消息提醒。")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Button(action: {
+                    switch systemStatus {
+                    case .notDetermined:
+                        requestAuthorization()
+                    default:
+                        openSystemSettings()
+                    }
+                }) {
+                    Label(systemStatus == .notDetermined ? "开启通知" : "打开通知设置", systemImage: "bell.badge")
+                        .font(.subheadline)
+                }
+            }
+        }
+    }
+
+    private func openSystemSettings() {
+        guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
+        openURL(url)
+    }
+
+    /// 未请求过系统通知权限时原地请求（对齐官方请求流程）。
+    private func requestAuthorization() {
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { _, _ in
+            Task { @MainActor in
+                await refreshSystemStatus()
+            }
         }
     }
 

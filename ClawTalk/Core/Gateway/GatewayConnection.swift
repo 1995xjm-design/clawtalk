@@ -1,6 +1,7 @@
 import Foundation
 import OSLog
 import UIKit
+import UserNotifications
 
 /// High-level gateway connection wrapper over GatewayWebSocket.
 /// Provides chat-specific methods and event routing.
@@ -20,6 +21,8 @@ final class GatewayConnection {
     private(set) var lastError: String?
     private(set) var pendingApprovals: [PendingApproval] = []
     private(set) var agentStatus: AgentStatusInfo?
+    /// 审批到达但系统通知未授权时的引导提示（对齐官方 NotificationPermissionGuidanceDialog）。
+    private(set) var pendingNotificationGuidance: NotificationGuidancePrompt?
 
     // MARK: - Private
 
@@ -243,7 +246,7 @@ final class GatewayConnection {
             case "chat":
                 decodeChatEvent(evt)
             case "exec.approval.requested":
-                handleApprovalRequested(evt)
+                await handleApprovalRequested(evt)
             case "exec.approval.resolved":
                 handleApprovalResolved(evt)
             case "agent":
@@ -269,7 +272,7 @@ final class GatewayConnection {
         }
     }
 
-    private func handleApprovalRequested(_ evt: EventFrame) {
+    private func handleApprovalRequested(_ evt: EventFrame) async {
         guard let payload = evt.payload,
               let data = try? JSONEncoder().encode(payload),
               let event = try? JSONDecoder().decode(ExecApprovalEvent.self, from: data)
@@ -296,7 +299,27 @@ final class GatewayConnection {
             pendingApprovals.append(approval)
             Haptics.warning()
             logger.info("approval requested: \(approval.displayCommand, privacy: .public)")
+
+            // 审批到达且通知未开启 → 弹出引导（对齐官方：可持久化不再显示）
+            await presentNotificationGuidanceIfNeeded()
         }
+    }
+
+    /// 审批到达但系统通知未授权时，弹出「通知未开启」引导。
+    private func presentNotificationGuidanceIfNeeded() async {
+        guard pendingNotificationGuidance == nil,
+              !ExecApprovalNotificationGuidance.isSuppressed else { return }
+        let settings = await UNUserNotificationCenter.current().notificationSettings()
+        guard !ExecApprovalNotificationGuidance.isNotificationAuthorizationAllowed(settings.authorizationStatus) else { return }
+        pendingNotificationGuidance = NotificationGuidancePrompt()
+    }
+
+    /// 关闭通知引导；suppressFuture 为 true 时持久化「不再显示」。
+    func dismissNotificationGuidance(suppressFuture: Bool) {
+        if suppressFuture {
+            ExecApprovalNotificationGuidance.suppressFuture()
+        }
+        pendingNotificationGuidance = nil
     }
 
     private func handleApprovalResolved(_ evt: EventFrame) {
