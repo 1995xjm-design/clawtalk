@@ -51,9 +51,9 @@ final class NodeConnection {
         "reminders.list", "reminders.add",
         "motion.activity", "motion.pedometer",
         "photos.latest",
-        "camera.list", "camera.snap",
-        "screen.snapshot",
-        "canvas.present", "canvas.navigate",
+        "camera.list", "camera.snap", "camera.clip",
+        "screen.snapshot", "screen.record",
+        "canvas.present", "canvas.navigate", "canvas.hide", "canvas.eval",
         "canvas.evalJS", "canvas.snapshot", "canvas.reset",
         "canvas.a2ui.reset", "canvas.a2ui.push", "canvas.a2ui.pushJSONL",
         "chat.push",
@@ -63,6 +63,17 @@ final class NodeConnection {
         "health.steps",
         "media.list",
     ]
+
+    /// Node display name advertised to the gateway (mirrors official
+    /// `NodeDisplayName.resolve`: prefers a user-set name, else the device name).
+    private static func resolvedNodeDisplayName() -> String {
+        let key = "node.displayName"
+        let existing = UserDefaults.standard.string(forKey: key)?.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let existing, !existing.isEmpty {
+            return existing
+        }
+        return UIDevice.current.name
+    }
 
     // MARK: - Connect
 
@@ -98,6 +109,8 @@ final class NodeConnection {
             scopes: [],
             caps: Self.declaredCaps,
             commands: Self.declaredCommands,
+            permissions: await GatewayPermissions.current(),
+            displayName: Self.resolvedNodeDisplayName(),
             clientMode: "node",
             pushHandler: { [weak self] push in
                 await self?.handlePush(push)

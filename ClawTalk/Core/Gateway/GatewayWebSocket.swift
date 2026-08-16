@@ -113,6 +113,8 @@ actor GatewayWebSocket {
     private let scopes: [String]
     private let caps: [String]
     private let commands: [String]
+    private let permissions: [String: Bool]
+    private let displayName: String
     private let clientMode: String
 
     // MARK: - Init
@@ -125,6 +127,8 @@ actor GatewayWebSocket {
         scopes: [String] = ["operator.admin", "operator.read", "operator.write", "operator.approvals"],
         caps: [String] = [],
         commands: [String] = [],
+        permissions: [String: Bool] = [:],
+        displayName: String = "ClawTalk",
         clientMode: String = "ui",
         pushHandler: (@Sendable (Push) async -> Void)? = nil,
         stateHandler: (@Sendable (ConnectionState) async -> Void)? = nil,
@@ -137,6 +141,8 @@ actor GatewayWebSocket {
         self.scopes = scopes
         self.caps = caps
         self.commands = commands
+        self.permissions = permissions
+        self.displayName = displayName
         self.clientMode = clientMode
         self.pushHandler = pushHandler
         self.stateHandler = stateHandler
@@ -368,7 +374,7 @@ actor GatewayWebSocket {
             "maxProtocol": AnyCodable(GATEWAY_MAX_PROTOCOL_VERSION),
             "client": AnyCodable([
                 "id": AnyCodable("openclaw-ios"),
-                "displayName": AnyCodable("ClawTalk"),
+                "displayName": AnyCodable(displayName),
                 "version": AnyCodable(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "dev"),
                 "platform": AnyCodable(platform),
                 "mode": AnyCodable(clientMode),
@@ -376,6 +382,7 @@ actor GatewayWebSocket {
             ] as [String: AnyCodable]),
             "caps": AnyCodable(caps.map { AnyCodable($0) }),
             "commands": AnyCodable(commands.map { AnyCodable($0) }),
+            "permissions": AnyCodable(permissions.mapValues { AnyCodable($0) }),
             "locale": AnyCodable(Locale.preferredLanguages.first ?? Locale.current.identifier),
             "userAgent": AnyCodable(ProcessInfo.processInfo.operatingSystemVersionString),
             "role": AnyCodable(role),
