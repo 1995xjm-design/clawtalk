@@ -269,6 +269,7 @@ final class GatewayConnection {
             host: event.request.host,
             agentId: event.request.agentId,
             ask: event.request.ask,
+            warningText: event.request.warningText,
             createdAt: Date(timeIntervalSince1970: event.createdAtMs / 1000),
             expiresAt: Date(timeIntervalSince1970: event.expiresAtMs / 1000)
         )

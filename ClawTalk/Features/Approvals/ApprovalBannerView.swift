@@ -41,6 +41,22 @@ struct ApprovalBannerView: View {
                 }
             }
 
+            // Warning text (official exec approval warningText)
+            if let warning = approval.warningText, !warning.isEmpty {
+                HStack(alignment: .top, spacing: 6) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                    Text(warning)
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .padding(8)
+                .background(Color.orange.opacity(0.12))
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+            }
+
             // Custom question if provided
             if let ask = approval.ask {
                 Text(ask)

@@ -18,6 +18,7 @@ struct ExecApprovalRequest: Decodable, Sendable {
     let ask: String?
     let agentId: String?
     let sessionKey: String?
+    let warningText: String?
 }
 
 // MARK: - Exec Approval Resolved (from push event)
@@ -39,6 +40,7 @@ struct PendingApproval: Identifiable, Sendable {
     let host: String?
     let agentId: String?
     let ask: String?
+    let warningText: String?
     let createdAt: Date
     let expiresAt: Date
 
