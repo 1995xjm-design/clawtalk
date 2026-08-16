@@ -192,7 +192,8 @@ final class NodeConnection {
         }
 
         let task = Task { [weak self] in
-            await self?.runInvoke(request)
+            guard let self else { return }
+            await self.runInvoke(request)
         }
         activeInvokes[request.id] = task
         await task.value
@@ -789,7 +790,7 @@ final class NodeConnection {
         else { return }
         switch action {
         case "stop", "cancel":
-            try? TalkCapability.shared.cancel()
+            _ = try? TalkCapability.shared.cancel()
         default:
             break
         }
