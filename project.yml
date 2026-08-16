@@ -38,7 +38,11 @@ targets:
       - ClawTalk
       - ClawTalkShared
     resources:
-      - ClawTalk/Resources
+      - path: ClawTalk/Resources
+        excludes:
+          - SharedSupport
+      - path: ClawTalk/Resources/SharedSupport
+        type: folder
     dependencies:
       - package: KeychainAccess
       - package: MarkdownUI
@@ -57,7 +61,7 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: app.lgm.7517
         PROVISIONING_PROFILE_SPECIFIER: 7517
         MARKETING_VERSION: "1.2.2"
-        CURRENT_PROJECT_VERSION: 15
+        CURRENT_PROJECT_VERSION: 16
         TARGETED_DEVICE_FAMILY: "1,2"
         KNOWN_REGIONS:
           - Base
@@ -222,7 +226,7 @@ targets:
         CODE_SIGN_ENTITLEMENTS: ClawTalkWatchApp/ClawTalkWatch.entitlements
         TARGETED_DEVICE_FAMILY: "4"
         MARKETING_VERSION: "1.2.2"
-        CURRENT_PROJECT_VERSION: 15
+        CURRENT_PROJECT_VERSION: 16
     info:
       path: ClawTalkWatchApp/Resources/Info.plist
       properties:
