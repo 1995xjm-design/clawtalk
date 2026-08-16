@@ -1,3 +1,4 @@
+import Combine
 import SwiftUI
 
 /// 主页 Tab：顶部语音助手大卡位 + 「今日概览」横向统计卡 + 下方可配置合并卡片网格。
@@ -59,6 +60,9 @@ struct HomeTabView: View {
     @State private var targetedKind: HomeCardKind?
     /// S10：编辑态抖动驱动。
     @State private var wobbleTick = false
+    /// C9：Store 变化刷新信号——@State 持有的 Store 不自动触发重绘，
+    /// 订阅 objectWillChange 递增该值，让卡面实时数据/角标随数据变化刷新。
+    @State private var storeRefreshTick = 0
 
     /// J3：语音日记数据源（今日日记数/待办数统计；与日记组共用 entries 持久化）。
     @State private var diaryViewModel: VoiceDiaryViewModel?
@@ -229,6 +233,24 @@ struct HomeTabView: View {
         .padding(.horizontal, 16)
     }
 
+    /// C9：合并各 Store 的 objectWillChange，驱动卡面实时数据/角标刷新。
+    private var storeRefreshPublisher: AnyPublisher<Void, Never> {
+        var publishers: [AnyPublisher<Void, Never>] = [
+            careStore.objectWillChange.map { _ in () }.eraseToAnyPublisher(),
+            habitStore.objectWillChange.map { _ in () }.eraseToAnyPublisher(),
+            geofenceStore.objectWillChange.map { _ in () }.eraseToAnyPublisher(),
+            expenseStore.objectWillChange.map { _ in () }.eraseToAnyPublisher(),
+            memoryStore.objectWillChange.map { _ in () }.eraseToAnyPublisher(),
+            travelStore.objectWillChange.map { _ in () }.eraseToAnyPublisher(),
+            kbStore.objectWillChange.map { _ in () }.eraseToAnyPublisher(),
+            fileVaultStore.objectWillChange.map { _ in () }.eraseToAnyPublisher(),
+        ]
+        if let diaryViewModel {
+            publishers.append(diaryViewModel.objectWillChange.map { _ in () }.eraseToAnyPublisher())
+        }
+        return Publishers.MergeMany(publishers).eraseToAnyPublisher()
+    }
+
     /// 可配置卡片网格（S10：编辑态拖动排序 + 尺寸调整；全部移除后一键恢复）。
     private var cardGrid: some View {
         let kinds = HomeCardRegistry.enabledKinds(from: enabledCardKindsStorage)
@@ -269,6 +291,7 @@ struct HomeTabView: View {
                         }
                     }
                     .task { expenseStore.reload() }
+                    .onReceive(storeRefreshPublisher) { _ in storeRefreshTick += 1 }
                 }
             }
         }
