@@ -329,9 +329,10 @@ struct HomeTabView: View {
             expenseStore: expenseStore,
             gatewayConnection: gatewayConnection,
             size: size,
-            badge: badgeText(for: kind),
-            liveSummary: liveSummary(for: kind),
-            redDotCount: redDotCount(for: kind)
+            // D12：编辑态 wobble 动画每帧重建卡片，跳过 badge/实时摘要/角标重算避免卡顿。
+            badge: isEditingCards ? nil : badgeText(for: kind),
+            liveSummary: isEditingCards ? nil : liveSummary(for: kind),
+            redDotCount: isEditingCards ? 0 : redDotCount(for: kind)
         )
     }
 

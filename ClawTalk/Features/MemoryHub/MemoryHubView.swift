@@ -62,6 +62,8 @@ struct MemoryHubView: View {
 private struct MemoryProfileTabView: View {
     let store: MemoryProfileStore
 
+    @State private var showScanner = false
+
     private var grouped: [(category: MemoryProfile.Category, entries: [MemoryProfile])] {
         MemoryProfile.Category.displayOrder.compactMap { category in
             let entries = store.profiles.filter { $0.category == category }
@@ -100,11 +102,20 @@ private struct MemoryProfileTabView: View {
                 } label: {
                     Label("重新聚合", systemImage: "arrow.clockwise")
                 }
+
+                Button {
+                    showScanner = true
+                } label: {
+                    Label("截图识别", systemImage: "person.text.rectangle")
+                }
             }
         }
         .task {
             store.refreshFromConversations()
             await store.syncToGateway()
+        }
+        .sheet(isPresented: $showScanner) {
+            MemoryProfileScannerView(store: store)
         }
     }
 
