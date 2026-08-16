@@ -24,7 +24,11 @@ enum GatewayPermissions {
         permissions["screenRecording"] = RPScreenRecorder.shared().isAvailable
 
         let photoStatus = PHPhotoLibrary.authorizationStatus(for: .readWrite)
-        permissions["photos"] = photoStatus == .authorized || photoStatus == .limited
+        var photosAuthorized = photoStatus == .authorized
+        if #available(iOS 18.0, *) {
+            photosAuthorized = photosAuthorized || photoStatus == .limited
+        }
+        permissions["photos"] = photosAuthorized
 
         let contactsStatus = CNContactStore.authorizationStatus(for: .contacts)
         permissions["contacts"] = contactsStatus == .authorized || contactsStatus == .limited
