@@ -126,7 +126,7 @@ actor GatewayWebSocket {
         bootstrapToken: String? = nil,
         password: String? = nil,
         role: String = "operator",
-        scopes: [String] = ["operator.read", "operator.write", "operator.talk.secrets"],
+        scopes: [String] = ["operator.admin", "operator.read", "operator.write", "operator.approvals", "operator.questions", "operator.pairing", "operator.talk.secrets"],
         caps: [String] = [],
         commands: [String] = [],
         permissions: [String: Bool] = [:],
@@ -755,6 +755,32 @@ actor GatewayWebSocket {
         }
         if detailCode == "AUTH_BOOTSTRAP_TOKEN_INVALID" || authReason == "bootstrap_token_invalid" {
             return .bootstrapTokenInvalid
+        }
+        // ???? GatewayErrors??? AUTH_*/DEVICE_AUTH_* ??? ? ??????
+        let code = detailCode.isEmpty ? topCode : detailCode
+        switch code {
+        case "AUTH_TOKEN_MISMATCH", "AUTH_TOKEN_MISSING", "AUTH_TOKEN_NOT_CONFIGURED",
+             "AUTH_UNAUTHORIZED", "UNAUTHORIZED", "AUTH_REQUIRED":
+            return .connectFailed("???????????????????????????")
+        case "AUTH_DEVICE_TOKEN_MISMATCH", "DEVICE_AUTH_INVALID", "DEVICE_IDENTITY_REQUIRED":
+            return .connectFailed("??????????????")
+        case "AUTH_SIGNATURE_INVALID", "DEVICE_AUTH_SIGNATURE_INVALID",
+             "DEVICE_AUTH_NONCE_MISMATCH", "DEVICE_AUTH_NONCE_REQUIRED",
+             "DEVICE_AUTH_DEVICE_ID_MISMATCH", "DEVICE_AUTH_PUBLIC_KEY_INVALID":
+            return .connectFailed("?????????????????????????")
+        case "AUTH_SIGNATURE_EXPIRED", "DEVICE_AUTH_SIGNATURE_EXPIRED":
+            return .connectFailed("??????????????????")
+        case "AUTH_SCOPE_MISMATCH", "MISSING_SCOPE":
+            return .connectFailed("?????????????????")
+        case "AUTH_PASSWORD_MISMATCH", "AUTH_PASSWORD_MISSING", "AUTH_PASSWORD_NOT_CONFIGURED":
+            return .connectFailed("????????????????")
+        case "AUTH_RATE_LIMITED":
+            return .connectFailed("??????????????????")
+        case "AUTH_TAILSCALE_IDENTITY_MISMATCH", "AUTH_TAILSCALE_IDENTITY_MISSING",
+             "AUTH_TAILSCALE_PROXY_MISSING", "AUTH_TAILSCALE_WHOIS_FAILED":
+            return .connectFailed("Tailscale ???????????? Tailscale ??")
+        default:
+            break
         }
         return nil
     }

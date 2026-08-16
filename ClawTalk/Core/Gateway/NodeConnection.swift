@@ -281,6 +281,23 @@ final class NodeConnection {
         }
     }
 
+    /// node.event??????????????? GatewayNodeSession.sendEvent??
+    /// ?????????????????????? false???????
+    func sendNodeEvent(_ event: String, payloadJSON: String?) async -> Bool {
+        guard let gw = gateway else { return false }
+        var params: [String: AnyCodable] = ["event": AnyCodable(event)]
+        if let payloadJSON {
+            params["payloadJSON"] = AnyCodable(payloadJSON)
+        }
+        do {
+            _ = try await gw.request(method: "node.event", params: params)
+            return true
+        } catch {
+            logger.error("node event failed: \(error.localizedDescription, privacy: .public)")
+            return false
+        }
+    }
+
     /// node.invoke.cancel: cancel the running task for the given invoke id.
     private func handleInvokeCancel(_ evt: EventFrame) async {
         guard let payload = evt.payload,
