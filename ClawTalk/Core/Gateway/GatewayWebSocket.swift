@@ -84,6 +84,7 @@ actor GatewayWebSocket {
     private var url: URL
     private var token: String?
     private var bootstrapToken: String?
+    private var password: String?
     private var shouldReconnect = true
     private var backoffMs: Double = 2000
     private var lastSeq: Int?
@@ -123,8 +124,9 @@ actor GatewayWebSocket {
         url: URL,
         token: String?,
         bootstrapToken: String? = nil,
+        password: String? = nil,
         role: String = "operator",
-        scopes: [String] = ["operator.admin", "operator.read", "operator.write", "operator.approvals"],
+        scopes: [String] = ["operator.read", "operator.write", "operator.talk.secrets"],
         caps: [String] = [],
         commands: [String] = [],
         permissions: [String: Bool] = [:],
@@ -137,6 +139,7 @@ actor GatewayWebSocket {
         self.url = url
         self.token = token
         self.bootstrapToken = bootstrapToken
+        self.password = password
         self.role = role
         self.scopes = scopes
         self.caps = caps
@@ -332,20 +335,56 @@ actor GatewayWebSocket {
         // Step 2: Build and send connect request
         let identity = DeviceIdentityManager.loadOrCreate()
         let gatewayHost = url.host ?? ""
-        let storedToken = DeviceAuthTokenStore.loadToken(deviceId: identity.deviceId, role: role, gatewayHost: gatewayHost)?.token
-        let authToken = storedToken ?? token
 
-        // 配对分支：尚无已配对 deviceToken 时，若存在 bootstrapToken（来自 openclaw qr 配对码），
-        // 走 bootstrap 配对路径——auth.bootstrapToken + 签名负载 token 槽位用同一个值。
-        let pairingBootstrapToken: String?
-        if storedToken == nil {
-            let candidate = bootstrapToken ?? loadBootstrapTokenFromSettings()
-            let trimmed = candidate?.trimmingCharacters(in: .whitespacesAndNewlines)
-            pairingBootstrapToken = (trimmed?.isEmpty == false) ? trimmed : nil
+        // 认证来源选择：镜像官方 GatewayChannel.selectConnectAuth。
+        // - 显式 token（扫码/深链/手动输入的 token 字段）优先于已配对 deviceToken
+        // - 显式 bootstrapToken（openclaw qr 配对码）强制走 bootstrap 配对路径，
+        //   不复用旧 deviceToken（换网关/重新配对时不串号）
+        // - 无显式凭据时复用已配对 deviceToken；仍无则兜底持久化配对码（历史 Onboarding 路径）
+        let storedEntry = DeviceAuthTokenStore.loadToken(
+            deviceId: identity.deviceId,
+            role: role,
+            gatewayHost: gatewayHost)
+        let storedToken = storedEntry?.token
+        let explicitToken = Self.trimmedNonEmpty(token)
+        let explicitBootstrapToken = Self.trimmedNonEmpty(bootstrapToken)
+        let explicitPassword = Self.trimmedNonEmpty(password)
+
+        let authToken: String?
+        if explicitToken != nil {
+            authToken = explicitToken
+        } else if explicitPassword == nil, explicitBootstrapToken == nil {
+            authToken = storedToken
         } else {
-            pairingBootstrapToken = nil
+            authToken = nil
         }
-        let signingToken = pairingBootstrapToken ?? authToken
+
+        let authBootstrapToken: String?
+        if authToken == nil, explicitPassword == nil {
+            if explicitBootstrapToken != nil {
+                authBootstrapToken = explicitBootstrapToken
+            } else if explicitToken == nil {
+                authBootstrapToken = Self.trimmedNonEmpty(loadBootstrapTokenFromSettings())
+            } else {
+                authBootstrapToken = nil
+            }
+        } else {
+            authBootstrapToken = nil
+        }
+
+        let authPassword = (authToken == nil && authBootstrapToken == nil) ? explicitPassword : nil
+        let signingToken = authToken ?? authBootstrapToken
+
+        // 镜像官方 resolveConnectScopes：用已配对 deviceToken 重连时以存档 scopes 为准，
+        // 避免请求超出网关授予范围导致握手被拒（operator.admin 等网关未授予的 scope）。
+        let usingStoredDeviceToken = explicitToken == nil && explicitBootstrapToken == nil
+            && explicitPassword == nil && storedToken != nil
+        let effectiveScopes: [String]
+        if usingStoredDeviceToken, let storedScopes = storedEntry?.scopes, !storedScopes.isEmpty {
+            effectiveScopes = storedScopes
+        } else {
+            effectiveScopes = scopes
+        }
 
         // Prefer the gateway-issued challenge timestamp for device-auth signing
         // (matches official OpenClawKit). Local-clock fallback only for gateways
@@ -361,7 +400,7 @@ actor GatewayWebSocket {
             clientId: "openclaw-ios",
             clientMode: clientMode,
             role: role,
-            scopes: scopes,
+            scopes: effectiveScopes,
             signedAtMs: signedAtMs,
             token: signingToken,
             nonce: nonce
@@ -386,13 +425,15 @@ actor GatewayWebSocket {
             "locale": AnyCodable(Locale.preferredLanguages.first ?? Locale.current.identifier),
             "userAgent": AnyCodable(ProcessInfo.processInfo.operatingSystemVersionString),
             "role": AnyCodable(role),
-            "scopes": AnyCodable(scopes.map { AnyCodable($0) }),
+            "scopes": AnyCodable(effectiveScopes.map { AnyCodable($0) }),
         ]
 
-        if let pairingBootstrapToken {
-            params["auth"] = AnyCodable(["bootstrapToken": AnyCodable(pairingBootstrapToken)] as [String: AnyCodable])
+        if let authBootstrapToken {
+            params["auth"] = AnyCodable(["bootstrapToken": AnyCodable(authBootstrapToken)] as [String: AnyCodable])
         } else if let authToken {
             params["auth"] = AnyCodable(["token": AnyCodable(authToken)] as [String: AnyCodable])
+        } else if let authPassword {
+            params["auth"] = AnyCodable(["password": AnyCodable(authPassword)] as [String: AnyCodable])
         }
 
         if let device = GatewayDeviceAuthPayload.signedDeviceDictionary(
@@ -494,11 +535,12 @@ actor GatewayWebSocket {
         }
 
         // Store device token if returned
+        let gatewayHost = url.host ?? ""
+        var bestNodeToken: String?
         if let auth = ok.auth,
            let deviceToken = auth["deviceToken"]?.stringValue {
             let authRole = auth["role"]?.stringValue ?? role
             let scopeValues = auth["scopes"]?.arrayValue?.compactMap { $0.stringValue } ?? []
-            let gatewayHost = url.host ?? ""
             DeviceAuthTokenStore.storeToken(
                 deviceId: identity.deviceId,
                 role: authRole,
@@ -506,9 +548,39 @@ actor GatewayWebSocket {
                 token: deviceToken,
                 scopes: scopeValues
             )
+            if authRole == "node" { bestNodeToken = deviceToken }
             // 同步把配对下发的 device token 传给 App 层（写入 settings.gatewayToken），
             // 供 HTTP 工具调用 / 诊断鉴权等使用（配对场景 settings.gatewayToken 原本为空）。
             deviceTokenHandler?(deviceToken)
+        }
+
+        // 官方多角色 handoff：bootstrap 配对成功后网关会下发 deviceTokens 数组
+        // （node / operator 各自独立令牌）。仅存单 deviceToken 会导致另一角色重连无凭据，
+        // 表现为扫码配对成功后网关/节点会话仍连不上。
+        if let auth = ok.auth,
+           let tokenEntries = auth["deviceTokens"]?.arrayValue {
+            for entry in tokenEntries {
+                guard let dict = entry.dictValue,
+                      let deviceToken = dict["deviceToken"]?.stringValue,
+                      let authRole = dict["role"]?.stringValue
+                else { continue }
+                let scopeValues = dict["scopes"]?.arrayValue?.compactMap { $0.stringValue } ?? []
+                DeviceAuthTokenStore.storeToken(
+                    deviceId: identity.deviceId,
+                    role: authRole,
+                    gatewayHost: gatewayHost,
+                    token: deviceToken,
+                    scopes: scopeValues
+                )
+                if authRole == "node", bestNodeToken == nil {
+                    bestNodeToken = deviceToken
+                }
+            }
+        }
+        // 若单 deviceToken 未覆盖 node 令牌（例如本连接是 operator 角色），
+        // 把 node 令牌同步给 App 层作网关令牌，供 HTTP 工具/诊断鉴权使用。
+        if let bestNodeToken {
+            deviceTokenHandler?(bestNodeToken)
         }
 
         lastTick = Date()
@@ -685,6 +757,13 @@ actor GatewayWebSocket {
             return .bootstrapTokenInvalid
         }
         return nil
+    }
+
+    /// 去除首尾空白；空串返回 nil。
+    private nonisolated static func trimmedNonEmpty(_ value: String?) -> String? {
+        guard let value else { return nil }
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
     }
 
     /// 读取持久化的配对令牌：优先钥匙串（SecureStorage.bootstrapTokenKey），旧存档兜底 UserDefaults。

@@ -164,13 +164,19 @@ struct SettingsView: View {
         }
         store.applyGatewayDeepLink(link)
         Task { @MainActor in
-            await testPairing(bootstrapToken: link.bootstrapToken ?? link.token ?? "")
+            await testPairing(
+                token: link.token,
+                bootstrapToken: link.bootstrapToken,
+                password: link.password
+            )
         }
         return true
     }
 
+    /// 用配对码走 WebSocket 握手配对。与官方一致：bootstrap 配对走 role=node 会话，
+    /// 配对成功后网关下发 node/operator 双角色令牌，App 主连接按角色各自使用。
     @MainActor
-    private func testPairing(bootstrapToken: String) async {
+    private func testPairing(token: String?, bootstrapToken: String?, password: String?) async {
         let resolved = store.settings.resolvedWebSocketURL
         guard !resolved.isEmpty, let wsURL = URL(string: resolved) else {
             pairingMessage = "无效的网关地址"
@@ -179,8 +185,16 @@ struct SettingsView: View {
         }
         let gateway = GatewayWebSocket(
             url: wsURL,
-            token: nil,
+            token: token,
             bootstrapToken: bootstrapToken,
+            password: password,
+            role: "node",
+            scopes: [],
+            caps: NodeConnection.declaredCaps,
+            commands: NodeConnection.declaredCommands,
+            permissions: await GatewayPermissions.current(),
+            displayName: NodeConnection.resolvedNodeDisplayName(),
+            clientMode: "node",
             deviceTokenHandler: { [store] deviceToken in
                 Task { @MainActor in
                     store.gatewayToken = deviceToken
@@ -191,12 +205,21 @@ struct SettingsView: View {
         do {
             try await gateway.connect()
             await gateway.shutdown()
+            clearConsumedPairingCredential()
             pairingMessage = "配对成功，网关令牌已更新"
         } catch {
             await gateway.shutdown()
             pairingMessage = "配对失败：\(AppErrorText.localized(error.localizedDescription))"
         }
         showPairingResult = true
+    }
+
+    /// bootstrap 配对码一次性有效，配对成功后清除。
+    private func clearConsumedPairingCredential() {
+        if store.settings.bootstrapToken != nil {
+            store.settings.bootstrapToken = nil
+            store.save()
+        }
     }
 
     // MARK: - WS 设备配对（输入 setup code / 获取配对码指令）
@@ -213,7 +236,11 @@ struct SettingsView: View {
         store.applyGatewayDeepLink(link)
         Task { @MainActor in
             defer { isPairing = false }
-            await testPairing(bootstrapToken: link.bootstrapToken ?? link.token ?? "")
+            await testPairing(
+                token: link.token,
+                bootstrapToken: link.bootstrapToken,
+                password: link.password
+            )
         }
     }
 

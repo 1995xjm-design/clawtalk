@@ -749,6 +749,13 @@ struct ClawTalkApp: App {
             url: wsURL,
             token: nil,
             bootstrapToken: setupCode,
+            role: "node",
+            scopes: [],
+            caps: NodeConnection.declaredCaps,
+            commands: NodeConnection.declaredCommands,
+            permissions: await GatewayPermissions.current(),
+            displayName: NodeConnection.resolvedNodeDisplayName(),
+            clientMode: "node",
             deviceTokenHandler: { [settingsStore] deviceToken in
                 Task { @MainActor in
                     settingsStore.gatewayToken = deviceToken
@@ -759,6 +766,11 @@ struct ClawTalkApp: App {
         do {
             try await gateway.connect()
             await gateway.shutdown()
+            // bootstrap 配对码一次性有效，配对成功后清除。
+            if settingsStore.settings.bootstrapToken != nil {
+                settingsStore.settings.bootstrapToken = nil
+                settingsStore.save()
+            }
             deepLinkPairingMessage = "配对成功，网关令牌已更新"
         } catch {
             await gateway.shutdown()

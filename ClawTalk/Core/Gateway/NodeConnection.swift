@@ -36,13 +36,13 @@ final class NodeConnection {
 
     // MARK: - Capabilities
 
-    private static let declaredCaps = [
+    static let declaredCaps = [
         "device", "notifications", "location", "contacts",
         "calendar", "reminders", "motion", "photos", "camera",
         "screen", "canvas", "voice",
         "health", "media", "watch", "talk",
     ]
-    private static let declaredCommands = [
+    static let declaredCommands = [
         "device.status", "device.info",
         "system.notify",
         "location.get",
@@ -66,7 +66,7 @@ final class NodeConnection {
 
     /// Node display name advertised to the gateway (mirrors official
     /// `NodeDisplayName.resolve`: prefers a user-set name, else the device name).
-    private static func resolvedNodeDisplayName() -> String {
+    static func resolvedNodeDisplayName() -> String {
         let key = "node.displayName"
         let existing = UserDefaults.standard.string(forKey: key)?.trimmingCharacters(in: .whitespacesAndNewlines)
         if let existing, !existing.isEmpty {
@@ -102,9 +102,13 @@ final class NodeConnection {
             return
         }
 
+        let resolvedToken = await Self.resolveStoredDeviceToken(
+            role: "node",
+            host: wsURL.host,
+            fallback: token)
         let gw = GatewayWebSocket(
             url: wsURL,
-            token: token,
+            token: resolvedToken,
             role: "node",
             scopes: [],
             caps: Self.declaredCaps,
@@ -130,6 +134,17 @@ final class NodeConnection {
             connectionState = .disconnected
             lastError = error.localizedDescription
         }
+    }
+
+    /// 按角色解析已配对 deviceToken：有则用它，没有则回退 App 级网关令牌（手动共享令牌场景）。
+    private static func resolveStoredDeviceToken(role: String, host: String?, fallback: String) async -> String? {
+        guard let host else { return fallback.isEmpty ? nil : fallback }
+        let deviceId = DeviceIdentityManager.loadOrCreate().deviceId
+        if let stored = DeviceAuthTokenStore.loadToken(deviceId: deviceId, role: role, gatewayHost: host)?.token,
+           !stored.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return stored
+        }
+        return fallback.isEmpty ? nil : fallback
     }
 
     func disconnect() async {

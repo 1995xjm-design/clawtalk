@@ -390,13 +390,19 @@ struct OnboardingView: View {
         connectionState = .testing
 
         Task { @MainActor in
-            await testWebSocketConnection(bootstrapToken: link.bootstrapToken ?? link.token ?? "")
+            await testWebSocketConnection(
+                token: link.token,
+                bootstrapToken: link.bootstrapToken,
+                password: link.password
+            )
         }
     }
 
-    /// 用 bootstrapToken 走 WebSocket 握手配对（配对成功即视为连接成功）。
+    /// 用配对码走 WebSocket 握手配对（配对成功即视为连接成功）。
+    /// 与官方一致：bootstrap 配对走 role=node 会话（clientMode=node、scopes 为空），
+    /// 配对成功后网关下发 node/operator 双角色令牌。
     @MainActor
-    private func testWebSocketConnection(bootstrapToken: String) async {
+    private func testWebSocketConnection(token: String?, bootstrapToken: String?, password: String?) async {
         let resolved = settingsStore.settings.resolvedWebSocketURL
         guard !resolved.isEmpty, let wsURL = URL(string: resolved) else {
             connectionState = .failed("无效的网关地址")
@@ -405,8 +411,16 @@ struct OnboardingView: View {
 
         let gateway = GatewayWebSocket(
             url: wsURL,
-            token: nil,
+            token: token,
             bootstrapToken: bootstrapToken,
+            password: password,
+            role: "node",
+            scopes: [],
+            caps: NodeConnection.declaredCaps,
+            commands: NodeConnection.declaredCommands,
+            permissions: await GatewayPermissions.current(),
+            displayName: NodeConnection.resolvedNodeDisplayName(),
+            clientMode: "node",
             deviceTokenHandler: { [settingsStore] deviceToken in
                 Task { @MainActor in
                     // 配对成功：把网关下发的 device token 存为 App 的网关令牌，
@@ -419,10 +433,19 @@ struct OnboardingView: View {
         do {
             try await gateway.connect()
             await gateway.shutdown()
+            clearConsumedPairingCredential()
             connectionState = .success
         } catch {
             await gateway.shutdown()
             connectionState = .failed(pairingErrorMessage(for: error))
+        }
+    }
+
+    /// bootstrap 配对码一次性有效，配对成功后清除，避免重连时把已消费的配对码再发出去。
+    private func clearConsumedPairingCredential() {
+        if settingsStore.settings.bootstrapToken != nil {
+            settingsStore.settings.bootstrapToken = nil
+            settingsStore.save()
         }
     }
 

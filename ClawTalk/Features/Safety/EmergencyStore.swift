@@ -270,7 +270,17 @@ final class EmergencyStore {
                     continue
                 }
 
-                let gateway = GatewayWebSocket(url: wsURL, token: settings.gatewayToken)
+                let gateway = GatewayWebSocket(
+                    url: wsURL,
+                    token: settings.gatewayToken,
+                    role: "node",
+                    scopes: [],
+                    caps: NodeConnection.declaredCaps,
+                    commands: NodeConnection.declaredCommands,
+                    permissions: await GatewayPermissions.current(),
+                    displayName: NodeConnection.resolvedNodeDisplayName(),
+                    clientMode: "node"
+                )
                 do {
                     try await gateway.connect()
                     let _: ChatSendResponse = try await gateway.requestDecoded(

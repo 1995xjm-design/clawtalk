@@ -58,9 +58,15 @@ final class GatewayConnection {
             return
         }
 
+        // 配对成功后 node/operator 各持独立 deviceToken：按角色优先用已配对令牌，
+        // 避免把 node 令牌错当 operator 令牌用导致另一角色重连被网关拒绝。
+        let resolvedToken = await Self.resolveStoredDeviceToken(
+            role: "operator",
+            host: wsURL.host,
+            fallback: token)
         let gw = GatewayWebSocket(
             url: wsURL,
-            token: token,
+            token: resolvedToken,
             pushHandler: { [weak self] push in
                 await self?.handlePush(push)
             },
@@ -80,6 +86,17 @@ final class GatewayConnection {
             lastError = error.localizedDescription
             LogCollector.record(module: "网关连接", AppErrorText.localized(error.localizedDescription))
         }
+    }
+
+    /// 按角色解析已配对 deviceToken：有则用它，没有则回退 App 级网关令牌（手动共享令牌场景）。
+    private static func resolveStoredDeviceToken(role: String, host: String?, fallback: String) async -> String? {
+        guard let host else { return fallback.isEmpty ? nil : fallback }
+        let deviceId = DeviceIdentityManager.loadOrCreate().deviceId
+        if let stored = DeviceAuthTokenStore.loadToken(deviceId: deviceId, role: role, gatewayHost: host)?.token,
+           !stored.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return stored
+        }
+        return fallback.isEmpty ? nil : fallback
     }
 
     /// Disconnect from the gateway.

@@ -88,7 +88,17 @@ final class BGAppRefreshManager {
 
         let sessionKey = PushManager.pushSessionKey
         let lastSeenKey = lastSeenKeyPrefix + sessionKey
-        let gateway = GatewayWebSocket(url: wsURL, token: store.gatewayToken)
+        let gateway = GatewayWebSocket(
+            url: wsURL,
+            token: store.gatewayToken,
+            role: "node",
+            scopes: [],
+            caps: NodeConnection.declaredCaps,
+            commands: NodeConnection.declaredCommands,
+            permissions: await GatewayPermissions.current(),
+            displayName: NodeConnection.resolvedNodeDisplayName(),
+            clientMode: "node"
+        )
 
         do {
             try await gateway.connect()
