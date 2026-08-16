@@ -256,7 +256,7 @@ struct TypingIndicator: View {
     }
 }
 
-/// 聊天气泡时间文案：今天只显示时分，非今天显示「MM-dd HH:mm」（主聊天页与 SyncChatView 统一）。
+/// 聊天气泡时间文案：今天只显示时分，非今天显示「MM-dd HH:mm」（主聊天页与 ChatView 统一）。
 enum ChatBubbleTimeText {
     static func string(from date: Date) -> String {
         let formatter = DateFormatter()

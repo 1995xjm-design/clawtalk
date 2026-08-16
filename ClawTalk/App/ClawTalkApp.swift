@@ -14,8 +14,6 @@ struct ClawTalkApp: App {
     @State private var channelStore: ChannelStore
     @State private var selectedChannel: Channel?
     @State private var chatViewModel: ChatViewModel?
-    @State private var syncChatViewModel: SyncChatViewModel?
-    @State private var selectedSyncChannel: Channel?
     @State private var backgroundViewModels: [UUID: ChatViewModel] = [:]
     @State private var voiceWakeWatchdogTask: Task<Void, Never>?
     @State private var gatewayConnection = GatewayConnection()
@@ -36,7 +34,6 @@ struct ClawTalkApp: App {
 
     private enum ChatRoute: Hashable {
         case chat
-        case sync
         case fileTransfer
     }
 
@@ -103,12 +100,6 @@ struct ClawTalkApp: App {
                 .onReceive(NotificationCenter.default.publisher(for: .clawTalkWakeRestartRequested)) { _ in
                     startVoiceWakeIfNeeded()
                 }
-            }
-        case .sync:
-            if let syncVM = syncChatViewModel, selectedSyncChannel != nil {
-                SyncChatView(viewModel: syncVM, onBack: goBack, onDeleteChannel: deleteCurrentChannel)
-                    .toolbar(.hidden, for: .navigationBar)
-                    .background(EnableSwipeBack())
             }
         case .fileTransfer:
             FileTransferChannelView(settings: settingsStore, onBack: goBack)
@@ -381,22 +372,6 @@ struct ClawTalkApp: App {
 
     private func selectChannel(_ channel: Channel, restartVoiceWake: Bool = true) {
         selectedTab = 0
-        // 三端同步频道（codex/claude）：不走网关 session，改用桥的 /sync 全历史 + 3 秒轮询
-        if channel.agentId == "codex" || channel.agentId == "claude" {
-            stopVoiceWake()
-            syncChatViewModel = SyncChatViewModel(
-                settings: settingsStore,
-                agentId: channel.agentId,
-                channelName: channel.name
-            )
-            chatViewModel = nil
-            selectedChannel = channel
-            selectedSyncChannel = channel
-            nodeConnection.onImagesReceived = nil
-            activeChatRoute = .sync
-            return
-        }
-
         let vm: ChatViewModel
         if let existing = backgroundViewModels.removeValue(forKey: channel.id) {
             // 复用后台继续任务的 VM，避免重建导致任务/消息丢失
@@ -488,14 +463,6 @@ struct ClawTalkApp: App {
         // ????????????????????????????? LOGO ???????
         UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
         stopVoiceWake()
-        if syncChatViewModel != nil || selectedSyncChannel != nil {
-            syncChatViewModel?.stopPolling()
-            syncChatViewModel = nil
-            selectedSyncChannel = nil
-            selectedChannel = nil
-            nodeConnection.onImagesReceived = nil
-            return
-        }
         guard let vm = chatViewModel else {
             selectedChannel = nil
             nodeConnection.onImagesReceived = nil
@@ -532,14 +499,9 @@ struct ClawTalkApp: App {
             vm.stop() // 真正取消：abort + cancel
             backgroundViewModels.removeValue(forKey: vm.channel.id)
         }
-        if let channel = selectedSyncChannel {
-            channelStore.delete(channel)
-        } else if let channel = selectedChannel {
+        if let channel = selectedChannel {
             channelStore.delete(channel)
         }
-        syncChatViewModel?.stopPolling()
-        syncChatViewModel = nil
-        selectedSyncChannel = nil
         chatViewModel = nil
         selectedChannel = nil
         nodeConnection.onImagesReceived = nil

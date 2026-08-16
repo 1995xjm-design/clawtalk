@@ -12,7 +12,7 @@ struct MeetingOrganizationResult {
 }
 
 /// 会议纪要整理逻辑，两条路：
-/// ① 网关可用时调 OpenClawClient.stream（与 SyncChatViewModel.send /
+/// ① 网关可用时调 OpenClawClient.stream（与 ChatViewModel.send /
 ///    VoiceAssistantViewModel.requestAgentReplyViaGateway 同独立发送链路），
 ///    让 agent 把转写整理成 JSON 格式纪要；
 /// ② 网关不可用 / 调用失败 / AI 输出不是标准 JSON → 本地规则降级，

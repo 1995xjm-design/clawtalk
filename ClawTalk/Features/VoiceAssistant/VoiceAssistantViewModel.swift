@@ -80,7 +80,7 @@ struct PendingVoiceIntent: Identifiable, Equatable {
 /// - 朗读（TTS）由本类自己驱动（场景音量/打断需要）；
 /// - 发送链路双模式：
 ///   - 独立路径（默认）：本类自己持有 OpenClawClient，走网关流式发送
-///     （OpenClawClient.stream + model "openclaw:<agentId>"，与 SyncChatViewModel.send 同链路），
+///     （OpenClawClient.stream + model "openclaw:<agentId>"，与 ChatViewModel.send 同链路），
 ///     主页不依赖聊天页，没进过聊天也能用；
 ///   - 兼容路径（宿主注入了 chatViewModel）：复用 ChatViewModel 的 sendText + messages 轮询，
 ///     并持续抑制其自带朗读（详见 requestAgentReply）。
@@ -130,12 +130,12 @@ final class VoiceAssistantViewModel {
     private let settings: SettingsStore
     /// 兼容路径：宿主（主页/聊天页）可注入 ChatViewModel，走原有 sendText + 轮询发送。
     private var chatViewModel: ChatViewModel?
-    /// 网关连接（可选）：当前独立发送走 OpenClawClient HTTP 流式，与 SyncChatViewModel.send
+    /// 网关连接（可选）：当前独立发送走 OpenClawClient HTTP 流式，与 ChatViewModel.send
     /// 一致；保留该引用供后续 WebSocket 直连扩展。
     private let gatewayConnection: GatewayConnection?
     /// 目标智能体 ID：默认 "main"，或 settings 里的默认频道（唤醒频道/首个频道）的 agentId。
     private let agentId: String
-    /// 独立发送链路持有的 OpenClawClient（与 SyncChatViewModel 同模式）。
+    /// 独立发送链路持有的 OpenClawClient（与 ChatViewModel 同模式）。
     private let openClaw = OpenClawClient()
     /// 本地记忆档案（直连 DeepSeek 通道注入用；懒加载，读不到时诚实降级为无档案）。
     private var cachedMemoryStore: MemoryProfileStore?
@@ -786,7 +786,7 @@ final class VoiceAssistantViewModel {
     /// 发送给智能体并拿到完整回复文本。
     ///
     /// - 独立路径（无 chatViewModel）：本类自己持有 OpenClawClient 走网关流式发送
-    ///   （OpenClawClient.stream + model "openclaw:<agentId>"，与 SyncChatViewModel.send 同链路），
+    ///   （OpenClawClient.stream + model "openclaw:<agentId>"，与 ChatViewModel.send 同链路），
     ///   不依赖聊天页，主页没进过聊天也能用。
     /// - 兼容路径（注入了 chatViewModel）：复用 ChatViewModel 的 sendText + messages 轮询，
     ///   并持续抑制其自带朗读（语音助手自己控制 TTS 场景音量/打断）。

@@ -150,7 +150,6 @@ private struct MemoryProfileTabView: View {
 struct MemoryTimelineEntry: Identifiable, Equatable {
     enum Source: String, CaseIterable, Identifiable {
         case phone = "手机"
-        case computer = "电脑"
         case keyboard = "键盘"
 
         var id: String { rawValue }
@@ -158,7 +157,6 @@ struct MemoryTimelineEntry: Identifiable, Equatable {
         var systemImage: String {
             switch self {
             case .phone: return "iphone"
-            case .computer: return "desktopcomputer"
             case .keyboard: return "keyboard"
             }
         }
@@ -173,8 +171,6 @@ struct MemoryTimelineEntry: Identifiable, Equatable {
 
 /// 对话沉淀数据源（诚实聚合，无数据即空）：
 /// - 手机：本机 ConversationStore 各频道真实用户消息
-/// - 电脑：Codex/Claude 同步桥（http://<网关主机>:18991|18992/sync，与 SyncChatViewModel 同源，
-///   尽力拉取，失败不影响手机数据）
 /// - 键盘：键盘扩展当前不保存打字日志，无数据时界面如实说明
 @Observable
 @MainActor
@@ -197,12 +193,6 @@ final class MemoryTimelineStore {
         var merged = loadPhoneEntries()
         var available: Set<MemoryTimelineEntry.Source> = merged.isEmpty ? [] : [.phone]
 
-        if let settings,
-           !settings.settings.gatewayURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            let computerEntries = await loadComputerEntries(gatewayURL: settings.settings.gatewayURL)
-            if !computerEntries.isEmpty { available.insert(.computer) }
-            merged += computerEntries
-        }
 
         entries = merged.sorted { $0.date > $1.date }
         sourcesWithData = available
@@ -230,40 +220,6 @@ final class MemoryTimelineStore {
         return result
     }
 
-    // MARK: - 电脑：Codex/Claude 同步桥
-
-    private func loadComputerEntries(gatewayURL: String) async -> [MemoryTimelineEntry] {
-        let host = SyncChatViewModel.host(from: gatewayURL)
-        let endpoints = [
-            ("Codex 同步", "http://\(host):18991/sync"),
-            ("Claude 同步", "http://\(host):18992/sync")
-        ]
-
-        var result: [MemoryTimelineEntry] = []
-        for (name, endpoint) in endpoints {
-            guard let url = URL(string: endpoint) else { continue }
-            do {
-                let (data, response) = try await URLSession.shared.data(from: url)
-                guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else { continue }
-                let decoded = try JSONDecoder().decode(SyncHistoryResponse.self, from: data)
-                for item in decoded.messages where item.role.lowercased() == "user" {
-                    guard let timestamp = SyncChatViewModel.parseTimestamp(item.ts) else { continue }
-                    let text = item.content.trimmingCharacters(in: .whitespacesAndNewlines)
-                    guard !text.isEmpty else { continue }
-                    result.append(MemoryTimelineEntry(
-                        id: UUID(),
-                        date: timestamp,
-                        source: .computer,
-                        channelName: name,
-                        text: text
-                    ))
-                }
-            } catch {
-                // 同步桥不可达/未部署：静默跳过，不影响手机数据（整段失败由错误横幅兜底）
-            }
-        }
-        return result
-    }
 }
 
 /// 对话沉淀 Tab：按日期分组的时间线（来源：手机/电脑/键盘）。
@@ -373,7 +329,6 @@ private struct MemoryTimelineTabView: View {
     private func sourceColor(_ source: MemoryTimelineEntry.Source) -> Color {
         switch source {
         case .phone: return .blue
-        case .computer: return .purple
         case .keyboard: return .orange
         }
     }
