@@ -31,7 +31,11 @@ enum GatewayPermissions {
         permissions["photos"] = photosAuthorized
 
         let contactsStatus = CNContactStore.authorizationStatus(for: .contacts)
-        permissions["contacts"] = contactsStatus == .authorized || contactsStatus == .limited
+        var contactsAuthorized = contactsStatus == .authorized
+        if #available(iOS 18.0, *) {
+            contactsAuthorized = contactsAuthorized || contactsStatus == .limited
+        }
+        permissions["contacts"] = contactsAuthorized
 
         let calendarStatus = EKEventStore.authorizationStatus(for: .event)
         permissions["calendar"] = hasEventKitReadAccess(calendarStatus)
