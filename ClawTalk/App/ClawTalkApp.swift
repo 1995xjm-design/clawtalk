@@ -23,7 +23,6 @@ struct ClawTalkApp: App {
     @State private var tlsFingerprintGate = TLSFingerprintGate.shared
     @State private var ackSynthesizer: AVSpeechSynthesizer?
     @State private var showGatewaySessions = false
-    @State private var showHomeTools = false
     @State private var showKeyboardSettings = false
     @State private var gatewaySessionsViewModel: ToolsViewModel?
     @State private var widgetSnapshot: WidgetSnapshot?
@@ -132,12 +131,8 @@ struct ClawTalkApp: App {
             HomeTabView(
                 settings: settingsStore,
                 gatewayConnection: gatewayConnection,
-                chatViewModel: chatViewModel,
-                onOpenTools: { showHomeTools = true }
+                chatViewModel: chatViewModel
             )
-            .sheet(isPresented: $showHomeTools) {
-                ToolsView(settings: settingsStore, gatewayConnection: gatewayConnection, nodeConnection: nodeConnection)
-            }
             .tabItem {
                 Label(String(localized: "Home"), systemImage: "square.grid.2x2")
             }

@@ -3,7 +3,7 @@ import SwiftUI
 /// 主页 Tab：顶部语音助手大卡位 + 「今日概览」横向统计卡 + 下方可配置合并卡片网格。
 ///
 /// S10：卡片系统升级为 iOS 桌面小组件质感——
-/// - 壁纸修复：NavigationStack 容器背景透明，壁纸层透出（N9）；
+/// - 壁纸：壁纸层垫在滚动内容下方（.background + ignoresSafeArea），避免被容器背景盖住；
 /// - 卡片尺寸：小（1 列）/ 中（2 列）/ 大（4 列），AppStorage 持久化；
 /// - 拖动排序：编辑态 draggable + dropDestination，顺序持久化；
 /// - 编辑态：长按卡片进入（抖动 + 移除 × + 尺寸切换），点空白或「完成」退出；
@@ -13,8 +13,6 @@ struct HomeTabView: View {
     private let settings: SettingsStore
     private let gatewayConnection: GatewayConnection?
     private let chatViewModel: ChatViewModel?
-    /// N0：主页空白处长按 → 工具页（由 App 层接线弹 ToolsView）。
-    private let onOpenTools: (() -> Void)?
     /// H1：实时语音入口回调（由 App 层接线弹 RealtimeVoiceView 全屏页；nil = 不显示入口）。
     private let onOpenRealtimeVoice: (() -> Void)?
     /// S10：4 列弹性网格（小卡 1 列 / 中卡 2 列 / 大卡 4 列，对齐 iOS 小组件比例）。
@@ -79,13 +77,11 @@ struct HomeTabView: View {
         settings: SettingsStore,
         gatewayConnection: GatewayConnection? = nil,
         chatViewModel: ChatViewModel? = nil,
-        onOpenTools: (() -> Void)? = nil,
         onOpenRealtimeVoice: (() -> Void)? = nil
     ) {
         self.settings = settings
         self.gatewayConnection = gatewayConnection
         self.chatViewModel = chatViewModel
-        self.onOpenTools = onOpenTools
         self.onOpenRealtimeVoice = onOpenRealtimeVoice
         _careStore = State(initialValue: CareReminderStore())
         _habitStore = State(initialValue: HabitStore())
@@ -98,53 +94,41 @@ struct HomeTabView: View {
     }
 
     var body: some View {
-        ZStack {
-            wallpaperLayer
-            NavigationStack {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 20) {
-                        assistantSection
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
+                    assistantSection
 
-                        todayOverviewSection
+                    todayOverviewSection
 
-                        cardsSection
+                    cardsSection
+                }
+                .padding(.vertical, 16)
+                .padding(.bottom, 240)
+            }
+            .scrollContentBackground(.hidden)
+            .toolbarBackground(.hidden, for: .navigationBar)
+            .navigationBarTitleDisplayMode(.inline)
+            // 壁纸直接垫在滚动内容后面（扩展到导航栏/标签栏区域），
+            // 避免被 NavigationStack 容器背景盖住（N9 旧方案在真机仍不透出）。
+            .background { wallpaperLayer.ignoresSafeArea() }
+            .onAppear {
+                migrateCardStorageIfNeeded()
+                configureAssistantIfNeeded()
+                configureOverviewIfNeeded()
+            }
+            .task {
+                await configureHealthIfNeeded()
+            }
+            .onChange(of: isEditingCards) { _, editing in
+                if editing {
+                    withAnimation(.easeInOut(duration: 0.28).repeatForever(autoreverses: true)) {
+                        wobbleTick = true
                     }
-                    .padding(.vertical, 16)
-                    .padding(.bottom, 240)
-                }
-                .scrollContentBackground(.hidden)
-                .background(.clear)
-                .toolbarBackground(.hidden, for: .navigationBar)
-                .navigationBarTitleDisplayMode(.inline)
-                .simultaneousGesture(
-                    LongPressGesture(minimumDuration: 0.6)
-                        .onEnded { _ in
-                            if settings.settings.hapticsEnabled {
-                                Haptics.impact(.medium)
-                            }
-                            onOpenTools?()
-                        }
-                )
-                .onAppear {
-                    migrateCardStorageIfNeeded()
-                    configureAssistantIfNeeded()
-                    configureOverviewIfNeeded()
-                }
-                .task {
-                    await configureHealthIfNeeded()
-                }
-                .onChange(of: isEditingCards) { _, editing in
-                    if editing {
-                        withAnimation(.easeInOut(duration: 0.28).repeatForever(autoreverses: true)) {
-                            wobbleTick = true
-                        }
-                    } else {
-                        wobbleTick = false
-                    }
+                } else {
+                    wobbleTick = false
                 }
             }
-            // N9：NavigationStack 容器背景必须透明，否则盖住底层壁纸层。
-            .background(.clear)
         }
     }
 
@@ -444,29 +428,28 @@ struct HomeTabView: View {
     /// 主页主题壁纸层（B5/N9）：默认无壁纸 = 系统纯色（深浅色自适应）；
     /// 选了内置壁纸/自定义照片后壁纸固定，深浅切换只改蒙层与卡片。
     private var wallpaperLayer: some View {
-        GeometryReader { geo in
-            ZStack {
-                if HomeWallpaper.hasSelectedWallpaper(settings.settings),
-                   let image = HomeWallpaper.currentImage(settings: settings.settings) {
-                    Image(uiImage: image)
-                        .resizable()
-                        .scaledToFill()
-                        .frame(width: geo.size.width, height: geo.size.height)
-                        .blur(radius: CGFloat((1 - settings.settings.homeBlurStrength) * 22))
-                        .clipped()
-                    Color.black.opacity(0.12)
-                    // S11：全局毛玻璃开启时，壁纸上覆盖磨砂材质（配合壁纸效果最佳）。
-                    if settings.settings.globalGlassEnabled {
-                        Rectangle().fill(.ultraThinMaterial)
-                    }
-                } else {
-                    // S11：全局毛玻璃开 = 磨砂材质背景；关 = 系统纯色。
-                    Rectangle()
-                        .fill(HomeWallpaper.glassBackground(enabled: settings.settings.globalGlassEnabled))
+        ZStack {
+            if HomeWallpaper.hasSelectedWallpaper(settings.settings),
+               let image = HomeWallpaper.currentImage(settings: settings.settings) {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .blur(radius: CGFloat((1 - settings.settings.homeBlurStrength) * 22))
+                    .clipped()
+                Color.black.opacity(0.12)
+                // S11：全局毛玻璃开启时，壁纸上覆盖磨砂材质（配合壁纸效果最佳）。
+                if settings.settings.globalGlassEnabled {
+                    Rectangle().fill(.ultraThinMaterial)
                 }
+            } else {
+                // S11：全局毛玻璃开 = 磨砂材质背景；关 = 系统纯色。
+                Rectangle()
+                    .fill(HomeWallpaper.glassBackground(enabled: settings.settings.globalGlassEnabled))
             }
-            .ignoresSafeArea()
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .ignoresSafeArea()
     }
 
     // MARK: - 今日概览

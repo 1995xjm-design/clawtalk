@@ -47,29 +47,99 @@ struct OnboardingView: View {
     // MARK: - Welcome
 
     private var welcomeStep: some View {
-        VStack(spacing: 24) {
+        VStack(spacing: 0) {
             Spacer()
 
             Image("LogoRed")
                 .resizable()
                 .scaledToFit()
-                .frame(width: 160, height: 160)
+                .frame(width: 120, height: 120)
 
             Text("欢迎使用 ClawTalk")
-                .font(.title)
+                .font(.largeTitle)
                 .fontWeight(.bold)
+                .padding(.top, 6)
 
-            Text("和你的 OpenClaw AI 智能体聊天。\n打字、发图片，或免提语音对话。")
+            Text("你的智能体，装进口袋。\n把这部 iPhone 和你的网关配对即可开始。")
                 .font(.body)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
+                .padding(.top, 8)
+                .padding(.horizontal, 32)
+
+            VStack(alignment: .leading, spacing: 12) {
+                featureRow(symbol: "desktopcomputer", title: "智能体运行在你自己的电脑上")
+                featureRow(symbol: "qrcode.viewfinder", title: "扫描设置码即可配对这台 iPhone")
+                featureRow(symbol: "message.fill", title: "随时随地聊天、语音、批准操作")
+            }
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background {
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .fill(Color(.secondarySystemBackground))
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .stroke(Color.secondary.opacity(0.25), lineWidth: 0.5)
+            }
+            .padding(.horizontal, 24)
+            .padding(.top, 26)
+
+            securityNotice
+                .padding(.horizontal, 24)
+                .padding(.top, 12)
 
             Spacer()
 
             primaryButton("开始使用") {
                 withAnimation { step = .gatewaySetup }
             }
-            .padding(.bottom, 80)
+            .padding(.horizontal, 24)
+            .padding(.bottom, 40)
+        }
+    }
+
+    /// 官方欢迎页同款卖点行（内容 100% 对齐官方，UI 用 ClawTalk 主题）。
+    private func featureRow(symbol: String, title: String) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: symbol)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(Color.openClawRed)
+                .frame(width: 34, height: 34)
+                .background {
+                    Circle().fill(Color.openClawRed.opacity(0.12))
+                }
+            Text(title)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.primary)
+            Spacer(minLength: 0)
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    /// 官方同款安全提示（设备能力授权说明）。
+    private var securityNotice: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.title3.weight(.semibold))
+                .foregroundStyle(.orange)
+                .frame(width: 24)
+                .padding(.top, 2)
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text("安全提示")
+                    .font(.headline)
+                Text("连接的智能体可以使用你开启的设备能力。相机、麦克风、相册、通讯录、日历和位置可能被调用。仅在你信任所连接的网关和智能体时继续。")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(16)
+        .background {
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(Color(.secondarySystemBackground))
         }
     }
 
