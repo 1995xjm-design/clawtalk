@@ -581,7 +581,7 @@ final class NodeConnection {
             let params = request.decodedParams(as: CameraSnapParams.self)
             let result = try await CameraCapability.snap(
                 camera: params?.camera,
-                facing: params?.facing,
+                facing: params?.facing ?? "front",
                 quality: params?.quality ?? 0.8,
                 maxWidth: params?.maxWidth ?? 1600,
                 format: CameraCapability.CameraImageFormat(rawValue: params?.format ?? "") ?? .jpeg,
@@ -659,10 +659,12 @@ final class NodeConnection {
             return "{\"ok\":true}"
         case "canvas.snapshot":
             let params = request.decodedParams(as: CanvasSnapshotParams.self)
+            let snapFormat = CanvasCapability.SnapshotFormat(rawValue: params?.format ?? "") ?? .jpeg
+            let defaultMaxWidth = snapFormat == .png ? 900 : 1600
             let result = try await CanvasCapability.shared.snapshot(
-                maxWidth: params?.maxWidth ?? 1024,
+                maxWidth: params?.maxWidth ?? defaultMaxWidth,
                 quality: params?.quality ?? 0.8,
-                format: CanvasCapability.SnapshotFormat(rawValue: params?.format ?? "") ?? .jpeg
+                format: snapFormat
             )
             return try encodeJSON(NodePayloads.CanvasSnapshotPayload(format: result.format, base64: result.imageBase64))
         case "canvas.reset":
