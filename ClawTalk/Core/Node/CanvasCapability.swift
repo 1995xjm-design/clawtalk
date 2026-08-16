@@ -10,10 +10,16 @@ final class CanvasCapability {
 
     struct PresentResult: Encodable { let ok: Bool }
     struct EvalResult: Encodable { let result: String? }
+    enum SnapshotFormat: String {
+        case jpeg
+        case png
+    }
+
     struct SnapshotResult: Encodable {
         let imageBase64: String
         let width: Int
         let height: Int
+        let format: String
     }
 
     enum CanvasError: LocalizedError {
@@ -103,27 +109,95 @@ final class CanvasCapability {
         return EvalResult(result: resultString)
     }
 
-    func snapshot(maxWidth: Int = 1024, quality: Double = 0.8) async throws -> SnapshotResult {
+    func snapshot(maxWidth: Int = 1024, quality: Double = 0.8, format: SnapshotFormat = .jpeg) async throws -> SnapshotResult {
         guard let webView else { throw CanvasError.noWebView }
 
         let config = WKSnapshotConfiguration()
         let image = try await webView.takeSnapshot(configuration: config)
 
         let resized = resizeImage(image, maxWidth: maxWidth)
-        guard let jpegData = resized.jpegData(compressionQuality: quality) else {
+        let data: Data?
+        switch format {
+        case .jpeg: data = resized.jpegData(compressionQuality: quality)
+        case .png: data = resized.pngData()
+        }
+        guard let data else {
             throw CanvasError.snapshotFailed
         }
 
         return SnapshotResult(
-            imageBase64: jpegData.base64EncodedString(),
+            imageBase64: data.base64EncodedString(),
             width: Int(resized.size.width),
-            height: Int(resized.size.height)
+            height: Int(resized.size.height),
+            format: format.rawValue
         )
     }
 
     func reset() {
         currentURL = nil
         webView?.loadHTMLString("", baseURL: nil)
+    }
+
+    // MARK: - A2UI (canvas.a2ui.reset / push / pushJSONL)
+
+    /// Evaluate JavaScript and return the raw result string (used by a2ui handlers).
+    func evalJSRaw(script: String) async throws -> String {
+        guard let webView else { throw CanvasError.noWebView }
+
+        let result = try await webView.evaluateJavaScript(script)
+        let resultString: String
+        if let str = result as? String {
+            resultString = str
+        } else if let num = result as? NSNumber {
+            resultString = num.stringValue
+        } else if result is NSNull || result == nil {
+            resultString = "null"
+        } else {
+            resultString = String(describing: result)
+        }
+        return resultString
+    }
+
+    func a2uiReset() async throws -> String {
+        let js = """
+        (() => {
+          const host = globalThis.openclawA2UI;
+          if (!host) return JSON.stringify({ ok: false, error: "missing openclawA2UI" });
+          return JSON.stringify(host.reset());
+        })()
+        """
+        return try await evalJSRaw(script: js)
+    }
+
+    func a2uiPush(messagesJSON: String) async throws -> String {
+        let js = """
+        (() => {
+          try {
+            const host = globalThis.openclawA2UI;
+            if (!host) return JSON.stringify({ ok: false, error: "missing openclawA2UI" });
+            const messages = \(messagesJSON);
+            return JSON.stringify(host.applyMessages(messages));
+          } catch (e) {
+            return JSON.stringify({ ok: false, error: String(e?.message ?? e) });
+          }
+        })()
+        """
+        return try await evalJSRaw(script: js)
+    }
+
+    func a2uiPushJSONL(jsonl: String) async throws -> String {
+        let messages: [AnyCodable] = jsonl
+            .split(whereSeparator: \.isNewline)
+            .compactMap { line -> AnyCodable? in
+                let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !trimmed.isEmpty,
+                      let data = trimmed.data(using: .utf8),
+                      let obj = try? JSONDecoder().decode(AnyCodable.self, from: data) else { return nil }
+                return obj
+            }
+        let data = try JSONEncoder().encode(messages)
+        let json = String(data: data, encoding: .utf8) ?? "[]"
+        return try await a2uiPush(messagesJSON: json)
     }
 
     // MARK: - Private
@@ -149,10 +223,14 @@ struct CanvasPresentParams: Decodable {
 }
 
 struct CanvasEvalParams: Decodable {
-    let script: String
+    let javaScript: String?
+    let script: String?
+
+    var resolvedScript: String? { javaScript ?? script }
 }
 
 struct CanvasSnapshotParams: Decodable {
     let maxWidth: Int?
     let quality: Double?
+    let format: String?
 }

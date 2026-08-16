@@ -42,6 +42,14 @@ import WatchConnectivity
 
 /// 手表端 WatchConnectivity 管理器：与 iPhone 主 App 交换频道列表与消息，
 /// 语音文本经 sendText 转发给 iPhone 由主 App 走网关。
+/// Incoming watch.notify payload presented as an alert on the watch.
+struct WatchNotify: Identifiable {
+    let id = UUID()
+    let title: String
+    let body: String
+    let details: String?
+}
+
 final class WatchSessionManager: NSObject, ObservableObject, WCSessionDelegate {
     static let shared = WatchSessionManager()
 
@@ -50,6 +58,7 @@ final class WatchSessionManager: NSObject, ObservableObject, WCSessionDelegate {
     @Published private(set) var isActivated = false
     @Published private(set) var isReachable = false
     @Published private(set) var statusText = "WCSession 未激活"
+    @Published var pendingNotify: WatchNotify?
 
     private override init() {
         super.init()
@@ -110,6 +119,11 @@ final class WatchSessionManager: NSObject, ObservableObject, WCSessionDelegate {
             case "channels":
                 guard let list = payload["channels"] as? [[String: Any]] else { return }
                 self.channels = list.compactMap { Self.decode(WatchChannel.self, from: $0) }
+            case "notify":
+                let title = payload["title"] as? String ?? "OpenClaw"
+                let body = payload["body"] as? String ?? ""
+                let details = payload["details"] as? String
+                self.pendingNotify = WatchNotify(title: title, body: body, details: details)
             default:
                 break
             }

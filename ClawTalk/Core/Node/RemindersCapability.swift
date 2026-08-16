@@ -67,7 +67,14 @@ enum RemindersCapability {
     }
 
     /// 新建提醒事项。
-    static func add(title: String, dueDate: Date?, notes: String?, priority: Int) async throws -> AddResult {
+    static func add(
+        title: String,
+        dueDate: Date?,
+        notes: String?,
+        priority: Int,
+        listId: String? = nil,
+        listName: String? = nil
+    ) async throws -> AddResult {
         try await requestAccess()
 
         let reminder = EKReminder(eventStore: store)
@@ -81,9 +88,16 @@ enum RemindersCapability {
         }
         reminder.priority = min(9, max(0, priority))
 
-        guard let calendar = store.defaultCalendarForNewReminders()
-                ?? store.calendars(for: .reminder).first
-        else {
+        let calendar: EKCalendar
+        if let listId, let matched = store.calendar(withIdentifier: listId) {
+            calendar = matched
+        } else if let listName, !listName.isEmpty,
+                  let matched = store.calendars(for: .reminder).first(where: { $0.title == listName }) {
+            calendar = matched
+        } else if let fallback = store.defaultCalendarForNewReminders()
+                ?? store.calendars(for: .reminder).first {
+            calendar = fallback
+        } else {
             throw RemindersError.unavailable("没有可用的提醒事项列表")
         }
         reminder.calendar = calendar

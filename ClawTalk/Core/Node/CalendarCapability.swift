@@ -4,6 +4,7 @@ import EventKit
 enum CalendarCapability {
 
     struct CalendarEvent: Encodable {
+        let identifier: String
         let title: String
         let startDate: String
         let endDate: String
@@ -60,6 +61,7 @@ enum CalendarCapability {
 
         return events.map { event in
             CalendarEvent(
+                identifier: event.eventIdentifier,
                 title: event.title ?? "",
                 startDate: formatter.string(from: event.startDate),
                 endDate: formatter.string(from: event.endDate),
@@ -77,7 +79,9 @@ enum CalendarCapability {
         endDate: String?,
         location: String?,
         notes: String?,
-        isAllDay: Bool?
+        isAllDay: Bool?,
+        calendarId: String? = nil,
+        calendarTitle: String? = nil
     ) async throws -> AddResult {
         try await requestCalendarAccess()
 
@@ -98,7 +102,14 @@ enum CalendarCapability {
 
         event.location = location
         event.notes = notes
-        event.calendar = store.defaultCalendarForNewEvents
+        if let calendarId, let calendar = store.calendar(withIdentifier: calendarId) {
+            event.calendar = calendar
+        } else if let calendarTitle, !calendarTitle.isEmpty,
+                  let calendar = store.calendars(for: .event).first(where: { $0.title == calendarTitle }) {
+            event.calendar = calendar
+        } else {
+            event.calendar = store.defaultCalendarForNewEvents
+        }
 
         try store.save(event, span: .thisEvent)
         return AddResult(ok: true, identifier: event.eventIdentifier)
@@ -138,7 +149,9 @@ enum CalendarCapability {
         title: String,
         dueDate: String?,
         notes: String?,
-        priority: Int?
+        priority: Int?,
+        listId: String? = nil,
+        listName: String? = nil
     ) async throws -> AddResult {
         try await requestRemindersAccess()
 
@@ -146,7 +159,14 @@ enum CalendarCapability {
         reminder.title = title
         reminder.notes = notes
         reminder.priority = priority ?? 0
-        reminder.calendar = store.defaultCalendarForNewReminders()
+        if let listId, let calendar = store.calendar(withIdentifier: listId) {
+            reminder.calendar = calendar
+        } else if let listName, !listName.isEmpty,
+                  let calendar = store.calendars(for: .reminder).first(where: { $0.title == listName }) {
+            reminder.calendar = calendar
+        } else {
+            reminder.calendar = store.defaultCalendarForNewReminders()
+        }
 
         if let dueDate, let date = formatter.date(from: dueDate) {
             reminder.dueDateComponents = Calendar.current.dateComponents(
@@ -187,24 +207,41 @@ enum CalendarCapability {
 struct CalendarEventsParams: Decodable {
     let daysAhead: Int?
     let daysBack: Int?
+    let startISO: String?
+    let endISO: String?
+    let limit: Int?
 }
 
 struct CalendarAddParams: Decodable {
     let title: String
-    let startDate: String
+    let startDate: String?
     let endDate: String?
+    let startISO: String?
+    let endISO: String?
     let location: String?
     let notes: String?
     let isAllDay: Bool?
+    let calendarId: String?
+    let calendarTitle: String?
+
+    var resolvedStart: String? { startISO ?? startDate }
+    var resolvedEnd: String? { endISO ?? endDate }
 }
 
 struct RemindersListParams: Decodable {
     let completed: Bool?
+    let status: String?
+    let limit: Int?
 }
 
 struct RemindersAddParams: Decodable {
     let title: String
     let dueDate: String?
+    let dueISO: String?
     let notes: String?
     let priority: Int?
+    let listId: String?
+    let listName: String?
+
+    var resolvedDue: String? { dueISO ?? dueDate }
 }

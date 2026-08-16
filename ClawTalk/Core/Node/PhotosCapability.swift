@@ -95,6 +95,8 @@ enum PhotosCapability {
 
 struct PhotosLatestParams: Decodable {
     let count: Int?
+    let limit: Int?
     let includeImage: Bool?
     let maxWidth: Int?
+    let quality: Double?
 }

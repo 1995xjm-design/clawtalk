@@ -19,7 +19,8 @@ enum NotificationCapability {
         title: String?,
         body: String?,
         sound: String?,
-        priority: String?
+        priority: String?,
+        delivery: String? = nil
     ) async throws {
         let center = UNUserNotificationCenter.current()
 
@@ -55,6 +56,10 @@ enum NotificationCapability {
             default:
                 content.interruptionLevel = .active
             }
+        }
+
+        if let delivery {
+            content.userInfo["delivery"] = delivery
         }
 
         let request = UNNotificationRequest(

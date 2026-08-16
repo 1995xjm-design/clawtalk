@@ -10,6 +10,13 @@ struct ClawTalkWatchApp: App {
         WindowGroup {
             MessageListView()
                 .environmentObject(session)
+                .alert(item: $session.pendingNotify) { item in
+                    Alert(
+                        title: Text(item.title),
+                        message: Text(item.body),
+                        dismissButton: .default(Text("确定"))
+                    )
+                }
         }
     }
 }

@@ -12,6 +12,7 @@ enum MotionCapability {
         let unknown: Bool
         let confidence: String
         let startDate: String
+        let endDate: String
     }
 
     struct PedometerResult: Encodable {
@@ -60,13 +61,18 @@ enum MotionCapability {
             }
         }
 
-        return activities.map { activity in
+        let activityEnd = now
+        return activities.enumerated().map { index, activity in
             let confidence: String = switch activity.confidence {
             case .low: "low"
             case .medium: "medium"
             case .high: "high"
             @unknown default: "unknown"
             }
+
+            let endDate = index + 1 < activities.count
+                ? activities[index + 1].startDate
+                : activityEnd
 
             return ActivityResult(
                 stationary: activity.stationary,
@@ -76,7 +82,8 @@ enum MotionCapability {
                 automotive: activity.automotive,
                 unknown: activity.unknown,
                 confidence: confidence,
-                startDate: formatter.string(from: activity.startDate)
+                startDate: formatter.string(from: activity.startDate),
+                endDate: formatter.string(from: endDate)
             )
         }
     }
@@ -119,8 +126,12 @@ enum MotionCapability {
 
 struct MotionActivityParams: Decodable {
     let hours: Int?
+    let startISO: String?
+    let endISO: String?
 }
 
 struct MotionPedometerParams: Decodable {
     let hours: Int?
+    let startISO: String?
+    let endISO: String?
 }
