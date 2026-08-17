@@ -62,13 +62,13 @@ struct PrivacyAccessSectionView: View {
         PrivacyGatewayPermissionSnapshot(
             location: statusLabel(CLLocationManager().authorizationStatus),
             health: HKHealthStore.isHealthDataAvailable() ? "可用" : "不可用",
-            calendar: EKEventStore.authorizationStatus(for: .event).statusLabel(),
-            contacts: CNContactStore.authorizationStatus(for: .contacts).statusLabel(),
-            photos: PHPhotoLibrary.authorizationStatus().statusLabel(),
+            calendar: EKEventStore.authorizationStatus(for: .event).statusLabel,
+            contacts: CNContactStore.authorizationStatus(for: .contacts).statusLabel,
+            photos: PHPhotoLibrary.authorizationStatus().statusLabel,
             microphone: microphoneStatusLabel())
     }
 
-    private static func statusLabel(_ status: CLAuthorizationStatus) -> String {
+    fileprivate static func statusLabel(_ status: CLAuthorizationStatus) -> String {
         switch status {
         case .authorizedAlways, .authorizedWhenInUse: return "已授权"
         case .denied: return "已拒绝"
