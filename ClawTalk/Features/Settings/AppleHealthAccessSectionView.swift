@@ -54,7 +54,7 @@ struct AppleHealthAccessSectionView: View {
         ]
         Task { @MainActor in
             if #available(iOS 17.0, *) {
-                let status = await store.statusForAuthorizationRequest(toShare: [], read: types)
+                let status = try? await store.statusForAuthorizationRequest(toShare: [], read: types)
                 isAuthorized = status == .unnecessary
             } else {
                 isAuthorized = false
