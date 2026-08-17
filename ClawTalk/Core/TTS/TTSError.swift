@@ -1,6 +1,6 @@
 import Foundation
 
-/// ?? TTS ?????OpenClaw / ????????
+/// TTS 错误：OpenClaw 网关 / 本地引擎统一错误类型。
 enum TTSError: LocalizedError {
     case httpError(Int)
     case invalidConfiguration

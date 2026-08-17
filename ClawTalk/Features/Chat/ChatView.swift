@@ -417,7 +417,7 @@ struct ChatView: View {
         .animation(.easeInOut(duration: 0.2), value: viewModel.state)
         .animation(.easeInOut(duration: 0.2), value: viewModel.errorMessage != nil)
         .onDisappear {
-            // ????????????????????????? LOGO ???????
+            // 收起键盘 + 停止语音唤醒，避免聊天页退出后 LOGO 遮罩残留。
             UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
         }
     }

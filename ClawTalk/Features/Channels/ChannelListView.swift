@@ -188,7 +188,7 @@ struct ChannelListView: View {
                 .listStyle(.insetGrouped)
                 .scrollContentBackground(.hidden)
             }
-            // ?????????????????????/???????????? LOGO ???
+            // 忽略键盘底部安全区，让 LOGO 渐变背景铺满屏幕。
             .ignoresSafeArea(.keyboard, edges: .bottom)
             .background {
                 if settingsStore.settings.globalGlassEnabled {

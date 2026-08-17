@@ -292,8 +292,8 @@ final class NodeConnection {
         }
     }
 
-    /// node.event??????????????? GatewayNodeSession.sendEvent??
-    /// ?????????????????????? false???????
+    /// node.event 上报：把事件转发给网关（对应 GatewayNodeSession.sendEvent）。
+    /// 网关不可用时直接返回 false，不抛错。
     func sendNodeEvent(_ event: String, payloadJSON: String?) async -> Bool {
         guard let gw = gateway else { return false }
         var params: [String: AnyCodable] = ["event": AnyCodable(event)]

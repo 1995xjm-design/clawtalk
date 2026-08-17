@@ -775,29 +775,29 @@ actor GatewayWebSocket {
         if detailCode == "AUTH_BOOTSTRAP_TOKEN_INVALID" || authReason == "bootstrap_token_invalid" {
             return .bootstrapTokenInvalid
         }
-        // ???? GatewayErrors??? AUTH_*/DEVICE_AUTH_* ??? ? ??????
+        // 网关错误码映射：AUTH_*/DEVICE_AUTH_* 统一转成带中文提示的连接失败。
         let code = detailCode.isEmpty ? topCode : detailCode
         switch code {
         case "AUTH_TOKEN_MISMATCH", "AUTH_TOKEN_MISSING", "AUTH_TOKEN_NOT_CONFIGURED",
              "AUTH_UNAUTHORIZED", "UNAUTHORIZED", "AUTH_REQUIRED":
-            return .connectFailed("???????????????????????????")
+            return .connectFailed("连接被拒绝：令牌无效或未配置，请重新扫码配对")
         case "AUTH_DEVICE_TOKEN_MISMATCH", "DEVICE_AUTH_INVALID", "DEVICE_IDENTITY_REQUIRED":
-            return .connectFailed("??????????????")
+            return .connectFailed("设备令牌校验失败，请重新扫码配对")
         case "AUTH_SIGNATURE_INVALID", "DEVICE_AUTH_SIGNATURE_INVALID",
              "DEVICE_AUTH_NONCE_MISMATCH", "DEVICE_AUTH_NONCE_REQUIRED",
              "DEVICE_AUTH_DEVICE_ID_MISMATCH", "DEVICE_AUTH_PUBLIC_KEY_INVALID":
-            return .connectFailed("?????????????????????????")
+            return .connectFailed("设备签名校验失败，请确认电脑端已批准并重新扫码配对")
         case "AUTH_SIGNATURE_EXPIRED", "DEVICE_AUTH_SIGNATURE_EXPIRED":
-            return .connectFailed("??????????????????")
+            return .connectFailed("设备签名已过期，请重新扫码配对")
         case "AUTH_SCOPE_MISMATCH", "MISSING_SCOPE":
-            return .connectFailed("?????????????????")
+            return .connectFailed("权限范围不匹配，请在电脑端重新授权")
         case "AUTH_PASSWORD_MISMATCH", "AUTH_PASSWORD_MISSING", "AUTH_PASSWORD_NOT_CONFIGURED":
-            return .connectFailed("????????????????")
+            return .connectFailed("访问密码错误或未设置，请检查电脑端配置")
         case "AUTH_RATE_LIMITED":
-            return .connectFailed("??????????????????")
+            return .connectFailed("尝试过于频繁，请稍后再试")
         case "AUTH_TAILSCALE_IDENTITY_MISMATCH", "AUTH_TAILSCALE_IDENTITY_MISSING",
              "AUTH_TAILSCALE_PROXY_MISSING", "AUTH_TAILSCALE_WHOIS_FAILED":
-            return .connectFailed("Tailscale ???????????? Tailscale ??")
+            return .connectFailed("Tailscale 身份校验失败，请确认电脑端 Tailscale 已连接")
         default:
             break
         }

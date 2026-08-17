@@ -20,7 +20,7 @@ final class GatewayConnection {
     private(set) var connectionState: State = .disconnected
     private(set) var lastError: String?
     private(set) var pendingApprovals: [PendingApproval] = []
-    /// ??????????? question ???operator.questions ????
+    /// 待回答的提问列表（官方 question.requested 事件 + operator.questions 拉取）。
     private(set) var pendingQuestions: [QuestionRecord] = []
     private(set) var agentStatus: AgentStatusInfo?
     /// 审批到达但系统通知未授权时的引导提示（对齐官方 NotificationPermissionGuidanceDialog）。
@@ -490,7 +490,7 @@ final class GatewayConnection {
         logger.info("agent status: \(status.status ?? "unknown", privacy: .public)")
     }
 
-    // MARK: - Question Protocol??? question.requested/resolved + question.list/get/resolve?
+    // MARK: - Question 协议（question.requested/resolved + question.list/get/resolve）
 
     private func handleQuestionRequested(_ evt: EventFrame) {
         guard let payload = evt.payload,
@@ -521,7 +521,7 @@ final class GatewayConnection {
         }
     }
 
-    /// question.list????????????????????????
+    /// question.list 拉取全部提问并过滤出待回答项。
     func refreshQuestions() async {
         guard let gw = gateway else { return }
         do {
@@ -537,21 +537,21 @@ final class GatewayConnection {
                     pendingQuestions.append(record)
                 }
             }
-            // ????????????????/??/?????????
+            // 只保留待回答的提问（已回答/已过期/已取消的移除）。
             pendingQuestions.removeAll { !$0.isPending }
         } catch {
-            // ???? question.list ????official ???? INVALID_REQUEST: unknown method?
+            // 老网关可能不支持 question.list（报 INVALID_REQUEST: unknown method），静默降级。
             logger.info("question.list unavailable: \(error.localizedDescription)")
         }
     }
 
-    /// question.get?? id ?????????
+    /// question.get：按 id 获取单个提问详情。
     func getQuestion(id: String) async throws -> QuestionRecord {
         let data = try await request(method: "question.get", params: ["id": AnyCodable(id)])
         return try JSONDecoder().decode(QuestionGetResult.self, from: data).question
     }
 
-    /// question.resolve??????questionId -> ????? label / ???????
+    /// question.resolve：提交回答（questionId -> 选项 label / 自由文本）。
     func resolveQuestion(id: String, answers: [String: [String]]) async throws {
         _ = try await request(method: "question.resolve", params: [
             "id": AnyCodable(id),
@@ -559,7 +559,7 @@ final class GatewayConnection {
         ])
     }
 
-    /// question.resolve + cancel???/??????
+    /// question.resolve + cancel 参数：取消提问。
     func cancelQuestion(id: String) async throws {
         _ = try await request(method: "question.resolve", params: [
             "id": AnyCodable(id),
@@ -567,7 +567,7 @@ final class GatewayConnection {
         ])
     }
 
-    /// ????????UI ??????
+    /// 清理过期提问（供 UI 刷新）。
     func pruneExpiredQuestions() {
         pendingQuestions.removeAll { !$0.isPending || $0.expiresAt < Date() }
     }

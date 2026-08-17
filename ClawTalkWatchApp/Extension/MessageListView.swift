@@ -2,7 +2,7 @@ import SwiftUI
 
 /// 手表端主界面：连接状态 + 频道选择 + 消息列表 + 语音/唤醒/刷新。
 /// 所有数据都来自真实来源（App Group 频道列表 + WatchConnectivity 消息），
-/// 拿不到数据时显示诚实空状态��不伪造内容。
+/// 拿不到数据时显示诚实空状态，不伪造内容。
 struct MessageListView: View {
     @EnvironmentObject private var session: WatchSessionManager
     @StateObject private var channelStore = WatchChannelStore()

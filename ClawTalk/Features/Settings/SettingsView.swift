@@ -61,7 +61,7 @@ struct SettingsView: View {
         case failed(String)
     }
 
-    /// DeepSeek ????????
+    /// DeepSeek 直连测试状态枚举
     /// DeepSeek 直连通道测试状态
     enum DeepSeekTestState: Equatable {
         case idle

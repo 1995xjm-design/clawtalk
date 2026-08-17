@@ -67,7 +67,7 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: app.lgm.7517
         PROVISIONING_PROFILE_SPECIFIER: 7517
         MARKETING_VERSION: "1.2.2"
-        CURRENT_PROJECT_VERSION: 26
+        CURRENT_PROJECT_VERSION: 27
         TARGETED_DEVICE_FAMILY: "1,2"
         KNOWN_REGIONS:
           - Base
@@ -90,7 +90,7 @@ targets:
         NSPhotoLibraryUsageDescription: "当 AI 助手需要获取图片时，需要访问你的照片。"
         NSCameraUsageDescription: "当 AI 助手需要拍照或录制视频时，需要访问你的相机。"
         NSAppTransportSecurity:
-          # ????????? HTTP ????????18789?????18890?
+          # 允许任意 HTTP 明文加载（网关 18789 / 18890 端口）。
           NSAllowsArbitraryLoads: true
         ITSAppUsesNonExemptEncryption: false
         NSSupportsLiveActivities: true
@@ -232,7 +232,7 @@ targets:
         CODE_SIGN_ENTITLEMENTS: ClawTalkWatchApp/ClawTalkWatch.entitlements
         TARGETED_DEVICE_FAMILY: "4"
         MARKETING_VERSION: "1.2.2"
-        CURRENT_PROJECT_VERSION: 26
+        CURRENT_PROJECT_VERSION: 27
     info:
       path: ClawTalkWatchApp/Resources/Info.plist
       properties:

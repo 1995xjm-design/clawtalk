@@ -40,9 +40,6 @@ struct ClawTalkApp: App {
     }
 
     init() {
-        #if DEBUG
-        DemoDataSeeder.seedIfNeeded()
-        #endif
         _settingsStore = State(initialValue: SettingsStore())
         _channelStore = State(initialValue: ChannelStore.shared)
     }
@@ -205,7 +202,7 @@ struct ClawTalkApp: App {
         }
     }
 
-    /// ????????? + ???????????????????????
+    /// 根级覆盖层：唤醒 toast、键盘设置页、网关会话列表等全局浮层。
     @ViewBuilder
     private var rootOverlays: some View {
         ApprovalOverlayView(gatewayConnection: gatewayConnection)
@@ -484,7 +481,7 @@ struct ClawTalkApp: App {
 
     /// 聊天页退出清理：系统侧滑返回或自绘返回按钮共用（不销毁后台任务，完成后发通知）。
     private func handleChatRouteCleared() {
-        // ????????????????????????????? LOGO ???????
+        // 收起键盘 + 停止语音唤醒，避免聊天页退出后启动 LOGO 遮罩残留。
         UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
         stopVoiceWake()
         guard let vm = chatViewModel else {
