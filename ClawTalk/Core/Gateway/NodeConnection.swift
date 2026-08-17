@@ -309,6 +309,27 @@ final class NodeConnection {
         }
     }
 
+    /// 向网关投递 agent 事件（对齐官方 agent.request）：优先 agent.request，
+    /// 网关不支持时降级 node.event（sendNodeEvent）。返回是否成功。
+    func sendAgentRequest(event: String, payloadJSON: String?) async -> Bool {
+        guard let gw = gateway else { return false }
+        let supportsAgentRequest = await gw.supportsServerMethod("agent.request") ?? false
+        var params: [String: AnyCodable] = ["event": AnyCodable(event)]
+        if let payloadJSON {
+            params["payloadJSON"] = AnyCodable(payloadJSON)
+        }
+        do {
+            _ = try await gw.request(
+                method: supportsAgentRequest ? "agent.request" : "node.event",
+                params: params
+            )
+            return true
+        } catch {
+            logger.error("agent event failed: \(error.localizedDescription, privacy: .public)")
+            return false
+        }
+    }
+
     // MARK: - Pending Foreground Node Actions (node.pending.pull/ack)
 
     private struct PendingForegroundNodeAction: Decodable {

@@ -288,7 +288,8 @@ struct ClawTalkApp: App {
                 // 语音唤醒看门狗：App 生命周期内常驻，每 10 秒自检自愈
                 Task { await runVoiceWakeWatchdog() }
                 guard settingsStore.settings.useWebSocket,
-                      settingsStore.isConfigured else { return }
+                      settingsStore.isConfigured,
+                      settingsStore.gatewayAutoConnect else { return }
 
                 // Connect operator WebSocket
                 if gatewayConnection.connectionState == .disconnected {
@@ -296,6 +297,9 @@ struct ClawTalkApp: App {
                         resolvedURL: settingsStore.settings.resolvedWebSocketURL,
                         token: settingsStore.gatewayToken
                     )
+                    if gatewayConnection.connectionState == .connected {
+                        settingsStore.recordLastGateway(urlString: settingsStore.settings.resolvedWebSocketURL)
+                    }
                     if gatewayConnection.connectionState == .disconnected,
                        let lastError = gatewayConnection.lastError {
                         LogCollector.record(module: "启动", "应用启动网关连接失败：\(AppErrorText.localized(lastError))")

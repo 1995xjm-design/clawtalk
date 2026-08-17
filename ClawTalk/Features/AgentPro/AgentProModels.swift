@@ -101,6 +101,51 @@ struct SystemInfo: Codable {
     var operatorCount: Int?
 }
 
+
+// MARK: - Dream Diary（doctor.memory.dreamDiary）
+
+struct DreamDiaryResponse: Codable {
+    var days: [DreamDiaryDay]?
+    var entries: [DreamDiaryEntry]?
+    var total: Int?
+}
+
+struct DreamDiaryDay: Codable, Identifiable {
+    var id: String? { date }
+    var date: String?
+    var entries: Int?
+    var summary: String?
+}
+
+struct DreamDiaryEntry: Codable, Identifiable {
+    var id: String? { entryId }
+    var entryId: String?
+    var date: String?
+    var summary: String?
+    var content: String?
+    var tags: [String]?
+}
+
+// MARK: - Skills 搜索/安装（skills.search / skills.detail / skills.install / skills.update）
+
+struct SkillsSearchResponse: Codable {
+    var results: [SkillItem]?
+    var query: String?
+    var total: Int?
+}
+
+struct SkillsInstallParams: Codable {
+    var slug: String
+    var agentId: String?
+}
+
+struct SkillsUpdateParams: Codable {
+    var id: String?
+    var slug: String?
+    var agentId: String?
+    var version: String?
+}
+
 /// Data → 可读 JSON 文本（AgentPro 通用展示兜底）。
 func prettyJSONText(_ data: Data) -> String {
     if let object = try? JSONSerialization.jsonObject(with: data, options: []),

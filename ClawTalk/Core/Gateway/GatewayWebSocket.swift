@@ -228,6 +228,13 @@ actor GatewayWebSocket {
         serverMethods?.contains(method)
     }
 
+    /// 健康探测：最近收到网关 tick 事件则视为健康（对齐官方 GatewayHealthMonitor 心跳语义）。
+    func pingHealth(timeoutSeconds: Double = 5) async -> Bool {
+        guard let lastTick else { return false }
+        let maxAge = (tickIntervalMs / 1000.0) * 2.0 + timeoutSeconds
+        return Date().timeIntervalSince(lastTick) <= maxAge
+    }
+
     /// Shut down the connection. Does not auto-reconnect.
     func shutdown() async {
         shouldReconnect = false

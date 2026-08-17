@@ -31,6 +31,11 @@ final class GatewayConnection {
     private let logger = Logger(subsystem: "com.openclaw.clawtalk", category: "gateway-conn")
     private var gateway: GatewayWebSocket?
     private var eventContinuations: [UUID: AsyncStream<ChatEventPayload>.Continuation] = [:]
+    /// 网关健康监控（15s 心跳、3 次失败告警，对齐官方 GatewayHealthMonitor）。
+    private let healthMonitor = GatewayHealthMonitor()
+    private(set) var healthFailureCount = 0
+    /// Talk 实时语音事件回调（Realtime 事件帧）。
+    var onTalkEvent: ((TalkRealtimeEvent) -> Void)?
 
     // MARK: - Connection Lifecycle
 
@@ -85,6 +90,7 @@ final class GatewayConnection {
             try await gw.connect()
             logger.info("gateway connect succeeded, setting state to .connected")
             connectionState = .connected
+            startHealthMonitor()
             Task { [weak self] in await self?.refreshQuestions() }
         } catch {
             logger.error("gateway connect failed: \(error.localizedDescription, privacy: .public)")
@@ -107,11 +113,28 @@ final class GatewayConnection {
 
     /// Disconnect from the gateway.
     func disconnect() async {
+        healthMonitor.stop()
         if let gw = gateway {
             await gw.shutdown()
         }
         gateway = nil
         connectionState = .disconnected
+    }
+
+    // MARK: - Health Monitor
+
+    private func startHealthMonitor() {
+        healthFailureCount = 0
+        healthMonitor.start(
+            check: { [weak self] in
+                guard let self, let gw = self.gateway else { return false }
+                return await gw.pingHealth(timeoutSeconds: 5)
+            },
+            onFailure: { [weak self] count in
+                self?.healthFailureCount = count
+                LogCollector.record(module: "网关健康", "健康检查连续失败 \(count) 次")
+            }
+        )
     }
 
     // MARK: - Chat
@@ -323,6 +346,37 @@ final class GatewayConnection {
         await gateway?.supportsServerMethod(method)
     }
 
+    private func handleTalkEvent(_ evt: EventFrame) {
+        guard let payload = evt.payload,
+              let data = try? JSONEncoder().encode(payload),
+              let talkEvent = try? JSONDecoder().decode(TalkRealtimeEvent.self, from: data)
+        else { return }
+        onTalkEvent?(talkEvent)
+    }
+
+    // MARK: - Talk 实时语音（官方 TalkRealtimeClientSession 协议）
+
+    func talkClientCreate(_ params: TalkRealtimeClientCreateParams) async throws -> TalkRealtimeClientResponse {
+        let dict = try Self.encodeParams(params)
+        let data = try await request(method: "talk.client.create", params: dict, timeoutMs: 20)
+        return try JSONDecoder().decode(TalkRealtimeClientResponse.self, from: data)
+    }
+
+    func talkClientClose(_ params: TalkRealtimeClientCloseParams) async throws -> TalkRealtimeClientResponse {
+        let dict = try Self.encodeParams(params)
+        let data = try await request(method: "talk.client.close", params: dict, timeoutMs: 20)
+        return try JSONDecoder().decode(TalkRealtimeClientResponse.self, from: data)
+    }
+
+    /// 通用：Encodable 结构 → [String: AnyCodable]（RPC params）。
+    static func encodeParams<T: Encodable>(_ value: T) throws -> [String: AnyCodable] {
+        let data = try JSONEncoder().encode(value)
+        guard let object = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            throw GatewayWebSocket.GatewayError.encodingFailed
+        }
+        return object.mapValues { AnyCodable($0) }
+    }
+
     // MARK: - Event Handling
 
     private func handlePush(_ push: GatewayWebSocket.Push) async {
@@ -343,6 +397,8 @@ final class GatewayConnection {
                 handleQuestionRequested(evt)
             case "question.resolved":
                 handleQuestionResolved(evt)
+            case "talk":
+                handleTalkEvent(evt)
             default:
                 break
             }

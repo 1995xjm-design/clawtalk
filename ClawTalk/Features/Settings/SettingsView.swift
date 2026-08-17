@@ -28,6 +28,7 @@ struct SettingsView: View {
     @State private var isRequestingPairingCode = false
     @State private var deepSeekTestState: DeepSeekTestState = .idle
     @State private var gatewayChannelTestState: VoiceAgentGatewayTestState = .idle
+    @State private var showQuickSetup = false
     @State private var notificationSystemStatus: UNAuthorizationStatus = .notDetermined
 
 
@@ -155,6 +156,11 @@ struct SettingsView: View {
                     rescanToken: rescanToken
                 )
                 .ignoresSafeArea()
+            }
+            .sheet(isPresented: $showQuickSetup) {
+                GatewayQuickSetupSheet(knownGatewayURL: store.settings.gatewayURL) { url in
+                    store.settings.gatewayURL = url
+                }
             }
         }
     }
@@ -953,10 +959,54 @@ private var connectionSection: some View {
     }
 
 
+    private var gatewayIssue: GatewayConnectionIssue? {
+        if gatewayConnection.healthFailureCount >= 3 {
+            return GatewayConnectionIssue(
+                kind: .network,
+                title: "网关连接不稳定",
+                detail: "健康检查连续失败 \(gatewayConnection.healthFailureCount) 次，请检查网关地址与网络。",
+                requestID: nil,
+                repairCommand: nil
+            )
+        }
+        guard gatewayConnection.connectionState == .disconnected,
+              let lastError = gatewayConnection.lastError,
+              !lastError.isEmpty else { return nil }
+        return GatewayConnectionIssue.classify(error: lastError)
+    }
+
     // MARK: - 系统集成（由「系统集成大包」子智能体追加：D 网关管理 / E 证书信任 / F 连接状态 / H 远程终端）
 
     private var integrationSection: some View {
         Section {
+            if let issue = gatewayIssue {
+                GatewayProblemBanner(issue: issue)
+            }
+            Button {
+                showQuickSetup = true
+            } label: {
+                Label("快速设置网关", systemImage: "bolt.horizontal.circle")
+            }
+            NavigationLink {
+                SessionDashboardView(gatewayConnection: gatewayConnection, settingsStore: store)
+            } label: {
+                Label("会话仪表盘", systemImage: "gauge.with.dots.needle.50percent")
+            }
+            NavigationLink {
+                AgentWorkspaceFilesView(gatewayConnection: gatewayConnection)
+            } label: {
+                Label("工作区文件", systemImage: "folder")
+            }
+            NavigationLink {
+                AgentAutomationPanelView(gatewayConnection: gatewayConnection)
+            } label: {
+                Label("自动化任务", systemImage: "clock.badge.gearshape")
+            }
+            NavigationLink {
+                DocsLicenseView()
+            } label: {
+                Label("文档与许可", systemImage: "book.closed")
+            }
             NavigationLink {
                 GatewayProfilesView(store: store, profileStore: gatewayProfileStore)
             } label: {

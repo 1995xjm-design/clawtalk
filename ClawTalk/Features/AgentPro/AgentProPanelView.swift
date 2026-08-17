@@ -11,11 +11,27 @@ struct AgentProPanelView: View {
     @State private var skills: SkillsStatusResponse?
     @State private var doctorStatus: DoctorMemoryStatus?
     @State private var configText: String?
+    @State private var dreamDiary: DreamDiaryResponse?
+    @State private var operators: [GatewayOperatorFleet.OperatorSessionInfo] = []
+    @State private var skillQuery = ""
+    @State private var skillInstallSlug = ""
+    @State private var selectedCronJob: CronJob?
+    @State private var cronDetail: CronJob?
+    @State private var showCronDetail = false
+    @State private var showDreamDiary = false
+    @State private var lastSearchSummary: String?
     @State private var busy = false
     @State private var errorText: String?
 
     var body: some View {
         List {
+            if let lastSearchSummary {
+                Section {
+                    Label(lastSearchSummary, systemImage: "checkmark.circle")
+                        .font(.footnote)
+                        .foregroundStyle(.green)
+                }
+            }
             if let errorText {
                 Section {
                     Label(errorText, systemImage: "exclamationmark.triangle")
@@ -29,6 +45,8 @@ struct AgentProPanelView: View {
             cronSection
             skillsSection
             doctorSection
+            dreamingSection
+            nodesSection
             configSection
         }
         .navigationTitle("网关高级面板")
@@ -49,6 +67,20 @@ struct AgentProPanelView: View {
         }
         .task {
             await refreshAll()
+        }
+        .sheet(isPresented: $showCronDetail) {
+            if let selectedCronJob {
+                NavigationStack {
+                    cronDetailSheet(selectedCronJob)
+                }
+                .presentationDetents([.medium, .large])
+            }
+        }
+        .sheet(isPresented: $showDreamDiary) {
+            NavigationStack {
+                dreamDiarySheet
+            }
+            .presentationDetents([.medium, .large])
         }
     }
 
@@ -159,6 +191,12 @@ struct AgentProPanelView: View {
                     .foregroundStyle(.secondary)
             }
             HStack(spacing: 16) {
+                Button("详情") {
+                    selectedCronJob = job
+                    showCronDetail = true
+                    Task { await loadCronDetail(job) }
+                }
+                .font(.caption)
                 Button("立即运行") {
                     Task { await runCronJob(job) }
                 }
@@ -223,6 +261,32 @@ struct AgentProPanelView: View {
                 .font(.caption)
                 .disabled(busy)
             }
+        } footer: {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 8) {
+                    TextField("搜索 ClawHub 技能", text: $skillQuery)
+                        .textFieldStyle(.roundedBorder)
+                        .font(.caption)
+                    Button("搜索") {
+                        Task { await searchSkills() }
+                    }
+                    .font(.caption)
+                    .disabled(busy || skillQuery.isEmpty)
+                }
+                HStack(spacing: 8) {
+                    TextField("clawhub slug 安装", text: $skillInstallSlug)
+                        .textFieldStyle(.roundedBorder)
+                        .font(.caption)
+                        .autocorrectionDisabled()
+                        .textInputAutocapitalization(.never)
+                    Button("安装") {
+                        Task { await installSkill() }
+                    }
+                    .font(.caption)
+                    .disabled(busy || skillInstallSlug.isEmpty)
+                }
+            }
+            .padding(.top, 4)
         }
     }
 
@@ -299,6 +363,174 @@ struct AgentProPanelView: View {
                 .font(.caption)
                 .disabled(busy)
             }
+        } footer: {
+            Button("保存配置（config.patch）") {
+                Task { await saveConfig() }
+            }
+            .font(.caption)
+            .disabled(busy || configText == nil)
+        }
+    }
+
+    // MARK: - Dreaming（doctor.memory.dreamDiary）
+
+    private var dreamingSection: some View {
+        Section {
+            if let dreamDiary {
+                let days = dreamDiary.days ?? []
+                if days.isEmpty {
+                    Text("暂无梦境记录")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(days) { day in
+                        HStack {
+                            Text(day.date ?? "—")
+                                .font(.subheadline)
+                            Spacer()
+                            Text("\(day.entries ?? 0) 条")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+            } else {
+                loadingRow
+            }
+        } header: {
+            HStack {
+                Text("记忆梦境")
+                Spacer()
+                Button("查看") {
+                    showDreamDiary = true
+                }
+                .font(.caption)
+                .disabled(busy)
+            }
+        }
+    }
+
+    private var dreamDiarySheet: some View {
+        List {
+            if let dreamDiary {
+                if let days = dreamDiary.days, !days.isEmpty {
+                    ForEach(days) { day in
+                        Section(day.date ?? "—") {
+                            Text(day.summary ?? "\(day.entries ?? 0) 条记录")
+                                .font(.footnote)
+                        }
+                    }
+                }
+                if let entries = dreamDiary.entries, !entries.isEmpty {
+                    ForEach(entries) { entry in
+                        Section(entry.date ?? "梦境") {
+                            Text(entry.summary ?? entry.content ?? "")
+                                .font(.footnote)
+                            if let tags = entry.tags, !tags.isEmpty {
+                                Text(tags.joined(separator: " · "))
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                }
+            } else {
+                HStack(spacing: 8) {
+                    ProgressView().scaleEffect(0.8)
+                    Text("加载中…").font(.footnote).foregroundStyle(.secondary)
+                }
+            }
+        }
+        .navigationTitle("记忆梦境")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .confirmationAction) {
+                Button("完成") { showDreamDiary = false }
+            }
+        }
+    }
+
+    // MARK: - Nodes（operator.read）
+
+    private var nodesSection: some View {
+        Section {
+            if operators.isEmpty && !busy {
+                Text("无 operator 设备")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+            ForEach(operators) { op in
+                HStack(spacing: 8) {
+                    Circle()
+                        .fill((op.connected ?? false) ? Color.green : Color.gray)
+                        .frame(width: 8, height: 8)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(op.displayName ?? op.deviceId ?? "设备")
+                            .font(.subheadline.weight(.medium))
+                        if let deviceId = op.deviceId {
+                            Text(deviceId)
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    Spacer()
+                    Text(op.kind ?? op.role ?? "operator")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        } header: {
+            HStack {
+                Text("节点舰队")
+                Spacer()
+                Button("刷新") {
+                    Task { await loadNodes() }
+                }
+                .font(.caption)
+                .disabled(busy)
+            }
+        }
+    }
+
+    // MARK: - Cron Detail
+
+    private func cronDetailSheet(_ job: CronJob) -> some View {
+        List {
+            Section("任务") {
+                row("ID", job.id ?? "—", mono: true)
+                row("名称", job.name ?? "—")
+                row("表达式", job.expression ?? "—", mono: true)
+                row("状态", job.status ?? "—")
+                row("上次运行", job.lastRunAt ?? "—")
+                row("下次运行", job.nextRunAt ?? "—")
+            }
+            if let cronDetail {
+                Section("详情") {
+                    if let status = cronDetail.status {
+                        row("运行状态", status)
+                    }
+                    if let lastRunAt = cronDetail.lastRunAt {
+                        row("上次运行", lastRunAt)
+                    }
+                    if let nextRunAt = cronDetail.nextRunAt {
+                        row("下次运行", nextRunAt)
+                    }
+                }
+            }
+            Section {
+                Button("立即运行") {
+                    Task {
+                        await runCronJob(job)
+                        showCronDetail = false
+                    }
+                }
+                .disabled(busy)
+            }
+        }
+        .navigationTitle("定时任务详情")
+        .navigationBarTitleDisplayMode(.inline)
+        .task {
+            await loadCronDetail(job)
         }
     }
 
@@ -359,7 +591,9 @@ struct AgentProPanelView: View {
             async let d: Void = loadSkills()
             async let e: Void = loadDoctor()
             async let f: Void = loadConfig()
-            _ = await (a, b, c, d, e, f)
+            async let g: Void = loadDreamDiary()
+            async let h: Void = loadNodes()
+            _ = await (a, b, c, d, e, f, g, h)
         }
     }
 
@@ -460,6 +694,74 @@ struct AgentProPanelView: View {
             configText = prettyJSONText(data)
         } catch {
             errorText = error.localizedDescription
+        }
+    }
+
+    private func loadDreamDiary() async {
+        do {
+            let data = try await call("doctor.memory.dreamDiary", timeoutMs: 8)
+            dreamDiary = decode(DreamDiaryResponse.self, from: data)
+        } catch {
+            errorText = error.localizedDescription
+        }
+    }
+
+    private func loadNodes() async {
+        do {
+            let data = try await call("operator.read", params: ["includeTalkSecrets": AnyCodable(false)], timeoutMs: 12)
+            let decoded = decode(GatewayOperatorFleet.OperatorListResponse.self, from: data)
+            operators = decoded?.operators ?? []
+        } catch {
+            errorText = error.localizedDescription
+        }
+    }
+
+    private func loadCronDetail(_ job: CronJob) async {
+        do {
+            let data = try await call("cron.get", params: ["id": AnyCodable(job.id ?? "")], timeoutMs: 8)
+            cronDetail = decode(CronJob.self, from: data)
+        } catch {
+            errorText = error.localizedDescription
+        }
+    }
+
+    private func searchSkills() async {
+        await run {
+            let query = skillQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !query.isEmpty else { return }
+            let data = try await call("skills.search", params: ["query": AnyCodable(query)], timeoutMs: 20)
+            let decoded = decode(SkillsSearchResponse.self, from: data)
+            let results = decoded?.results ?? []
+            let summary = results.isEmpty
+                ? "未找到匹配技能"
+                : "找到 \(results.count) 个技能：" + results.prefix(8).map { $0.name ?? $0.id ?? "—" }.joined(separator: "、")
+            lastSearchSummary = summary
+        }
+    }
+
+    private func installSkill() async {
+        await run {
+            let slug = skillInstallSlug.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !slug.isEmpty else { return }
+            let params = SkillsInstallParams(slug: slug, agentId: "main")
+            let dict = try GatewayConnection.encodeParams(params)
+            _ = try await call("skills.install", params: dict, timeoutMs: 125)
+            lastSearchSummary = "已安装 \(slug)"
+            skillInstallSlug = ""
+            await loadSkills()
+        }
+    }
+
+    private func saveConfig() async {
+        await run {
+            guard let configText, let data = configText.data(using: .utf8),
+                  let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+            else {
+                lastSearchSummary = "配置不是合法 JSON"
+                return
+            }
+            _ = try await call("config.patch", params: object.mapValues { AnyCodable($0) }, timeoutMs: 20)
+            lastSearchSummary = "配置已保存"
         }
     }
 

@@ -6,6 +6,12 @@ final class SettingsStore {
     private let defaults = UserDefaults.standard
     private let settingsKey = "app_settings"
     private let stableIDKey = "gateway_stable_id"
+    // 官方对齐键：gateway.autoconnect / gateway.last.*（持久化连接意图与上次网关）
+    private let autoConnectKey = "gateway.autoconnect"
+    private let lastHostKey = "gateway.last.host"
+    private let lastKindKey = "gateway.last.kind"
+    private let lastPortKey = "gateway.last.port"
+    private let lastTLSKey = "gateway.last.tls"
     private let secure = SecureStorage.shared
 
     var settings: AppSettings = .defaults
@@ -102,6 +108,40 @@ final class SettingsStore {
             secure.setString(nil, forKey: SecureStorage.bootstrapTokenKey)
         }
         syncGatewayToAppGroup()
+    }
+
+    /// 官方对齐：启动时是否自动连接上次网关（gateway.autoconnect，默认 true）。
+    var gatewayAutoConnect: Bool {
+        get { defaults.object(forKey: autoConnectKey) as? Bool ?? true }
+        set { defaults.set(newValue, forKey: autoConnectKey) }
+    }
+
+    /// 官方对齐：记录上次成功连接的网关（gateway.last.host/kind/port/tls）。
+    var lastGatewayHost: String? {
+        get { defaults.string(forKey: lastHostKey) }
+        set { defaults.set(newValue, forKey: lastHostKey) }
+    }
+    var lastGatewayKind: String? {
+        get { defaults.string(forKey: lastKindKey) }
+        set { defaults.set(newValue, forKey: lastKindKey) }
+    }
+    var lastGatewayPort: Int {
+        get { defaults.object(forKey: lastPortKey) as? Int ?? 0 }
+        set { defaults.set(newValue, forKey: lastPortKey) }
+    }
+    var lastGatewayTLS: Bool {
+        get { defaults.object(forKey: lastTLSKey) as? Bool ?? true }
+        set { defaults.set(newValue, forKey: lastTLSKey) }
+    }
+
+    /// 连接成功后调用：把本次网关写入 gateway.last.*（官方键）。
+    func recordLastGateway(urlString: String) {
+        guard let components = URLComponents(string: urlString) else { return }
+        lastGatewayHost = components.host
+        lastGatewayPort = components.port ?? 0
+        lastGatewayTLS = (components.scheme?.lowercased() == "https" || components.scheme?.lowercased() == "wss")
+        lastGatewayKind = components.host?.contains(".") == true ? "remote" : "lan"
+        gatewayAutoConnect = true
     }
 
     /// 应用扫码/粘贴/深链解析出的官方配对信息：写网关地址、令牌、bootstrapToken 与 stableID。

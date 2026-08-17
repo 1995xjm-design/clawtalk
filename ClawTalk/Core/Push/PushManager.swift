@@ -168,13 +168,71 @@ final class PushManager {
         }
     }
 
-    /// 已配置网关时自动上报（供主智能体在拿到 token 后调用）。
+    /// 官方对齐上报链：优先网关 RPC push.apns.register（探测支持才用），
+    /// 其次 PushRelay 中继（配置了 relayBaseURL），最后降级 chat 消息上报。
     @discardableResult
-    func reportIfConfigured(settings: SettingsStore) async -> Bool {
-        guard settings.isConfigured else { return false }
+    func reportDeviceTokenWithFallback(
+        settings: SettingsStore,
+        gatewayConnection: GatewayConnection? = nil
+    ) async -> Bool {
+        guard let deviceToken, !deviceToken.isEmpty else { return false }
+
+        // 1) 网关 RPC（官方 NodeAppModel.push.apns.register）
+        if let gatewayConnection {
+            let supports = await gatewayConnection.supportsServerMethod("push.apns.register") ?? false
+            if supports {
+                do {
+                    let deviceID = OpenClawClient().deviceID
+                    let params: [String: AnyCodable] = [
+                        "apnsToken": AnyCodable(deviceToken),
+                        "deviceId": AnyCodable(deviceID),
+                        "environment": AnyCodable(PushBuildConfig.load().environment.rawValue)
+                    ]
+                    _ = try await gatewayConnection.request(method: "push.apns.register", params: params, timeoutMs: 20)
+                    lastReportError = nil
+                    return true
+                } catch {
+                    lastReportError = error.localizedDescription
+                    logger.error("push.apns.register failed: \(error.localizedDescription, privacy: .public)")
+                }
+            }
+        }
+
+        // 2) PushRelay 中继（配置了 relayBaseURL 才走）
+        let config = PushBuildConfig.load()
+        if config.mode == .relay, let relayBase = config.relayBaseURL, !relayBase.isEmpty {
+            let client = PushRelayClient(baseURL: relayBase)
+            do {
+                let response = try await client.register(PushRelayRegisterRequest(
+                    deviceId: OpenClawClient().deviceID,
+                    apnsToken: deviceToken,
+                    gatewayURL: settings.settings.gatewayURL,
+                    gatewayToken: settings.gatewayToken,
+                    appVersion: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String,
+                    environment: config.environment.rawValue
+                ))
+                if response.ok == true {
+                    lastReportError = nil
+                    return true
+                }
+                lastReportError = response.error ?? "中继未确认"
+            } catch {
+                lastReportError = error.localizedDescription
+                logger.error("relay register failed: \(error.localizedDescription, privacy: .public)")
+            }
+        }
+
+        // 3) 降级：chat 上报（原有行为）
         return await reportDeviceTokenToGateway(
             gatewayURL: settings.settings.gatewayURL,
             token: settings.gatewayToken
         )
+    }
+
+    /// 已配置网关时自动上报（供主智能体在拿到 token 后调用）。
+    @discardableResult
+    func reportIfConfigured(settings: SettingsStore) async -> Bool {
+        guard settings.isConfigured else { return false }
+        return await reportDeviceTokenWithFallback(settings: settings, gatewayConnection: nil)
     }
 }
