@@ -77,7 +77,6 @@ struct PrivacyAccessSectionView: View {
         @unknown default: return "未知"
         }
     }
-}
 
 
     private static func microphoneStatusLabel() -> String {

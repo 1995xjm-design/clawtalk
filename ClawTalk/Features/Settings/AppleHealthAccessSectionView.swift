@@ -8,7 +8,7 @@ struct AppleHealthAccessSectionView: View {
 
     var body: some View {
         List {
-            Section("Apple 健康") {
+            Section {
                 HStack {
                     Label("健康数据访问", systemImage: "heart.fill")
                     Spacer()
@@ -16,6 +16,8 @@ struct AppleHealthAccessSectionView: View {
                         .font(.caption)
                         .foregroundStyle(isAuthorized ? .green : .orange)
                 }
+            } header: {
+                Text("Apple 健康")
             } footer: {
                 Text("用于健康功能卡读取步数、心率等数据；不会上传云端。")
             }
@@ -52,9 +54,8 @@ struct AppleHealthAccessSectionView: View {
         ]
         Task { @MainActor in
             if #available(iOS 17.0, *) {
-                let statuses = await store.statusForAuthorizationRequest(toShare: [], read: types)
-                let requested = statuses[.sharingAuthorized] == true
-                isAuthorized = requested
+                let status = await store.statusForAuthorizationRequest(toShare: [], read: types)
+                isAuthorized = status == .unnecessary
             } else {
                 isAuthorized = false
             }
