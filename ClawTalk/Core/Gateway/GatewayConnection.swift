@@ -319,8 +319,8 @@ final class GatewayConnection {
     }
 
     /// Whether the gateway advertised support for the given RPC method (nil = 未收到 snapshot).
-    func supportsServerMethod(_ method: String) -> Bool? {
-        gateway?.supportsServerMethod(method)
+    func supportsServerMethod(_ method: String) async -> Bool? {
+        await gateway?.supportsServerMethod(method)
     }
 
     // MARK: - Event Handling
