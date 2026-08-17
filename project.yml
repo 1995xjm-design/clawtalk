@@ -35,7 +35,9 @@ targets:
     type: application
     platform: iOS
     sources:
-      - ClawTalk
+      - path: ClawTalk
+        excludes:
+          - RimeSupport/**
       - ClawTalkShared
     resources:
       - ClawTalk/Resources
@@ -65,7 +67,7 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: app.lgm.7517
         PROVISIONING_PROFILE_SPECIFIER: 7517
         MARKETING_VERSION: "1.2.2"
-        CURRENT_PROJECT_VERSION: 18
+        CURRENT_PROJECT_VERSION: 19
         TARGETED_DEVICE_FAMILY: "1,2"
         KNOWN_REGIONS:
           - Base
@@ -230,7 +232,7 @@ targets:
         CODE_SIGN_ENTITLEMENTS: ClawTalkWatchApp/ClawTalkWatch.entitlements
         TARGETED_DEVICE_FAMILY: "4"
         MARKETING_VERSION: "1.2.2"
-        CURRENT_PROJECT_VERSION: 18
+        CURRENT_PROJECT_VERSION: 19
     info:
       path: ClawTalkWatchApp/Resources/Info.plist
       properties:
