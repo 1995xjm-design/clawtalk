@@ -963,6 +963,11 @@ private var connectionSection: some View {
                 Label("网关管理", systemImage: "server.rack")
             }
             NavigationLink {
+                AgentProPanelView(gatewayConnection: gatewayConnection)
+            } label: {
+                Label("网关高级面板", systemImage: "chart.bar.fill")
+            }
+            NavigationLink {
                 CertificateTrustView()
             } label: {
                 Label("证书信任", systemImage: "lock.shield")
@@ -973,9 +978,34 @@ private var connectionSection: some View {
                 Label("连接状态", systemImage: "antenna.radiowaves.left.and.right")
             }
             NavigationLink {
+                GatewayControlWebView(store: store, viewName: "terminal", title: "官方终端")
+            } label: {
+                Label("官方终端", systemImage: "terminal.fill")
+            }
+            NavigationLink {
                 TerminalView(store: store)
             } label: {
-                Label("远程终端", systemImage: "terminal")
+                Label("远程终端（兼容模式）", systemImage: "terminal")
+            }
+            NavigationLink {
+                GatewayControlWebView(store: store, viewName: "desktop", title: "桌面观察")
+            } label: {
+                Label("桌面观察", systemImage: "desktopcomputer")
+            }
+            NavigationLink {
+                ChannelsPanelView(gatewayConnection: gatewayConnection)
+            } label: {
+                Label("频道管理", systemImage: "rectangle.3.group")
+            }
+            NavigationLink {
+                TasksPanelView(gatewayConnection: gatewayConnection)
+            } label: {
+                Label("任务队列", systemImage: "checklist")
+            }
+            NavigationLink {
+                WorkboardPanelView(gatewayConnection: gatewayConnection)
+            } label: {
+                Label("工作板", systemImage: "square.grid.3x2")
             }
             NavigationLink {
                 ScreenStreamView(store: store)

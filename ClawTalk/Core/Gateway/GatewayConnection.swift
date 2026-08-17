@@ -313,9 +313,14 @@ final class GatewayConnection {
     // MARK: - RPC Convenience
 
     /// Make a raw RPC request.
-    func request(method: String, params: [String: AnyCodable]? = nil) async throws -> Data {
+    func request(method: String, params: [String: AnyCodable]? = nil, timeoutMs: Double? = nil) async throws -> Data {
         guard let gw = gateway else { throw GatewayWebSocket.GatewayError.notConnected }
-        return try await gw.request(method: method, params: params)
+        return try await gw.request(method: method, params: params, timeoutMs: timeoutMs)
+    }
+
+    /// Whether the gateway advertised support for the given RPC method (nil = 未收到 snapshot).
+    func supportsServerMethod(_ method: String) -> Bool? {
+        gateway?.supportsServerMethod(method)
     }
 
     // MARK: - Event Handling

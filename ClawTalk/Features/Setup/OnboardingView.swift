@@ -1,24 +1,68 @@
 import SwiftUI
 import UIKit
 
+/// 官方 6 步引导页：intro → welcome → mode → connect → auth → success。
+/// 内容 100% 对齐官方 OpenClaw iOS 引导页（6 页），UI 用 ClawTalk 主题、文案全中文。
 struct OnboardingView: View {
     @Bindable var settingsStore: SettingsStore
     let onComplete: () -> Void
 
-    @State private var step: Step = .welcome
+    @State private var step: Step = .intro
     @State private var gatewayURL = ""
     @State private var gatewayToken = ""
+    @State private var gatewayPassword = ""
+    @State private var gatewayHost = ""
+    @State private var gatewayPort = "18789"
+    @State private var useTLS = true
+    @State private var selectedMode: GatewayMode = .lan
+    @State private var setupCodeInput = ""
+    @State private var devMode = false
     @State private var connectionState: ConnectionTestState = .idle
     @State private var showScanner = false
     @State private var scanNotice: String?
     @State private var rescanToken = 0
-    @State private var showManual = false
     @State private var copiedCommand = false
+    @State private var needsApproval = false
 
     enum Step: Int, CaseIterable {
-        case welcome = 0
-        case gatewaySetup
-        case gateway
+        case intro = 0
+        case welcome
+        case mode
+        case connect
+        case auth
+        case success
+    }
+
+    enum GatewayMode: String, CaseIterable, Identifiable {
+        case lan
+        case remote
+        case local
+
+        var id: String { rawValue }
+
+        var title: String {
+            switch self {
+            case .lan: return "家庭网络"
+            case .remote: return "远程域名"
+            case .local: return "本机开发"
+            }
+        }
+
+        var subtitle: String {
+            switch self {
+            case .lan: return "本机局域网自动发现网关"
+            case .remote: return "通过域名 + Token 连接"
+            case .local: return "同一台电脑上调试"
+            }
+        }
+
+        var symbol: String {
+            switch self {
+            case .lan: return "wifi"
+            case .remote: return "globe"
+            case .local: return "laptopcomputer"
+            }
+        }
     }
 
     enum ConnectionTestState: Equatable {
@@ -30,23 +74,40 @@ struct OnboardingView: View {
 
     var body: some View {
         TabView(selection: $step) {
+            introStep.tag(Step.intro)
             welcomeStep.tag(Step.welcome)
-            gatewaySetupStep.tag(Step.gatewaySetup)
-            gatewayStep.tag(Step.gateway)
+            modeStep.tag(Step.mode)
+            connectStep.tag(Step.connect)
+            authStep.tag(Step.auth)
+            successStep.tag(Step.success)
         }
         .tabViewStyle(.page(indexDisplayMode: .always))
         .indexViewStyle(.page(backgroundDisplayMode: .always))
         .onAppear {
             UIPageControl.appearance().currentPageIndicatorTintColor = UIColor(.openClawRed)
             UIPageControl.appearance().pageIndicatorTintColor = UIColor(.openClawRed).withAlphaComponent(0.3)
+            UserDefaults.standard.set(true, forKey: "onboarding.first_run_intro_seen")
+        }
+        .fullScreenCover(isPresented: $showScanner) {
+            QRScannerView(
+                onScan: { value in
+                    handleScannedCode(value)
+                },
+                onCancel: {
+                    showScanner = false
+                },
+                scanNotice: scanNotice,
+                rescanToken: rescanToken
+            )
+            .ignoresSafeArea()
         }
         .background(Color(.systemBackground))
         .preferredColorScheme(settingsStore.settings.preferredColorScheme)
     }
 
-    // MARK: - Welcome
+    // MARK: - P1 Intro（欢迎页，全屏无导航）
 
-    private var welcomeStep: some View {
+    private var introStep: some View {
         VStack(spacing: 0) {
             Spacer()
 
@@ -55,7 +116,7 @@ struct OnboardingView: View {
                 .scaledToFit()
                 .frame(width: 120, height: 120)
 
-            Text("欢迎使用 ClawTalk")
+            Text("ClawTalk")
                 .font(.largeTitle)
                 .fontWeight(.bold)
                 .padding(.top, 6)
@@ -91,15 +152,402 @@ struct OnboardingView: View {
 
             Spacer()
 
-            primaryButton("开始使用") {
-                withAnimation { step = .gatewaySetup }
+            primaryButton("继续") {
+                withAnimation { step = .welcome }
             }
-            .padding(.horizontal, 24)
+
+            Button("跳过") {
+                finishOnboarding()
+            }
+            .font(.subheadline)
+            .foregroundStyle(.secondary)
             .padding(.bottom, 40)
         }
     }
 
-    /// 官方欢迎页同款卖点行（内容 100% 对齐官方，UI 用 ClawTalk 主题）。
+    // MARK: - P2 Welcome（连接网关）
+
+    private var welcomeStep: some View {
+        VStack(spacing: 20) {
+            Spacer()
+
+            Image(systemName: "qrcode.viewfinder")
+                .font(.largeTitle)
+                .foregroundStyle(.openClawRed)
+
+            Text("连接网关")
+                .font(.title2)
+                .fontWeight(.bold)
+
+            Text("在网关主机上运行以下命令，然后扫描二维码")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 32)
+
+            qrCommandBox
+                .padding(.horizontal, 24)
+
+            primaryButton("扫码连接") {
+                scanNotice = nil
+                showScanner = true
+            }
+            .padding(.top, 4)
+
+            HStack(spacing: 12) {
+                Rectangle()
+                    .fill(Color.secondary.opacity(0.3))
+                    .frame(height: 1)
+                Text("或")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Rectangle()
+                    .fill(Color.secondary.opacity(0.3))
+                    .frame(height: 1)
+            }
+            .padding(.horizontal, 40)
+
+            HStack(spacing: 24) {
+                Button {
+                    withAnimation { step = .mode }
+                } label: {
+                    Label("手动连接", systemImage: "slider.horizontal.3")
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                        .foregroundStyle(.openClawRed)
+                }
+
+                Button {
+                    pasteSetupCode()
+                } label: {
+                    Label("粘贴配对码", systemImage: "doc.on.clipboard")
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                        .foregroundStyle(.openClawRed)
+                }
+            }
+
+            connectionStatusRow
+                .padding(.horizontal, 24)
+
+            Spacer()
+
+            Button("跳过") {
+                finishOnboarding()
+            }
+            .font(.subheadline)
+            .foregroundStyle(.secondary)
+            .padding(.bottom, 40)
+        }
+        .animation(.easeInOut(duration: 0.2), value: connectionState)
+    }
+
+    // MARK: - P3 Mode（网关设置表单）
+
+    private var modeStep: some View {
+        VStack(spacing: 20) {
+            Spacer()
+
+            Image(systemName: "server.rack")
+                .font(.largeTitle)
+                .foregroundStyle(.openClawRed)
+
+            Text("网关设置")
+                .font(.title2)
+                .fontWeight(.bold)
+
+            Text("输入设置码可直达连接；或选择连接模式后继续。")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 32)
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text("设置码")
+                    .font(.caption)
+                    .fontWeight(.medium)
+                    .foregroundStyle(.secondary)
+                HStack(spacing: 10) {
+                    TextField("输入设置码", text: $setupCodeInput)
+                        .autocorrectionDisabled()
+                        .textInputAutocapitalization(.never)
+                        .padding(12)
+                        .background(Color(.systemGray6))
+                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    Button("连接") {
+                        connectWithSetupCode(setupCodeInput)
+                    }
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
+                    .background(Color.openClawRed)
+                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .disabled(setupCodeInput.isEmpty)
+                    .opacity(setupCodeInput.isEmpty ? 0.5 : 1)
+                }
+            }
+            .padding(.horizontal, 24)
+
+            VStack(spacing: 10) {
+                ForEach(GatewayMode.allCases) { mode in
+                    modeCard(mode)
+                }
+            }
+            .padding(.horizontal, 24)
+
+            Toggle("开发者模式", isOn: $devMode)
+                .font(.subheadline)
+                .padding(.horizontal, 24)
+
+            Spacer()
+
+            primaryButton("下一步") {
+                withAnimation { step = .connect }
+            }
+
+            Button("返回") {
+                withAnimation { step = .welcome }
+            }
+            .font(.subheadline)
+            .foregroundStyle(.secondary)
+            .padding(.bottom, 24)
+        }
+    }
+
+    private func modeCard(_ mode: GatewayMode) -> some View {
+        Button {
+            selectedMode = mode
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: mode.symbol)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(selectedMode == mode ? .white : Color.openClawRed)
+                    .frame(width: 34, height: 34)
+                    .background {
+                        Circle().fill(selectedMode == mode ? Color.openClawRed : Color.openClawRed.opacity(0.12))
+                    }
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(mode.title)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.primary)
+                    Text(mode.subtitle)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 0)
+                if selectedMode == mode {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundStyle(.openClawRed)
+                }
+            }
+            .padding(12)
+            .background {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(Color(.secondarySystemBackground))
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .stroke(selectedMode == mode ? Color.openClawRed : Color.secondary.opacity(0.2), lineWidth: selectedMode == mode ? 1.5 : 0.5)
+            }
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: - P4 Connect（网关详情表单）
+
+    private var connectStep: some View {
+        VStack(spacing: 20) {
+            Spacer()
+
+            Image(systemName: "network")
+                .font(.largeTitle)
+                .foregroundStyle(.openClawRed)
+
+            Text("网关详情")
+                .font(.title2)
+                .fontWeight(.bold)
+
+            connectionStatusRow
+                .padding(.horizontal, 24)
+
+            if selectedMode == .remote {
+                labeledField("域名", text: $gatewayURL, keyboard: .URL)
+                    .padding(.horizontal, 24)
+            } else {
+                labeledField("主机", text: $gatewayHost, keyboard: .URL)
+                    .padding(.horizontal, 24)
+            }
+
+            labeledField("端口", text: $gatewayPort, keyboard: .numberPad)
+                .padding(.horizontal, 24)
+
+            Toggle("启用 TLS", isOn: $useTLS)
+                .font(.subheadline)
+                .padding(.horizontal, 24)
+
+            primaryButton("测试连接") {
+                saveManualGateway()
+                testWebSocketWithManualCredentials()
+            }
+            .disabled(connectFieldsInvalid)
+            .opacity(connectFieldsInvalid ? 0.5 : 1)
+
+            Button("返回") {
+                withAnimation { step = .mode }
+            }
+            .font(.subheadline)
+            .foregroundStyle(.secondary)
+            .padding(.bottom, 24)
+        }
+    }
+
+    private var connectFieldsInvalid: Bool {
+        if selectedMode == .remote {
+            return gatewayURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }
+        return gatewayHost.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    // MARK: - P5 Auth（认证 + 配对批准表单）
+
+    private var authStep: some View {
+        VStack(spacing: 20) {
+            Spacer()
+
+            Image(systemName: "lock.shield")
+                .font(.largeTitle)
+                .foregroundStyle(.openClawRed)
+
+            Text("认证")
+                .font(.title2)
+                .fontWeight(.bold)
+
+            labeledField("网关认证令牌", text: $gatewayToken, secure: true)
+                .padding(.horizontal, 24)
+
+            labeledField("网关密码", text: $gatewayPassword, secure: true)
+                .padding(.horizontal, 24)
+
+            connectionStatusRow
+                .padding(.horizontal, 24)
+
+            if needsApproval {
+                approvalBox
+                    .padding(.horizontal, 24)
+            }
+
+            VStack(spacing: 10) {
+                primaryButton("批准后继续") {
+                    retryConnection()
+                }
+                .disabled(gatewayToken.isEmpty && gatewayPassword.isEmpty)
+                .opacity(gatewayToken.isEmpty && gatewayPassword.isEmpty ? 0.5 : 1)
+
+                HStack(spacing: 24) {
+                    Button("重新扫码") {
+                        scanNotice = nil
+                        showScanner = true
+                    }
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(.openClawRed)
+
+                    Button("重试连接") {
+                        retryConnection()
+                    }
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(.openClawRed)
+                }
+            }
+
+            Button("返回") {
+                withAnimation { step = .connect }
+            }
+            .font(.subheadline)
+            .foregroundStyle(.secondary)
+            .padding(.bottom, 24)
+        }
+    }
+
+    /// 配对批准引导（对齐官方：在网关批准这台设备）。
+    private var approvalBox: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label("需要网关批准这台设备", systemImage: "clock.badge.exclamationmark")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.orange)
+
+            Text("在网关主机上运行以下命令批准配对：")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+
+            HStack(spacing: 8) {
+                Text("openclaw devices approve")
+                    .font(.system(.footnote, design: .monospaced))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                Button {
+                    UIPasteboard.general.string = "openclaw devices approve"
+                } label: {
+                    Label("复制", systemImage: "doc.on.doc")
+                        .font(.caption)
+                }
+                .buttonStyle(.bordered)
+                .tint(.orange)
+            }
+            .padding(10)
+            .background(Color(.systemGray6))
+            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+
+            Text("或在 OpenClaw 聊天里发送 /pair approve。返回本 App 会自动重试。")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(16)
+        .background {
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Color(.secondarySystemBackground))
+        }
+    }
+
+    // MARK: - P6 Success（完成页，全屏无导航）
+
+    private var successStep: some View {
+        VStack(spacing: 0) {
+            Spacer()
+
+            Image(systemName: "checkmark.seal.fill")
+                .font(.system(size: 84))
+                .foregroundStyle(.green)
+
+            Text("已连接")
+                .font(.largeTitle)
+                .fontWeight(.bold)
+                .padding(.top, 18)
+
+            Text(gatewayDisplayName)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .padding(.top, 6)
+                .padding(.horizontal, 32)
+
+            Spacer()
+
+            primaryButton("前往聊天") {
+                finishOnboarding()
+            }
+            .padding(.bottom, 40)
+        }
+    }
+
+    private var gatewayDisplayName: String {
+        let base = gatewayURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !base.isEmpty { return base }
+        return settingsStore.settings.gatewayURL
+    }
+
+    // MARK: - Shared UI
+
     private func featureRow(symbol: String, title: String) -> some View {
         HStack(spacing: 12) {
             Image(systemName: symbol)
@@ -117,7 +565,6 @@ struct OnboardingView: View {
         .accessibilityElement(children: .combine)
     }
 
-    /// 官方同款安全提示（设备能力授权说明）。
     private var securityNotice: some View {
         HStack(alignment: .top, spacing: 12) {
             Image(systemName: "exclamationmark.triangle.fill")
@@ -143,175 +590,6 @@ struct OnboardingView: View {
         }
     }
 
-    // MARK: - Gateway Setup Instructions
-
-    private var gatewaySetupStep: some View {
-        VStack(spacing: 24) {
-            Spacer()
-
-            Image(systemName: "server.rack")
-                .font(.largeTitle)
-                .foregroundStyle(.openClawRed)
-
-            Text("需要网关")
-                .font(.title2)
-                .fontWeight(.bold)
-
-            Text("ClawTalk 需要连接运行在电脑或服务器上的 OpenClaw 网关。")
-                .font(.body)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 32)
-
-            VStack(alignment: .leading, spacing: 12) {
-                bulletPoint("在电脑上安装 OpenClaw")
-                bulletPoint("运行 openclaw onboard 完成配置")
-                bulletPoint("在网关配置中开启 HTTP API")
-                bulletPoint("设置网关访问令牌")
-                bulletPoint("远程访问时开启 HTTPS")
-            }
-            .padding(.horizontal, 32)
-
-            Link(destination: URL(string: "https://docs.openclaw.ai/gateway")!) {
-                HStack(spacing: 6) {
-                    Image(systemName: "book.fill")
-                    Text("查看设置指南")
-                }
-                .font(.subheadline)
-                .fontWeight(.medium)
-                .foregroundStyle(.openClawRed)
-            }
-            .padding(.top, 4)
-
-            Spacer()
-
-            primaryButton("我已有网关") {
-                withAnimation { step = .gateway }
-            }
-
-            Button("稍后设置") {
-                finishOnboarding()
-            }
-            .font(.subheadline)
-            .foregroundStyle(.secondary)
-            .padding(.bottom, 60)
-        }
-    }
-
-    private func bulletPoint(_ text: LocalizedStringKey) -> some View {
-        HStack(alignment: .top, spacing: 10) {
-            Circle()
-                .fill(Color.openClawRed)
-                .frame(width: 6, height: 6)
-                .padding(.top, 6)
-            Text(text)
-                .font(.subheadline)
-                .foregroundStyle(.primary)
-        }
-    }
-
-    // MARK: - Gateway Config
-
-    private var gatewayStep: some View {
-        VStack(spacing: 20) {
-            Spacer()
-
-            Image(systemName: "qrcode.viewfinder")
-                .font(.largeTitle)
-                .foregroundStyle(.openClawRed)
-
-            Text("连接网关")
-                .font(.title2)
-                .fontWeight(.bold)
-
-            Text("在您的 OpenClaw 上运行此命令并扫描二维码")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 32)
-
-            qrCommandBox
-                .padding(.horizontal, 24)
-
-            primaryButton("扫描二维码") {
-                scanNotice = nil
-                showScanner = true
-            }
-            .padding(.top, 4)
-
-            HStack(spacing: 12) {
-                Rectangle()
-                    .fill(Color.secondary.opacity(0.3))
-                    .frame(height: 1)
-                Text("或")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                Rectangle()
-                    .fill(Color.secondary.opacity(0.3))
-                    .frame(height: 1)
-            }
-            .padding(.horizontal, 40)
-
-            HStack(spacing: 24) {
-                Button {
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        showManual.toggle()
-                    }
-                } label: {
-                    Label(showManual ? "收起手动连接" : "手动连接", systemImage: showManual ? "chevron.up" : "chevron.down")
-                        .font(.subheadline)
-                        .fontWeight(.medium)
-                        .foregroundStyle(.openClawRed)
-                }
-
-                Button {
-                    pasteSetupCode()
-                } label: {
-                    Label("粘贴配对码", systemImage: "doc.on.clipboard")
-                        .font(.subheadline)
-                        .fontWeight(.medium)
-                        .foregroundStyle(.openClawRed)
-                }
-            }
-
-            if showManual {
-                manualConnectionForm
-                    .transition(.opacity.combined(with: .move(edge: .top)))
-            }
-
-            connectionStatusRow
-                .padding(.horizontal, 24)
-
-            Spacer()
-
-            bottomActionButton
-                .padding(.bottom, 8)
-
-            Button("跳过") {
-                finishOnboarding()
-            }
-            .font(.subheadline)
-            .foregroundStyle(.secondary)
-            .padding(.bottom, 40)
-        }
-        .animation(.easeInOut(duration: 0.2), value: connectionState)
-        .animation(.easeInOut(duration: 0.2), value: showManual)
-        .fullScreenCover(isPresented: $showScanner) {
-            QRScannerView(
-                onScan: { value in
-                    handleScannedCode(value)
-                },
-                onCancel: {
-                    showScanner = false
-                },
-                scanNotice: scanNotice,
-                rescanToken: rescanToken
-            )
-            .ignoresSafeArea()
-        }
-    }
-
-    /// 「openclaw qr」命令框，可一键复制。
     private var qrCommandBox: some View {
         HStack(spacing: 10) {
             Text("openclaw qr")
@@ -338,39 +616,30 @@ struct OnboardingView: View {
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 
-    /// 手动连接表单（网关地址 + 访问令牌）。
-    private var manualConnectionForm: some View {
-        VStack(spacing: 14) {
-            VStack(alignment: .leading, spacing: 6) {
-                Text("网关地址")
-                    .font(.caption)
-                    .fontWeight(.medium)
-                    .foregroundStyle(.secondary)
-                TextField("网关地址", text: $gatewayURL)
-                    .keyboardType(.URL)
+    private func labeledField(_ title: String, text: Binding<String>, keyboard: UIKeyboardType = .default, secure: Bool = false) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title)
+                .font(.caption)
+                .fontWeight(.medium)
+                .foregroundStyle(.secondary)
+            if secure {
+                SecureField(title, text: text)
+                    .textContentType(.password)
+                    .padding(12)
+                    .background(Color(.systemGray6))
+                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            } else {
+                TextField(title, text: text)
+                    .keyboardType(keyboard)
                     .autocorrectionDisabled()
                     .textInputAutocapitalization(.never)
                     .padding(12)
                     .background(Color(.systemGray6))
                     .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
             }
-
-            VStack(alignment: .leading, spacing: 6) {
-                Text("访问令牌")
-                    .font(.caption)
-                    .fontWeight(.medium)
-                    .foregroundStyle(.secondary)
-                SecureField("访问令牌", text: $gatewayToken)
-                    .textContentType(.password)
-                    .padding(12)
-                    .background(Color(.systemGray6))
-                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-            }
         }
-        .padding(.horizontal, 24)
     }
 
-    /// 内联连接测试结果。
     @ViewBuilder
     private var connectionStatusRow: some View {
         if connectionState != .idle {
@@ -403,34 +672,23 @@ struct OnboardingView: View {
         }
     }
 
-    /// 底部主按钮：配对/连接成功后显示「继续」，手动模式下显示「测试连接」。
-    @ViewBuilder
-    private var bottomActionButton: some View {
-        if connectionState == .success {
-            primaryButton("继续") {
-                finishOnboarding()
-            }
-        } else if showManual {
-            primaryButton("测试连接") {
-                settingsStore.settings.gatewayURL = gatewayURL
-                settingsStore.gatewayToken = gatewayToken
-                settingsStore.save()
-                testConnection()
-            }
-            .disabled(gatewayURL.isEmpty || gatewayToken.isEmpty || connectionState == .testing)
-            .opacity(gatewayURL.isEmpty || gatewayToken.isEmpty ? 0.5 : 1)
+    private func primaryButton(_ title: LocalizedStringKey, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title)
+                .font(.headline)
+                .foregroundStyle(.white)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 14)
+                .background(Color.openClawRed)
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         }
+        .padding(.horizontal, 24)
     }
 
-    // MARK: - QR Pairing
-
-    private func startScanning() {
-        showScanner = true
-    }
+    // MARK: - Connection Flow
 
     private func handleScannedCode(_ raw: String) {
         guard let link = GatewayConnectDeepLink.fromSetupInput(raw) else {
-            // 无效配对码：不退出扫码页，显示提示并复位继续扫码
             rescanToken += 1
             scanNotice = "无法识别配对码，请重新扫描"
             connectionState = .failed("无法识别配对码，请重新扫码")
@@ -446,18 +704,22 @@ struct OnboardingView: View {
             connectionState = .failed("剪贴板为空，请先复制配对码")
             return
         }
+        connectWithSetupCode(raw)
+    }
+
+    private func connectWithSetupCode(_ raw: String) {
         guard let link = GatewayConnectDeepLink.fromSetupInput(raw) else {
-            connectionState = .failed("无法识别剪贴板中的配对码")
+            connectionState = .failed("无法识别配对码")
             return
         }
         applySetupCode(link)
     }
 
-    /// 应用配对码：自动填网关地址、保存令牌/bootstrapToken/stableID，并走 WebSocket 配对测试。
     private func applySetupCode(_ link: GatewayConnectDeepLink) {
         gatewayURL = link.httpGatewayURL
         settingsStore.applyGatewayDeepLink(link)
         connectionState = .testing
+        needsApproval = false
 
         Task { @MainActor in
             await testWebSocketConnection(
@@ -468,9 +730,56 @@ struct OnboardingView: View {
         }
     }
 
-    /// 用配对码走 WebSocket 握手配对（配对成功即视为连接成功）。
-    /// 与官方一致：bootstrap 配对走 role=node 会话（clientMode=node、scopes 为空），
-    /// 配对成功后网关下发 node/operator 双角色令牌。
+    /// 手动模式：把表单字段写入设置并保存令牌/密码。
+    private func saveManualGateway() {
+        let built = buildGatewayURLFromFields()
+        if !built.isEmpty {
+            settingsStore.settings.gatewayURL = built
+        }
+        let port = gatewayPort.trimmingCharacters(in: .whitespacesAndNewlines)
+        settingsStore.settings.webSocketPath = port.isEmpty ? "18789" : port
+        if !gatewayToken.isEmpty {
+            settingsStore.gatewayToken = gatewayToken
+        }
+        settingsStore.save()
+    }
+
+    private func buildGatewayURLFromFields() -> String {
+        if selectedMode == .remote {
+            return gatewayURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        let host = gatewayHost.trimmingCharacters(in: .whitespacesAndNewlines)
+        let port = gatewayPort.trimmingCharacters(in: .whitespacesAndNewlines)
+        let scheme = useTLS ? "https" : "http"
+        if host.isEmpty { return "" }
+        if port.isEmpty { return "\(scheme)://\(host)" }
+        return "\(scheme)://\(host):\(port)"
+    }
+
+    private func testWebSocketWithManualCredentials() {
+        connectionState = .testing
+        needsApproval = false
+        Task { @MainActor in
+            await testWebSocketConnection(
+                token: gatewayToken.isEmpty ? nil : gatewayToken,
+                bootstrapToken: nil,
+                password: gatewayPassword.isEmpty ? nil : gatewayPassword
+            )
+        }
+    }
+
+    private func retryConnection() {
+        connectionState = .testing
+        Task { @MainActor in
+            await testWebSocketConnection(
+                token: gatewayToken.isEmpty ? nil : gatewayToken,
+                bootstrapToken: settingsStore.settings.bootstrapToken,
+                password: gatewayPassword.isEmpty ? nil : gatewayPassword
+            )
+        }
+    }
+
+    /// 用 WebSocket 握手配对（配对成功即视为连接成功）。
     @MainActor
     private func testWebSocketConnection(token: String?, bootstrapToken: String?, password: String?) async {
         let resolved = settingsStore.settings.resolvedWebSocketURL
@@ -493,8 +802,6 @@ struct OnboardingView: View {
             clientMode: "node",
             deviceTokenHandler: { [settingsStore] deviceToken in
                 Task { @MainActor in
-                    // 配对成功：把网关下发的 device token 存为 App 的网关令牌，
-                    // 否则工具页/诊断/网关会话拿不到令牌（此前这里一直是空）。
                     settingsStore.gatewayToken = deviceToken
                     settingsStore.save()
                 }
@@ -505,13 +812,21 @@ struct OnboardingView: View {
             await gateway.shutdown()
             clearConsumedPairingCredential()
             connectionState = .success
+            UserDefaults.standard.set(true, forKey: "gateway.hasConnectedOnce")
+            withAnimation { step = .success }
         } catch {
             await gateway.shutdown()
-            connectionState = .failed(pairingErrorMessage(for: error))
+            if let gatewayError = error as? GatewayWebSocket.GatewayError,
+               case .pairingRequired = gatewayError {
+                needsApproval = true
+                connectionState = .failed("等待网关批准这台设备")
+                withAnimation { step = .auth }
+            } else {
+                connectionState = .failed(pairingErrorMessage(for: error))
+            }
         }
     }
 
-    /// bootstrap 配对码一次性有效，配对成功后清除，避免重连时把已消费的配对码再发出去。
     private func clearConsumedPairingCredential() {
         if settingsStore.settings.bootstrapToken != nil {
             settingsStore.settings.bootstrapToken = nil
@@ -533,75 +848,14 @@ struct OnboardingView: View {
         }
     }
 
-    // MARK: - Helpers
-
-    private func primaryButton(_ title: LocalizedStringKey, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Text(title)
-                .font(.headline)
-                .foregroundStyle(.white)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 14)
-                .background(Color.openClawRed)
-                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-        }
-        .padding(.horizontal, 24)
-    }
-
-    private func testConnection() {
-        connectionState = .testing
-
-        Task {
-            do {
-                let baseURL = gatewayURL.trimmingCharacters(in: .whitespacesAndNewlines).trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-                guard let url = URL(string: "\(baseURL)/v1/chat/completions") else {
-                    connectionState = .failed("Invalid gateway URL")
-                    return
-                }
-
-                var request = URLRequest(url: url)
-                request.httpMethod = "POST"
-                request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-                request.setValue("Bearer \(gatewayToken)", forHTTPHeaderField: "Authorization")
-                request.httpBody = Data("{\"model\":\"openclaw:main\",\"messages\":[],\"stream\":false}".utf8)
-                request.timeoutInterval = 15
-
-                let (_, response) = try await URLSession.shared.data(for: request)
-
-                if let http = response as? HTTPURLResponse {
-                    switch http.statusCode {
-                    case 200...299, 400:
-                        connectionState = .success
-                    case 401, 403:
-                        connectionState = .failed("Auth failed. Check your token.")
-                    default:
-                        connectionState = .failed("HTTP \(http.statusCode)")
-                    }
-                } else {
-                    connectionState = .failed("Unexpected response")
-                }
-            } catch let error as URLError {
-                switch error.code {
-                case .notConnectedToInternet:
-                    connectionState = .failed("No internet connection")
-                case .timedOut:
-                    connectionState = .failed("Timed out. Check URL and gateway.")
-                case .cannotFindHost, .cannotConnectToHost:
-                    connectionState = .failed("Cannot reach gateway.")
-                case .secureConnectionFailed:
-                    connectionState = .failed("SSL/TLS failed. Use HTTPS.")
-                default:
-                    connectionState = .failed(error.localizedDescription)
-                }
-            } catch {
-                connectionState = .failed(error.localizedDescription)
-            }
-        }
-    }
-
     private func finishOnboarding() {
         settingsStore.hasCompletedOnboarding = true
         settingsStore.save()
+        let defaults = UserDefaults.standard
+        defaults.set(true, forKey: "onboarding.completed")
+        defaults.set(true, forKey: "gateway.onboardingComplete")
+        defaults.set(selectedMode.rawValue, forKey: "onboarding.last_mode")
+        defaults.set(ISO8601DateFormatter().string(from: Date()), forKey: "onboarding.last_success_time")
         onComplete()
     }
 }
@@ -609,13 +863,10 @@ struct OnboardingView: View {
 // MARK: - Gateway Setup Code
 
 /// OpenClaw 网关配对码解析。
-/// 配对码是 base64url 编码的 JSON：{"url":"wss://...","bootstrapToken":"..."}，
-/// 由电脑端 `openclaw qr` 命令生成。兼容直接粘贴原始 JSON 的情况。
 struct GatewaySetupCode: Codable, Equatable {
     let url: String
     let bootstrapToken: String
 
-    /// 解析配对码（先试 base64url 解码，再试原始 JSON）。
     static func parse(_ raw: String) -> GatewaySetupCode? {
         let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
@@ -635,7 +886,6 @@ struct GatewaySetupCode: Codable, Equatable {
         return nil
     }
 
-    /// 把配对码里的 ws(s):// 地址转成 http(s):// 网关地址（去掉路径，App 按配置拼接 /ws）。
     static func httpForm(of wsURL: String) -> String {
         let trimmed = wsURL.trimmingCharacters(in: .whitespacesAndNewlines)
         guard var components = URLComponents(string: trimmed) else {
