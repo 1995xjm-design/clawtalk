@@ -374,9 +374,7 @@ final class NodeConnection {
             _ = try await invokeWithTimeout(request)
             return true
         } catch {
-            logger.error(
-                "pending replay failed: \(action.command, privacy: .public) "
-                    + "\(error.localizedDescription, privacy: .public)")
+            logger.error("pending replay failed: \(action.command, privacy: .public) \(error.localizedDescription, privacy: .public)")
             return false
         }
     }
