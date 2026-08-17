@@ -17,7 +17,7 @@ extension TalkModeManager {
         case .granted: return .granted
         case .denied: return .denied
         case .undetermined: return .undetermined
-        @unknown default: return .restricted
+        @unknown default: return MicrophonePermissionState.restricted
         }
     }
 

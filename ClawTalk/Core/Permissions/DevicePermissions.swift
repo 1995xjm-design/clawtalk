@@ -76,8 +76,8 @@ enum DevicePermissions {
         switch AVAudioApplication.shared.recordPermission {
         case .granted: return .granted
         case .denied: return .denied
-        case .undetermined: return .notDetermined
-        @unknown default: return .notDetermined
+        case .undetermined: return DevicePermissionGrant.notDetermined
+        @unknown default: return DevicePermissionGrant.notDetermined
         }
     }
 
