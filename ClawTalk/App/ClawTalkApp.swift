@@ -203,16 +203,18 @@ struct ClawTalkApp: App {
         }
     }
 
+    /// ????????? + ???????????????????????
+    @ViewBuilder
+    private var rootOverlays: some View {
+        ApprovalOverlayView(gatewayConnection: gatewayConnection)
+        QuestionOverlayView(gatewayConnection: gatewayConnection)
+    }
+
     /// WindowGroup 内容（拆出独立计算属性，避免 SwiftUI 类型检查超时）
     @ViewBuilder
     private var windowContent: some View {
         rootWindowContent
-            .overlay {
-                ApprovalOverlayView(gatewayConnection: gatewayConnection)
-            }
-            .overlay {
-                QuestionOverlayView(gatewayConnection: gatewayConnection)
-            }
+            .overlay { rootOverlays }
             .notificationGuidanceDialog(
                 guidance: gatewayConnection.pendingNotificationGuidance,
                 onDismiss: { suppressFuture in
