@@ -79,7 +79,7 @@ struct AgentProPanelView: View {
                     row("总 Token", formatNumber(totals.totalTokens))
                     row("总费用", formatCost(totals.totalCost))
                 }
-                if let cacheStatus {
+                if let cacheStatus = usage.cacheStatus {
                     row("缓存状态", cacheStatus)
                 }
                 if let daily = usage.daily, !daily.isEmpty {
@@ -184,29 +184,31 @@ struct AgentProPanelView: View {
                         .font(.footnote)
                         .foregroundStyle(.red)
                 }
-                if let items = skills.skills, !items.isEmpty {
-                    ForEach(items) { skill in
-                        HStack {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(skill.name ?? skill.id ?? "—")
-                                    .font(.subheadline.weight(.medium))
-                                if let version = skill.version {
-                                    Text("v\(version)")
-                                        .font(.caption2)
-                                        .foregroundStyle(.secondary)
+                if let items = skills.skills {
+                    if items.isEmpty {
+                        Text("无已安装技能")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    } else {
+                        ForEach(items) { skill in
+                            HStack {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(skill.name ?? skill.id ?? "—")
+                                        .font(.subheadline.weight(.medium))
+                                    if let version = skill.version {
+                                        Text("v\(version)")
+                                            .font(.caption2)
+                                            .foregroundStyle(.secondary)
+                                    }
                                 }
-                            }
-                            Spacer()
-                            if let enabled = skill.enabled {
-                                Image(systemName: enabled ? "checkmark.circle.fill" : "circle")
-                                    .foregroundStyle(enabled ? .green : .secondary)
+                                Spacer()
+                                if let enabled = skill.enabled {
+                                    Image(systemName: enabled ? "checkmark.circle.fill" : "circle")
+                                        .foregroundStyle(enabled ? .green : .secondary)
+                                }
                             }
                         }
                     }
-                } else if items?.isEmpty != false {
-                    Text("无已安装技能")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
                 }
             } else {
                 loadingRow
@@ -389,9 +391,6 @@ struct AgentProPanelView: View {
             ], timeoutMs: 12)
             let decoded = decode(CronListResponse.self, from: data)
             cronJobs = decoded?.jobs ?? []
-            if let rev = decoded?.snapshotRevision {
-                snapshotRevision = rev
-            }
         } catch {
             errorText = error.localizedDescription
         }
