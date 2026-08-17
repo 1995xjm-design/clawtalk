@@ -48,14 +48,12 @@ struct GatewayConnectionStatusView: View {
             }
 
             Section("配对工具") {
-                if let generatedSetupCode {
-                    LabeledContent("配对码") {
-                        Text(generatedSetupCode)
-                            .font(.system(.body, design: .monospaced))
-                            .textSelection(.enabled)
-                    }
+                if let code = generatedSetupCode {
+                    LabeledContent("配对码", value: code)
+                        .font(.system(.body, design: .monospaced))
+                        .textSelection(.enabled)
                     Button {
-                        UIPasteboard.general.string = generatedSetupCode
+                        UIPasteboard.general.string = code
                     } label: {
                         Label("复制配对码", systemImage: "doc.on.doc")
                     }
