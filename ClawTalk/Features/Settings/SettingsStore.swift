@@ -134,6 +134,16 @@ final class SettingsStore {
         set { defaults.set(newValue, forKey: lastTLSKey) }
     }
 
+    /// 安装号（官方 stable instance ID）：用于推送中继注册标识，与设备身份分离的安装级唯一标识。
+    static func loadStableInstanceID() -> String? {
+        if let existing = UserDefaults.standard.string(forKey: "push.installation.id"), !existing.isEmpty {
+            return existing
+        }
+        let newID = UUID().uuidString.lowercased()
+        UserDefaults.standard.set(newID, forKey: "push.installation.id")
+        return newID
+    }
+
     /// 连接成功后调用：把本次网关写入 gateway.last.*（官方键）。
     func recordLastGateway(urlString: String) {
         guard let components = URLComponents(string: urlString) else { return }

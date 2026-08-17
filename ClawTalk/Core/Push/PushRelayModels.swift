@@ -12,15 +12,29 @@ enum PushAPNsEnvironment: String, Codable {
 }
 
 enum PushTransportMode: String, Codable {
-    case apns
-    case websocket
+    case direct
+    case relay
+
+    /// 兼容旧存档：websocket 视作 direct，apns 视作 direct（APNs 只用于系统通道，不影响注册 payload 传输语义）。
+    static func resolved(_ raw: String?) -> PushTransportMode {
+        switch raw?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+        case "relay": return .relay
+        case "direct", "websocket": return .direct
+        default: return .direct
+        }
+    }
 }
 
 struct PushBuildConfig {
     var mode: PushBuildMode = .relay
     var environment: PushAPNsEnvironment = .production
-    var transport: PushTransportMode = .apns
+    var transport: PushTransportMode = .direct
     var relayBaseURL: String?
+    var distribution: PushDistributionMode = .official
+    var profile: PushRelayProfile = .production
+    var proofPolicy: PushProofPolicy = .appleStrict
+
+    static var current: PushBuildConfig { .load() }
 
     /// 读取环境变量/Info.plist 覆盖（默认 relay + production + apns）。
     static func load(defaults: UserDefaults = .standard) -> PushBuildConfig {
@@ -30,6 +44,18 @@ struct PushBuildConfig {
         }
         if let env = defaults.string(forKey: "push.apns.environment"), let parsed = PushAPNsEnvironment(rawValue: env) {
             config.environment = parsed
+        }
+        if let transport = defaults.string(forKey: "push.transport") {
+            config.transport = PushTransportMode.resolved(transport)
+        }
+        if let distribution = defaults.string(forKey: "push.distribution"), let parsed = PushDistributionMode(rawValue: distribution) {
+            config.distribution = parsed
+        }
+        if let profile = defaults.string(forKey: "push.relay.profile"), let parsed = PushRelayProfile(rawValue: profile) {
+            config.profile = parsed
+        }
+        if let proof = defaults.string(forKey: "push.proof.policy"), let parsed = PushProofPolicy(rawValue: proof) {
+            config.proofPolicy = parsed
         }
         config.relayBaseURL = defaults.string(forKey: "push.relay.baseURL")
         return config
@@ -62,6 +88,10 @@ struct PushRelayRegisterRequest: Encodable {
 struct PushRelayRegisterResponse: Codable {
     var ok: Bool?
     var relayId: String?
+    var relayHandle: String?
+    var sendGrant: String?
+    var expiresAtMs: Int64?
+    var tokenSuffix: String?
     var error: String?
 }
 
@@ -69,12 +99,16 @@ enum PushRelayError: LocalizedError {
     case invalidRelayURL
     case http(Int)
     case decoding
+    case relayBaseURLMissing
+    case relayMisconfigured(String)
 
     var errorDescription: String? {
         switch self {
         case .invalidRelayURL: return "推送中继地址无效"
         case .http(let code): return "推送中继 HTTP \(code)"
         case .decoding: return "推送中继响应解析失败"
+        case .relayBaseURLMissing: return "推送中继地址未配置"
+        case .relayMisconfigured(let message): return "推送中继配置错误：\(message)"
         }
     }
 }
@@ -82,6 +116,15 @@ enum PushRelayError: LocalizedError {
 /// 中继注册客户端：POST {relayBase}/v1/push/register 提交 deviceToken。
 struct PushRelayClient {
     let baseURL: String
+
+    /// 规范化中继地址（去尾斜杠），用于缓存键比较。
+    var normalizedBaseURLString: String {
+        var trimmed = baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        while trimmed.hasSuffix("/") {
+            trimmed.removeLast()
+        }
+        return trimmed
+    }
 
     func register(_ request: PushRelayRegisterRequest) async throws -> PushRelayRegisterResponse {
         guard let url = URL(string: baseURL)?.appendingPathComponent("v1/push/register") else {

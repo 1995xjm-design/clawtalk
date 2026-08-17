@@ -98,7 +98,7 @@ struct TalkRealtimeEvent: Codable {
 
 // MARK: - TalkGatewaySpeech（网关语音合成，对齐 TalkGatewaySpeechClient）
 
-struct TalkGatewaySpeechRequest: Encodable {
+struct TalkGatewaySpeechParams: Encodable {
     var text: String
     var voice: String?
     var sessionKey: String?
@@ -110,4 +110,91 @@ struct TalkGatewaySpeechResponse: Codable {
     var format: String?
     var sampleRate: Double?
     var error: String?
+}
+
+// MARK: - TalkRealtime 服务端事件家族（对齐官方 TalkRealtimeClientSession 模型）
+
+enum TalkRealtimeTranscriptRole: String, Encodable {
+    case user
+    case assistant
+}
+
+struct TalkRealtimeTranscriptParams: Encodable {
+    let sessionKey: String
+    let voiceSessionId: String
+    let entryId: String
+    let role: TalkRealtimeTranscriptRole
+    let text: String
+    let timestamp: Double?
+}
+
+struct TalkRealtimeToolCallResponse: Decodable {
+    let runId: String?
+    let idempotencyKey: String?
+}
+
+struct TalkRealtimeServerEvent: Decodable {
+    let type: String
+    let error: TalkRealtimeServerError?
+    let itemId: String?
+    let item: TalkRealtimeServerItem?
+    let turn: TalkRealtimeServerTurn?
+    let callId: String?
+    let name: String?
+    let delta: String?
+    let arguments: String?
+    let transcript: String?
+    let text: String?
+
+    enum CodingKeys: String, CodingKey {
+        case type
+        case error
+        case itemId = "item_id"
+        case item
+        case turn
+        case callId = "call_id"
+        case name
+        case delta
+        case arguments
+        case transcript
+        case text
+    }
+
+    var resolvedItemId: String? { itemId ?? item?.id }
+    var resolvedCallId: String? { callId ?? item?.callId }
+    var resolvedName: String? { name ?? item?.name }
+    var resolvedArguments: String? { arguments ?? item?.arguments }
+
+    var isMaximumDurationError: Bool {
+        guard type == "error", let message = error?.message?.lowercased() else { return false }
+        return message.contains("session") && message.contains("maximum duration")
+    }
+}
+
+struct TalkRealtimeServerError: Decodable {
+    let message: String?
+}
+
+struct TalkRealtimeServerTurn: Decodable {
+    let id: String?
+    let role: String?
+    let transcript: String?
+}
+
+struct TalkRealtimeServerItem: Decodable {
+    let id: String?
+    let type: String?
+    let text: String?
+    let callId: String?
+    let name: String?
+    let arguments: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case type
+        case text
+        case callId = "call_id"
+        case name
+        case arguments
+    }
 }

@@ -41,6 +41,13 @@ final class PushManager {
     private let defaults = UserDefaults.standard
     private let tokenKey = "clawtalk_apns_device_token"
 
+    /// 后台信标发送所需的 node 连接（由 ClawTalkApp 启动时注入）。
+    private weak var nodeConnectionForBeacon: NodeConnection?
+
+    func attachNodeConnection(_ connection: NodeConnection) {
+        nodeConnectionForBeacon = connection
+    }
+
     private(set) var apnsState: APNSState = .notRegistered
     private(set) var lastReportError: String?
 
@@ -165,6 +172,41 @@ final class PushManager {
             lastReportError = error.localizedDescription
             LogCollector.record(module: "推送", "上报 deviceToken 失败：\(AppErrorText.localized(error.localizedDescription))")
             return false
+        }
+    }
+
+    /// 注册审批通知分类（对齐官方 ExecApprovalNotificationBridge.registerCategories）。
+    func registerApprovalNotificationCategories() {
+        ApprovalNotificationBridge.registerCategories()
+    }
+
+    /// 发送后台信标 node.presence.alive（节流 10 分钟，需连接中）。
+    func sendBackgroundAliveBeacon(trigger: BackgroundAliveBeacon.Trigger) {
+        let lastKey = "background_alive.last_success_at_ms"
+        let lastSent = defaults.double(forKey: lastKey)
+        guard BackgroundAliveBeacon.shouldSkipRecentSuccess(
+            isGatewayConnected: true,
+            now: Date(),
+            lastSuccessAtMs: lastSent > 0 ? lastSent : nil) == false
+        else { return }
+        let displayName = UserDefaults.standard.string(forKey: "clawtalk_node_display_name")
+            ?? UIDevice.current.name
+        let payload = BackgroundAliveBeacon.makePayload(
+            trigger: trigger,
+            displayName: displayName,
+            pushTransport: deviceToken != nil ? "apns" : nil)
+        guard let requestJSON = try? BackgroundAliveBeacon.makeNodeEventRequestPayloadJSON(payload: payload),
+              let data = requestJSON.data(using: .utf8),
+              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else { return }
+        guard let node = nodeConnectionForBeacon else { return }
+        Task {
+            let result = await node.sendAgentRequest(
+                event: BackgroundAliveBeacon.eventName,
+                payloadJSON: object["payloadJSON"] as? String)
+            if result {
+                defaults.set(Date().timeIntervalSince1970 * 1000, forKey: lastKey)
+            }
         }
     }
 

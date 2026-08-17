@@ -108,6 +108,11 @@ final class AppDelegate: NSObject, UIApplicationDelegate, WCSessionDelegate {
         fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void
     ) {
         PushManager.shared.handleRemoteNotification(userInfo: userInfo)
+        // 静默推送触发后台信标（对齐官方 BackgroundAliveBeacon.silent_push）
+        let aps = userInfo["aps"] as? [AnyHashable: Any]
+        if (aps?["content-available"] as? Int) == 1 {
+            PushManager.shared.sendBackgroundAliveBeacon(trigger: .silentPush)
+        }
         completionHandler(.newData)
     }
 }

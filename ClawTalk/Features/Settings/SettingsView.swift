@@ -74,6 +74,7 @@ struct SettingsView: View {
         NavigationStack {
             Form {
                 connectionSection
+                proSection
                 pairingSection
             keyboardSection
                 skinSection
@@ -642,6 +643,34 @@ private var connectionSection: some View {
             case .openResponses:
                 Text("Open Responses API 模式提供 Token 用量数据，需网关支持（endpoints.responses.enabled）。")
             }
+        }
+    }
+
+    /// 高级面板聚合（官方对齐）：设置 Pro / 会话中心 / 后台任务 / 聊天增强。
+    private var proSection: some View {
+        Section {
+            NavigationLink {
+                SettingsProTab(gatewayConnection: gatewayConnection, settingsStore: store)
+            } label: {
+                Label("设置 Pro", systemImage: "square.grid.2x2.fill")
+            }
+            NavigationLink {
+                CommandCenterTab(gatewayConnection: gatewayConnection)
+            } label: {
+                Label("会话中心", systemImage: "rectangle.stack.fill")
+            }
+            NavigationLink {
+                BackgroundTasksScreen(gatewayConnection: gatewayConnection)
+            } label: {
+                Label("后台任务", systemImage: "clock.badge.checkmark")
+            }
+            NavigationLink {
+                ChatProTab(gatewayConnection: gatewayConnection)
+            } label: {
+                Label("聊天增强", systemImage: "bubble.left.and.bubble.right.fill")
+            }
+        } header: {
+            Text("高级")
         }
     }
 

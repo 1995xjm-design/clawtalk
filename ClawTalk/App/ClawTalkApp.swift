@@ -31,6 +31,8 @@ struct ClawTalkApp: App {
     private let watchSessionCoordinator = ClawTalkWatchSessionCoordinator.shared
     @State private var widgetReminderStore = CareReminderStore()
     @State private var showExpenseFromWidget = false
+    @State private var wakeToastCommand: String?
+    @State private var wakeToastTask: Task<Void, Never>?
 
     private enum ChatRoute: Hashable {
         case chat
@@ -208,6 +210,16 @@ struct ClawTalkApp: App {
     private var rootOverlays: some View {
         ApprovalOverlayView(gatewayConnection: gatewayConnection)
         QuestionOverlayView(gatewayConnection: gatewayConnection)
+        if let wakeToastCommand {
+            VStack {
+                VoiceWakeToast(command: wakeToastCommand)
+                    .padding(.top, 8)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                Spacer()
+            }
+            .allowsHitTesting(false)
+            .zIndex(10)
+        }
     }
 
     /// WindowGroup 内容（拆出独立计算属性，避免 SwiftUI 类型检查超时）
@@ -278,6 +290,8 @@ struct ClawTalkApp: App {
                 // 推送与后台刷新接线：首次申请通知权限、注册 APNs、注册 BGAppRefreshTask
                 await PushManager.shared.requestNotificationPermissionIfNeeded()
                 await ensureRemoteNotificationsRegistered()
+                PushManager.shared.registerApprovalNotificationCategories()
+                PushManager.shared.attachNodeConnection(nodeConnection)
                 BGAppRefreshManager.shared.register()
                 // 分享扩展轮询：App Group 有待发标记则读取并发送
                 await checkPendingShareIfNeeded()
@@ -299,6 +313,7 @@ struct ClawTalkApp: App {
                     )
                     if gatewayConnection.connectionState == .connected {
                         settingsStore.recordLastGateway(urlString: settingsStore.settings.resolvedWebSocketURL)
+                        PushManager.shared.sendBackgroundAliveBeacon(trigger: .connect)
                     }
                     if gatewayConnection.connectionState == .disconnected,
                        let lastError = gatewayConnection.lastError {
@@ -366,8 +381,8 @@ struct ClawTalkApp: App {
                     stopVoiceWake()
                 }
             }
-            .onReceive(NotificationCenter.default.publisher(for: .clawTalkWakeWordDetected)) { _ in
-                handleWakeWordDetected()
+            .onReceive(NotificationCenter.default.publisher(for: .clawTalkWakeWordDetected)) { note in
+                handleWakeWordDetected(keyword: note.object as? String)
             }
             .onReceive(NotificationCenter.default.publisher(for: .clawTalkDeviceTokenDidChange)) { _ in
                 Task { await PushManager.shared.reportIfConfigured(settings: settingsStore) }
@@ -571,8 +586,9 @@ struct ClawTalkApp: App {
     }
 
     /// 唤醒词命中：停唤醒 -> 自动选/建频道（无聊天页时）-> 进入免提对话 -> 播报「在呢」。
-    private func handleWakeWordDetected() {
+    private func handleWakeWordDetected(keyword: String? = nil) {
         stopVoiceWake()
+        showWakeToast(keyword: keyword ?? "ClawTalk")
         guard settingsStore.settings.voiceInputEnabled else {
             startVoiceWakeIfNeeded()
             return
@@ -589,6 +605,22 @@ struct ClawTalkApp: App {
         }
         vm.enterConversationMode()
         speakAck()
+    }
+
+    /// 唤醒命中提示 toast：显示 1.6 秒后自动消失（对齐官方 VoiceWakeToast 顶部提示）。
+    private func showWakeToast(keyword: String) {
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+            wakeToastCommand = keyword
+        }
+        wakeToastTask?.cancel()
+        wakeToastTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 1_600_000_000)
+            if !Task.isCancelled {
+                withAnimation(.easeOut(duration: 0.25)) {
+                    wakeToastCommand = nil
+                }
+            }
+        }
     }
 
     /// 后台命中唤醒词且当前没有打开的聊天页时，优先进入设置里选的「唤醒后进入的频道」，
