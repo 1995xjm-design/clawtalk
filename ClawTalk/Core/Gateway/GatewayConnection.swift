@@ -20,6 +20,8 @@ final class GatewayConnection {
     private(set) var connectionState: State = .disconnected
     private(set) var lastError: String?
     private(set) var pendingApprovals: [PendingApproval] = []
+    /// ??????????? question ???operator.questions ????
+    private(set) var pendingQuestions: [QuestionRecord] = []
     private(set) var agentStatus: AgentStatusInfo?
     /// 审批到达但系统通知未授权时的引导提示（对齐官方 NotificationPermissionGuidanceDialog）。
     private(set) var pendingNotificationGuidance: NotificationGuidancePrompt?
@@ -83,6 +85,7 @@ final class GatewayConnection {
             try await gw.connect()
             logger.info("gateway connect succeeded, setting state to .connected")
             connectionState = .connected
+            Task { [weak self] in await self?.refreshQuestions() }
         } catch {
             logger.error("gateway connect failed: \(error.localizedDescription, privacy: .public)")
             connectionState = .disconnected
@@ -251,6 +254,10 @@ final class GatewayConnection {
                 handleApprovalResolved(evt)
             case "agent":
                 handleAgentEvent(evt)
+            case "question.requested":
+                handleQuestionRequested(evt)
+            case "question.resolved":
+                handleQuestionResolved(evt)
             default:
                 break
             }
@@ -342,6 +349,88 @@ final class GatewayConnection {
         logger.info("agent status: \(status.status ?? "unknown", privacy: .public)")
     }
 
+    // MARK: - Question Protocol??? question.requested/resolved + question.list/get/resolve?
+
+    private func handleQuestionRequested(_ evt: EventFrame) {
+        guard let payload = evt.payload,
+              let data = try? JSONEncoder().encode(payload),
+              let record = try? JSONDecoder().decode(QuestionRecord.self, from: data)
+        else {
+            logger.error("failed to decode question.requested")
+            return
+        }
+        if !pendingQuestions.contains(where: { $0.id == record.id }) {
+            pendingQuestions.append(record)
+            logger.info("question requested: \(record.id, privacy: .public) x\(record.questions.count)")
+            Haptics.warning()
+        }
+    }
+
+    private func handleQuestionResolved(_ evt: EventFrame) {
+        guard let payload = evt.payload,
+              let data = try? JSONEncoder().encode(payload),
+              let event = try? JSONDecoder().decode(OpenClawQuestionResolvedEvent.self, from: data)
+        else { return }
+
+        if let idx = pendingQuestions.firstIndex(where: { $0.id == event.id }) {
+            let record = pendingQuestions[idx]
+            pendingQuestions.remove(at: idx)
+            logger.info("question resolved: \(event.id, privacy: .public) -> \(event.status.rawValue, privacy: .public)")
+            _ = record
+        }
+    }
+
+    /// question.list????????????????????????
+    func refreshQuestions() async {
+        guard let gw = gateway else { return }
+        do {
+            let data = try await gw.request(method: "question.list", params: nil)
+            let result = try JSONDecoder().decode(QuestionListResult.self, from: data)
+            let listed = result.questions
+            var seen = Set<String>()
+            for record in listed {
+                seen.insert(record.id)
+                if record.isPending,
+                   !pendingQuestions.contains(where: { $0.id == record.id })
+                {
+                    pendingQuestions.append(record)
+                }
+            }
+            // ????????????????/??/?????????
+            pendingQuestions.removeAll { !$0.isPending }
+        } catch {
+            // ???? question.list ????official ???? INVALID_REQUEST: unknown method?
+            logger.info("question.list unavailable: \(error.localizedDescription)")
+        }
+    }
+
+    /// question.get?? id ?????????
+    func getQuestion(id: String) async throws -> QuestionRecord {
+        let data = try await request(method: "question.get", params: ["id": AnyCodable(id)])
+        return try JSONDecoder().decode(QuestionGetResult.self, from: data).question
+    }
+
+    /// question.resolve??????questionId -> ????? label / ???????
+    func resolveQuestion(id: String, answers: [String: [String]]) async throws {
+        _ = try await request(method: "question.resolve", params: [
+            "id": AnyCodable(id),
+            "answers": AnyCodable(answers),
+        ])
+    }
+
+    /// question.resolve + cancel???/??????
+    func cancelQuestion(id: String) async throws {
+        _ = try await request(method: "question.resolve", params: [
+            "id": AnyCodable(id),
+            "cancel": AnyCodable(true),
+        ])
+    }
+
+    /// ????????UI ??????
+    func pruneExpiredQuestions() {
+        pendingQuestions.removeAll { !$0.isPending || $0.expiresAt < Date() }
+    }
+
     private func handleStateChange(_ state: GatewayWebSocket.ConnectionState) {
         let newState: State = switch state {
         case .connected: .connected
@@ -353,6 +442,7 @@ final class GatewayConnection {
 
         if newState == .disconnected {
             pendingApprovals.removeAll()
+            pendingQuestions.removeAll()
             agentStatus = nil
         }
     }

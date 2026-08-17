@@ -210,6 +210,9 @@ struct ClawTalkApp: App {
             .overlay {
                 ApprovalOverlayView(gatewayConnection: gatewayConnection)
             }
+            .overlay {
+                QuestionOverlayView(gatewayConnection: gatewayConnection)
+            }
             .notificationGuidanceDialog(
                 guidance: gatewayConnection.pendingNotificationGuidance,
                 onDismiss: { suppressFuture in
