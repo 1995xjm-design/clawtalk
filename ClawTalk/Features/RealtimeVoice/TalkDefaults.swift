@@ -22,7 +22,7 @@ enum TalkDefaults {
 /// 音频路由（对齐官方 TalkAudioRoute）：扬声器/蓝牙/听筒策略。
 enum TalkAudioRoute {
     static func categoryOptions(speakerphoneEnabled: Bool) -> AVAudioSession.CategoryOptions {
-        var options: AVAudioSession.CategoryOptions = [.allowBluetoothHFP, .allowBluetoothA2DP, .allowAirPlay]
+        var options: AVAudioSession.CategoryOptions = [.allowBluetooth, .allowBluetoothA2DP, .allowAirPlay]
         if speakerphoneEnabled {
             options.insert(.defaultToSpeaker)
         }

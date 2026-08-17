@@ -25,40 +25,7 @@ struct SettingsChannelsDestination: View {
                         .foregroundStyle(.secondary)
                 }
                 ForEach(channels) { channel in
-                    HStack(spacing: 10) {
-                        Image(systemName: icon(for: channel.kind))
-                            .foregroundStyle(channel.enabled == true ? .green : .secondary)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(channel.name.isEmpty ? channel.kind : channel.name)
-                                .font(.subheadline.weight(.medium))
-                            if let account = channel.account, !account.isEmpty {
-                                Text(account)
-                                    .font(.caption2)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                        Spacer()
-                        if busy {
-                            ProgressView()
-                        } else {
-                            Menu {
-                                Button {
-                                    Task { await toggle(channel) }
-                                } label: {
-                                    Label(channel.enabled == true ? "停止" : "启动", systemImage: channel.enabled == true ? "stop.circle" : "play.circle")
-                                }
-                                Button {
-                                    Task { await logout(channel) }
-                                } label: {
-                                    Label("退出登录", systemImage: "rectangle.portrait.and.arrow.right")
-                                        .foregroundStyle(.red)
-                                }
-                            } label: {
-                                Image(systemName: "ellipsis.circle")
-                                    .font(.title3)
-                            }
-                        }
-                    }
+                    channelRow(channel)
                 }
             }
         }
@@ -75,6 +42,44 @@ struct SettingsChannelsDestination: View {
             }
         }
         .task { await refresh() }
+    }
+
+    /// 单行频道（拆出子视图，避免 List 大表达式类型检查超时）。
+    private func channelRow(_ channel: ChannelStatusItem) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: icon(for: channel.kind))
+                .foregroundStyle(channel.enabled == true ? .green : .secondary)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(channel.name.flatMap { $0.isEmpty ? nil : $0 } ?? channel.kind)
+                    .font(.subheadline.weight(.medium))
+                if let account = channel.account, !account.isEmpty {
+                    Text(account)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            Spacer()
+            if busy {
+                ProgressView()
+            } else {
+                Menu {
+                    Button {
+                        Task { await toggle(channel) }
+                    } label: {
+                        Label(channel.enabled == true ? "停止" : "启动", systemImage: channel.enabled == true ? "stop.circle" : "play.circle")
+                    }
+                    Button {
+                        Task { await logout(channel) }
+                    } label: {
+                        Label("退出登录", systemImage: "rectangle.portrait.and.arrow.right")
+                            .foregroundStyle(.red)
+                    }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                        .font(.title3)
+                }
+            }
+        }
     }
 
     private func icon(for kind: String) -> String {
