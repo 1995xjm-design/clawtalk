@@ -65,7 +65,7 @@ struct PrivacyAccessSectionView: View {
             calendar: EKEventStore.authorizationStatus(for: .event).statusLabel(),
             contacts: CNContactStore.authorizationStatus(for: .contacts).statusLabel(),
             photos: PHPhotoLibrary.authorizationStatus().statusLabel(),
-            microphone: AVAudioApplication.shared.recordPermission.statusLabel())
+            microphone: microphoneStatusLabel())
     }
 
     private static func statusLabel(_ status: CLAuthorizationStatus) -> String {
@@ -74,6 +74,17 @@ struct PrivacyAccessSectionView: View {
         case .denied: return "已拒绝"
         case .notDetermined: return "未决定"
         case .restricted: return "受限"
+        @unknown default: return "未知"
+        }
+    }
+}
+
+
+    private static func microphoneStatusLabel() -> String {
+        switch AVAudioApplication.shared.recordPermission {
+        case .granted: return "已授权"
+        case .denied: return "已拒绝"
+        case .undetermined: return "未决定"
         @unknown default: return "未知"
         }
     }
@@ -114,17 +125,6 @@ private extension PHAuthorizationStatus {
         case .denied: return "已拒绝"
         case .notDetermined: return "未决定"
         case .restricted: return "受限"
-        @unknown default: return "未知"
-        }
-    }
-}
-
-private extension AVAudioApplication.RecordPermission {
-    var statusLabel: String {
-        switch self {
-        case .granted: return "已授权"
-        case .denied: return "已拒绝"
-        case .undetermined: return "未决定"
         @unknown default: return "未知"
         }
     }
