@@ -258,3 +258,14 @@ struct AgentEvent: Codable, Sendable {
         case seq, stream, ts, data
     }
 }
+
+// MARK: - Server Advertisements (official parity)
+
+/// 网关在 HelloOk features["methods"] 里广播其支持的 RPC 方法。
+/// 官方实现：GatewayPush.advertisedServerMethods()。
+extension HelloOk {
+    func advertisedServerMethods() -> Set<String> {
+        guard let values = features["methods"]?.value as? [AnyCodable] else { return [] }
+        return Set(values.compactMap { $0.stringValue })
+    }
+}

@@ -29,6 +29,11 @@ final class NodeConnection {
 
     private var activeInvokes: [String: Task<Void, Never>] = [:]
     private var invokeInputHandlers: [String: @MainActor (String) async -> Void] = [:]
+    // MARK: - Pending foreground action replay (node.pending.pull/ack)
+
+    private var pendingActionDrainInFlight = false
+    private var pendingActionDrainRequested = false
+    private var completedPendingActionIDs: Set<String> = []
 
     private static let defaultInvokeTimeoutMs = 30_000
     private static let maxInvokeTimeoutMs = 120_000
@@ -188,6 +193,12 @@ final class NodeConnection {
         case .disconnected: .disconnected
         }
         connectionState = newState
+        // 每次连上（含看门狗自动重连）后拉取网关未确认的前台动作，防止重连丢事件。
+        if state == .connected {
+            Task { @MainActor [weak self] in
+                await self?.resumePendingNodeActionsIfNeeded()
+            }
+        }
     }
 
     // MARK: - Invoke Dispatch (P2)
@@ -294,6 +305,92 @@ final class NodeConnection {
             return true
         } catch {
             logger.error("node event failed: \(error.localizedDescription, privacy: .public)")
+            return false
+        }
+    }
+
+    // MARK: - Pending Foreground Node Actions (node.pending.pull/ack)
+
+    private struct PendingForegroundNodeAction: Decodable {
+        let id: String
+        let command: String
+        let paramsJSON: String?
+        let nodeId: String?
+        let enqueuedAtMs: Int?
+    }
+
+    private struct PendingForegroundNodeActionsResponse: Decodable {
+        let nodeId: String?
+        let actions: [PendingForegroundNodeAction]
+    }
+
+    /// node 通道重连后拉取未确认的前台动作并执行、确认，
+    /// 防止网关侧已排队的前台动作在重连窗口丢失（官方 resumePendingForegroundNodeActionsIfNeeded）。
+    func resumePendingNodeActionsIfNeeded() async {
+        guard !isBackgrounded() else { return }
+        guard connectionState == .connected, let gw = gateway else { return }
+        guard !pendingActionDrainInFlight else {
+            pendingActionDrainRequested = true
+            return
+        }
+        pendingActionDrainInFlight = true
+        defer {
+            pendingActionDrainInFlight = false
+            if pendingActionDrainRequested {
+                pendingActionDrainRequested = false
+                Task { @MainActor [weak self] in
+                    await self?.resumePendingNodeActionsIfNeeded()
+                }
+            }
+        }
+        do {
+            let payload = try await gw.request(method: "node.pending.pull", params: [:], timeoutMs: 6000)
+            let decoded = try JSONDecoder().decode(PendingForegroundNodeActionsResponse.self, from: payload)
+            guard !decoded.actions.isEmpty else { return }
+            for action in decoded.actions {
+                guard !isBackgrounded() else { return }
+                guard !completedPendingActionIDs.contains(action.id) else { continue }
+                let ok = await replayPendingAction(action)
+                guard ok else { return }
+                completedPendingActionIDs.insert(action.id)
+                if await ackPendingNodeAction(id: action.id) {
+                    completedPendingActionIDs.remove(action.id)
+                }
+            }
+        } catch {
+            logger.info("pending pull skipped: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    private func replayPendingAction(_ action: PendingForegroundNodeAction) async -> Bool {
+        let request = NodeInvokeRequest(
+            id: action.id,
+            nodeId: action.nodeId ?? "",
+            command: action.command,
+            paramsJSON: action.paramsJSON,
+            timeoutMs: nil,
+            idempotencyKey: nil)
+        do {
+            _ = try await invokeWithTimeout(request)
+            return true
+        } catch {
+            logger.error(
+                "pending replay failed: \(action.command, privacy: .public) "
+                    + "\(error.localizedDescription, privacy: .public)")
+            return false
+        }
+    }
+
+    private func ackPendingNodeAction(id: String) async -> Bool {
+        guard let gw = gateway else { return false }
+        do {
+            _ = try await gw.request(
+                method: "node.pending.ack",
+                params: ["ids": AnyCodable([id])],
+                timeoutMs: 6000)
+            return true
+        } catch {
+            logger.error("pending ack failed: \(id, privacy: .public) \(error.localizedDescription, privacy: .public)")
             return false
         }
     }

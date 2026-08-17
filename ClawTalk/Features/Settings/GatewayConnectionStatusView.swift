@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// 网关连接状态页（任务 F）：当前网关地址/接口方式/令牌状态 + 网关（operator）与节点（node）连接状态 + 重连按钮。
 /// nodeConnection 由主智能体接线传入；未接线时显示占位说明。
@@ -8,6 +9,9 @@ struct GatewayConnectionStatusView: View {
     var nodeConnection: NodeConnection?
 
     @State private var isReconnecting = false
+    @State private var generatedSetupCode: String?
+    @State private var isGeneratingSetupCode = false
+    @State private var setupCodeError: String?
 
     var body: some View {
         List {
@@ -41,6 +45,41 @@ struct GatewayConnectionStatusView: View {
                     Text("节点连接未接入本页面（由主智能体接线传入 nodeConnection 后显示）。")
                         .foregroundStyle(.secondary)
                 }
+            }
+
+            Section("配对工具") {
+                if let generatedSetupCode {
+                    LabeledContent("配对码") {
+                        Text(generatedSetupCode)
+                            .font(.system(.body, design: .monospaced))
+                            .textSelection(.enabled)
+                    }
+                    Button {
+                        UIPasteboard.general.string = generatedSetupCode
+                    } label: {
+                        Label("复制配对码", systemImage: "doc.on.doc")
+                    }
+                }
+                if let setupCodeError {
+                    Text(setupCodeError)
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                }
+                Button {
+                    generateSetupCode()
+                } label: {
+                    if isGeneratingSetupCode {
+                        HStack {
+                            ProgressView().scaleEffect(0.8)
+                            Text("生成中...")
+                        }
+                    } else {
+                        Label("生成配对码（手机端）", systemImage: "qrcode")
+                    }
+                }
+                .disabled(gatewayConnection.connectionState != .connected || isGeneratingSetupCode)
+            } footer: {
+                Text("网关 operator 已连接时，由手机端生成 node 配对码（官方 device.pair.setupCode），可发给电脑/手表侧节点使用。")
             }
 
             Section {
@@ -107,6 +146,21 @@ struct GatewayConnectionStatusView: View {
                 Text(text)
                     .foregroundStyle(color)
             }
+        }
+    }
+
+    private func generateSetupCode() {
+        isGeneratingSetupCode = true
+        setupCodeError = nil
+        generatedSetupCode = nil
+        Task {
+            do {
+                let code = try await gatewayConnection.generateNodeSetupCode()
+                generatedSetupCode = code
+            } catch {
+                setupCodeError = error.localizedDescription
+            }
+            isGeneratingSetupCode = false
         }
     }
 

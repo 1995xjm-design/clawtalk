@@ -210,19 +210,99 @@ final class GatewayConnection {
 
     // MARK: - Exec Approvals
 
-    /// Resolve a pending exec approval.
+    /// 官方 approval 双协议：unified（approval.get/approval.resolve）与 legacy（exec.approval.*）。
+    private enum ApprovalRPCFamily {
+        case unified
+        case legacy
+        case unavailable
+    }
+
+    private func execApprovalFamily(gw: GatewayWebSocket) async -> ApprovalRPCFamily {
+        let unifiedGet = await gw.supportsServerMethod("approval.get")
+        let unifiedResolve = await gw.supportsServerMethod("approval.resolve")
+        let legacyGet = await gw.supportsServerMethod("exec.approval.get")
+        let legacyResolve = await gw.supportsServerMethod("exec.approval.resolve")
+        if unifiedGet == true, unifiedResolve == true { return .unified }
+        if unifiedGet == false, unifiedResolve == false,
+           legacyGet == true, legacyResolve == true { return .legacy }
+        return .unavailable
+    }
+
+    /// Resolve a pending exec approval. 自动按网关广播方法选择 unified/legacy 协议族
+    /// （官方 execApprovalRPCFamily：supportsServerMethod 探测，二选一）。
     func resolveApproval(id: String, decision: String) async throws {
         guard let gw = gateway else { throw GatewayWebSocket.GatewayError.notConnected }
-        let _: ApprovalResolveResponse = try await gw.requestDecoded(
-            method: "exec.approval.resolve",
-            params: [
-                "id": AnyCodable(id),
-                "decision": AnyCodable(decision),
-            ]
-        )
+        switch await execApprovalFamily(gw: gw) {
+        case .unified:
+            let _: UnifiedApprovalResolveResult = try await gw.requestDecoded(
+                method: "approval.resolve",
+                params: [
+                    "id": AnyCodable(id),
+                    "kind": AnyCodable("exec"),
+                    "decision": AnyCodable(decision),
+                ]
+            )
+        case .legacy, .unavailable:
+            let _: ApprovalResolveResponse = try await gw.requestDecoded(
+                method: "exec.approval.resolve",
+                params: [
+                    "id": AnyCodable(id),
+                    "decision": AnyCodable(decision),
+                ]
+            )
+        }
         // Remove from pending list immediately
         pendingApprovals.removeAll { $0.id == id }
         logger.info("approval resolved: \(id, privacy: .public) → \(decision, privacy: .public)")
+    }
+
+    /// 拉取审批的规范快照（unified approval.get / legacy exec.approval.get 按协议族选择），
+    /// 对齐官方通知链路的 canonical readback。
+    func fetchApproval(id: String) async throws -> PendingApproval? {
+        guard let gw = gateway else { throw GatewayWebSocket.GatewayError.notConnected }
+        switch await execApprovalFamily(gw: gw) {
+        case .unified:
+            let result: UnifiedApprovalFetchEnvelope = try await gw.requestDecoded(
+                method: "approval.get",
+                params: ["id": AnyCodable(id)])
+            return Self.makePendingApproval(from: result.approval)
+        case .legacy:
+            let result: LegacyApprovalFetchResult = try await gw.requestDecoded(
+                method: "exec.approval.get",
+                params: ["id": AnyCodable(id)])
+            return Self.makePendingApproval(from: result)
+        case .unavailable:
+            return nil
+        }
+    }
+
+    // MARK: - Push Relay Identity (gateway.identity.get)
+
+    /// 网关中继身份（Push Relay）：deviceId + publicKey，官方 GatewayRelayIdentityResponse。
+    func fetchPushRelayGatewayIdentity() async throws -> PushRelayGatewayIdentity {
+        guard let gw = gateway else { throw GatewayWebSocket.GatewayError.notConnected }
+        let response: GatewayRelayIdentityResponse = try await gw.requestDecoded(
+            method: "gateway.identity.get")
+        return PushRelayGatewayIdentity(
+            deviceId: response.deviceId,
+            publicKey: response.publicKey
+        )
+    }
+
+    // MARK: - Pairing (device.pair.setupCode)
+
+    /// 生成手机端配对码（官方 sendDirectWatchSetup：params {"includeQr":false,"bootstrapProfile":"node"}）。
+    func generateNodeSetupCode() async throws -> String {
+        guard let gw = gateway else { throw GatewayWebSocket.GatewayError.notConnected }
+        struct SetupCodeResponse: Decodable { let setupCode: String }
+        let response: SetupCodeResponse = try await gw.requestDecoded(
+            method: "device.pair.setupCode",
+            params: [
+                "includeQr": AnyCodable(false),
+                "bootstrapProfile": AnyCodable("node"),
+            ]
+        )
+        return response.setupCode
     }
 
     /// Remove expired approvals.
@@ -502,4 +582,107 @@ struct AgentStatusInfo: Decodable, Sendable {
     let agentId: String?
     let sessionKey: String?
     let message: String?
+}
+
+
+// MARK: - Approval Dual-Protocol Types (official parity)
+
+/// unified approval.resolve 响应（applied + 终态 approval 快照）。
+struct UnifiedApprovalResolveResult: Decodable, Sendable {
+    let applied: Bool?
+    let approval: [String: AnyCodable]?
+}
+
+/// unified approval.get 响应信封。
+struct UnifiedApprovalFetchEnvelope: Decodable, Sendable {
+    let approval: UnifiedApprovalSnapshot
+}
+
+struct UnifiedApprovalSnapshot: Decodable, Sendable {
+    let id: String
+    let status: String?
+    let createdAtMs: Int?
+    let expiresAtMs: Int?
+    let presentation: [String: AnyCodable]?
+
+    private enum CodingKeys: String, CodingKey {
+        case id, status, presentation
+        case createdAtMs = "createdAtMs"
+        case expiresAtMs = "expiresAtMs"
+    }
+}
+
+/// legacy exec.approval.get 响应。
+struct LegacyApprovalFetchResult: Decodable, Sendable {
+    let id: String
+    let commandText: String
+    let commandPreview: String?
+    let warningText: String?
+    let host: String?
+    let nodeId: String?
+    let agentId: String?
+    let createdAtMs: Int64?
+    let expiresAtMs: Int64?
+
+    private enum CodingKeys: String, CodingKey {
+        case id, host
+        case commandText = "commandText"
+        case commandPreview = "commandPreview"
+        case warningText = "warningText"
+        case nodeId = "nodeId"
+        case agentId = "agentId"
+        case createdAtMs = "createdAtMs"
+        case expiresAtMs = "expiresAtMs"
+    }
+}
+
+// MARK: - Push Relay Identity Types (official parity)
+
+struct GatewayRelayIdentityResponse: Decodable, Sendable {
+    let deviceId: String
+    let publicKey: String
+}
+
+struct PushRelayGatewayIdentity: Sendable, Equatable {
+    let deviceId: String
+    let publicKey: String
+}
+
+extension GatewayConnection {
+    fileprivate static func makePendingApproval(from legacy: LegacyApprovalFetchResult) -> PendingApproval {
+        let created = legacy.createdAtMs.map { Date(timeIntervalSince1970: Double($0) / 1000) } ?? Date()
+        let expires = legacy.expiresAtMs.map { Date(timeIntervalSince1970: Double($0) / 1000) }
+            ?? created.addingTimeInterval(3600)
+        return PendingApproval(
+            id: legacy.id,
+            command: legacy.commandText,
+            commandArgv: nil,
+            cwd: nil,
+            host: legacy.host,
+            agentId: legacy.agentId,
+            ask: legacy.commandPreview,
+            warningText: legacy.warningText,
+            createdAt: created,
+            expiresAt: expires
+        )
+    }
+
+    fileprivate static func makePendingApproval(from unified: UnifiedApprovalSnapshot) -> PendingApproval? {
+        let presentation = unified.presentation
+        let created = unified.createdAtMs.map { Date(timeIntervalSince1970: Double($0) / 1000) } ?? Date()
+        let expires = unified.expiresAtMs.map { Date(timeIntervalSince1970: Double($0) / 1000) }
+            ?? created.addingTimeInterval(3600)
+        return PendingApproval(
+            id: unified.id,
+            command: presentation?["commandText"]?.stringValue ?? "命令",
+            commandArgv: nil,
+            cwd: nil,
+            host: presentation?["host"]?.stringValue,
+            agentId: presentation?["agentId"]?.stringValue,
+            ask: presentation?["commandPreview"]?.stringValue,
+            warningText: presentation?["warningText"]?.stringValue,
+            createdAt: created,
+            expiresAt: expires
+        )
+    }
 }

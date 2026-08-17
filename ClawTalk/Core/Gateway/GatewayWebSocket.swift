@@ -88,6 +88,8 @@ actor GatewayWebSocket {
     private var shouldReconnect = true
     private var backoffMs: Double = 2000
     private var lastSeq: Int?
+    /// Gateway advertised RPC methods from HelloOk features["methods"] (official GatewayNodeSession.serverMethods).
+    private var serverMethods: Set<String>?
     private var lastTick: Date?
     private var tickIntervalMs: Double = 30000
     private let decoder = JSONDecoder()
@@ -220,10 +222,17 @@ actor GatewayWebSocket {
         for w in waiters { w.resume(returning: ()) }
     }
 
+    /// Whether the server advertised support for the given RPC method.
+    /// Returns nil when no snapshot has been received yet (official supportsServerMethod).
+    func supportsServerMethod(_ method: String) -> Bool? {
+        serverMethods?.contains(method)
+    }
+
     /// Shut down the connection. Does not auto-reconnect.
     func shutdown() async {
         shouldReconnect = false
         isConnected = false
+        serverMethods = nil
         watchdogTask?.cancel(); watchdogTask = nil
         tickTask?.cancel(); tickTask = nil
         keepaliveTask?.cancel(); keepaliveTask = nil
@@ -526,6 +535,9 @@ actor GatewayWebSocket {
 
         let payloadData = try encoder.encode(payload)
         let ok = try decoder.decode(HelloOk.self, from: payloadData)
+
+        // Record server-advertised methods for approval dual-protocol detection.
+        serverMethods = ok.advertisedServerMethods()
 
         // Extract tick interval
         if let tick = ok.policy["tickIntervalMs"]?.value as? Double {
