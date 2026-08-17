@@ -7,18 +7,21 @@ struct OnboardingTests {
 
     // MARK: - Step Progression
 
-    @Test("Onboarding has 3 steps")
+    @Test("Onboarding has 6 steps")
     func stepCount() {
         let steps = OnboardingView.Step.allCases
-        #expect(steps.count == 3)
+        #expect(steps.count == 6)
     }
 
     @Test("Steps are in correct order")
     func stepOrder() {
         let steps = OnboardingView.Step.allCases
-        #expect(steps[0] == .welcome)
-        #expect(steps[1] == .gatewaySetup)
-        #expect(steps[2] == .gateway)
+        #expect(steps[0] == .intro)
+        #expect(steps[1] == .welcome)
+        #expect(steps[2] == .mode)
+        #expect(steps[3] == .connect)
+        #expect(steps[4] == .auth)
+        #expect(steps[5] == .success)
     }
 
     // MARK: - Connection Test State
