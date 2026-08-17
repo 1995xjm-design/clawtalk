@@ -38,14 +38,12 @@ targets:
       - ClawTalk
       - ClawTalkShared
     resources:
-      - path: ClawTalk/Resources
-        excludes:
-          - SharedSupport
+      - ClawTalk/Resources
     postBuildScripts:
       - name: Copy Rime SharedSupport into main app
         script: |
           set -e
-          SRC="$SRCROOT/ClawTalk/Resources/SharedSupport"
+          SRC="$SRCROOT/ClawTalk/RimeSupport"
           DST="$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/SharedSupport"
           mkdir -p "$DST"
           cp -R "$SRC/." "$DST/"
@@ -67,7 +65,7 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: app.lgm.7517
         PROVISIONING_PROFILE_SPECIFIER: 7517
         MARKETING_VERSION: "1.2.2"
-        CURRENT_PROJECT_VERSION: 17
+        CURRENT_PROJECT_VERSION: 18
         TARGETED_DEVICE_FAMILY: "1,2"
         KNOWN_REGIONS:
           - Base
@@ -232,7 +230,7 @@ targets:
         CODE_SIGN_ENTITLEMENTS: ClawTalkWatchApp/ClawTalkWatch.entitlements
         TARGETED_DEVICE_FAMILY: "4"
         MARKETING_VERSION: "1.2.2"
-        CURRENT_PROJECT_VERSION: 17
+        CURRENT_PROJECT_VERSION: 18
     info:
       path: ClawTalkWatchApp/Resources/Info.plist
       properties:
