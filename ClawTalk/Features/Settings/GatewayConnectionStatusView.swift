@@ -47,7 +47,7 @@ struct GatewayConnectionStatusView: View {
                 }
             }
 
-            Section("配对工具") {
+            Section {
                 if let code = generatedSetupCode {
                     LabeledContent("配对码", value: code)
                         .font(.system(.body, design: .monospaced))
@@ -76,6 +76,8 @@ struct GatewayConnectionStatusView: View {
                     }
                 }
                 .disabled(gatewayConnection.connectionState != .connected || isGeneratingSetupCode)
+            } header: {
+                Text("配对工具")
             } footer: {
                 Text("网关 operator 已连接时，由手机端生成 node 配对码（官方 device.pair.setupCode），可发给电脑/手表侧节点使用。")
             }
